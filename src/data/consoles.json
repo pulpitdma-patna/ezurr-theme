@@ -1,0 +1,86 @@
+[
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONSNIN130_1.jpg?v=1772613150&width=533",
+    "brand": "Nintendo",
+    "name": "Nintendo Switch 2",
+    "price": "₹65,000",
+    "strike": "₹74,490"
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONVALV410.jpg?v=1779280531&width=533",
+    "brand": "Valve",
+    "name": "Steam Deck OLED 1TB Console",
+    "price": "₹119,990",
+    "strike": "₹149,990"
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONVALV409.jpg?v=1779280467&width=533",
+    "brand": "Valve",
+    "name": "Steam Deck OLED 512GB Console",
+    "price": "₹109,990",
+    "strike": "₹139,990"
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONMETA406.jpg?v=1779272594&width=533",
+    "brand": "Meta",
+    "name": "Meta Quest 3 512GB",
+    "price": "₹65,799",
+    "strike": "₹79,990"
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONMETA408.jpg?v=1779279857&width=533",
+    "brand": "Meta",
+    "name": "Meta Quest 3S Xbox Black Edition 128GB",
+    "price": "₹54,490",
+    "strike": "₹64,990"
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONMETA407.jpg?v=1779279795&width=533",
+    "brand": "Meta",
+    "name": "Meta Quest 3S 128GB",
+    "price": "₹42,899",
+    "strike": "₹49,990"
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONPLAY127_2.jpg?v=1772612994&width=533",
+    "brand": "PlayStation",
+    "name": "PlayStation VR2",
+    "price": "₹44,990",
+    "strike": ""
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONPLAY440.jpg?v=1780489351&width=533",
+    "brand": "PlayStation",
+    "name": "PS5 Disc Drive for Digital Edition Slim",
+    "price": "₹12,499",
+    "strike": "₹17,999"
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONSNIN132_1_754729eb-e322-4deb-bd32-551da733c6f7.jpg?v=1781180504&width=533",
+    "brand": "Nintendo",
+    "name": "Nintendo Switch Lite — Yellow",
+    "price": "₹20,490",
+    "strike": "₹24,990"
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONXBOX128_1.jpg?v=1772613054&width=533",
+    "brand": "Xbox",
+    "name": "Xbox Series X",
+    "price": "Sold out",
+    "strike": ""
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONXBOX129.jpg?v=1772613029&width=533",
+    "brand": "Xbox",
+    "name": "Xbox Series S",
+    "price": "Sold out",
+    "strike": ""
+  },
+  {
+    "img": "https://ezurr.com/cdn/shop/files/CONSNIN131_1.jpg?v=1772613221&width=533",
+    "brand": "Nintendo",
+    "name": "Nintendo Switch OLED",
+    "price": "Sold out",
+    "strike": ""
+  }
+]

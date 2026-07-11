@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ezurr Theme
 
-## Getting Started
+React storefront converted from the Ezurr DC (Design Compiler) prototype — ready to deploy on [Vercel](https://vercel.com).
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** (App Router)
+- **React 19** + TypeScript
+- **Tailwind CSS 4** with Ezurr design tokens (`--ez-h` accent hue, oklch palette)
+
+## Pages
+
+| Route | Prototype source |
+|-------|------------------|
+| `/` | Ezurr Home |
+| `/preorders` | Ezurr Preorders |
+| `/consoles` | Ezurr Consoles |
+| `/games` | Ezurr Games |
+| `/game-cards` | Ezurr Game Cards |
+| `/accessories` | Ezurr Accessories |
+| `/product` | Ezurr Product |
+| `/checkout` | Ezurr Preorder |
+
+Original `.dc.html` prototypes are preserved in `../prototype/`.
+
+## Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy to Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Push this folder to GitHub (or import directly).
+2. In Vercel, **Add New Project** → import the `ezurr-theme` repository.
+3. Framework preset: **Next.js** (auto-detected).
+4. Root directory: `ezurr-theme` if the repo contains the parent folder.
+5. Deploy — no environment variables required for the demo theme.
 
-## Learn More
+Or use the Vercel CLI:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm i -g vercel
+cd ezurr-theme
+vercel
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Theme customization
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Edit `src/lib/theme.ts`:
 
-## Deploy on Vercel
+- `accentHue` — brand accent (default `255`, blue)
+- `showOffer` / `offerStyle` — home offer band (parallax vs split)
+- `showMembership` — Ezurr Plus section
+- `prepaidDiscount` — checkout prepaid discount %
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Product catalog data lives in `src/data/*.json` (extracted from prototype scripts).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Production notes
+
+This is a **front-end theme demo**. To go live as a store:
+
+- Wire product data to Shopify, Medusa, or your CMS
+- Replace static `/product` with dynamic `[slug]` routes
+- Connect checkout to a payment provider (Razorpay, Stripe, etc.)
+- Add auth for sign-in and cart persistence
