@@ -13,28 +13,37 @@ const brandMarks: Record<BrandName, string> = {
   Valve: "V",
 };
 
+const brandNotes: Record<BrandName, string> = {
+  PlayStation: "Console-defining worlds, DualSense gear, and PS5 essentials.",
+  Nintendo: "Playful hardware and games designed to go wherever you do.",
+  Xbox: "High-performance consoles and the ecosystem built around Game Pass.",
+  Logitech: "Precision controls for racing, competitive play, and simulation.",
+  Meta: "Immersive standalone VR with no console or cables required.",
+  Valve: "Your PC library, refined for powerful portable play.",
+};
+
 export function BrandExplorer() {
   const [activeBrand, setActiveBrand] = useState<BrandName>("PlayStation");
 
   return (
     <section className="ez-section" aria-label="Shop by brand">
-      <div className="relative overflow-hidden bg-[#F1F3F7] py-14 sm:py-20 lg:py-24">
-        <div className="absolute -right-40 -top-48 h-[520px] w-[520px] rounded-full bg-white/80 blur-3xl" />
-        <div className="absolute -bottom-64 -left-40 h-[520px] w-[520px] rounded-full bg-[var(--ez-accent)]/10 blur-3xl" />
-
+      <div className="relative overflow-hidden bg-[#0D0E11] py-14 text-white sm:py-18 lg:py-20">
+        <div className="absolute -right-48 -top-56 h-[560px] w-[560px] rounded-full bg-[var(--ez-accent)]/15 blur-[120px]" />
         <div className="ez-page relative">
-          <div className="mb-9 grid gap-5 lg:mb-12 lg:grid-cols-[1fr_0.75fr] lg:items-end">
+          <div className="mb-8 grid gap-4 sm:mb-10 lg:grid-cols-[1fr_0.7fr] lg:items-end">
             <div>
-              <span className="ez-section-kicker">Your platform. Your way.</span>
-              <h2 className="ez-section-title mt-3">Find your ecosystem.</h2>
+              <span className="ez-section-kicker !text-white/45">Shop your ecosystem</span>
+              <h2 className="mt-3 max-w-[720px] text-[clamp(2rem,5vw,4.3rem)] font-semibold leading-[0.96] tracking-[-0.055em] text-white">
+                The names shaping play.
+              </h2>
             </div>
-            <p className="ez-section-copy lg:justify-self-end">
-              Switch between the names shaping play and discover a focused edit of their best hardware, games, and gear.
+            <p className="max-w-[520px] text-sm leading-relaxed text-white/50 sm:text-base lg:justify-self-end">
+              Choose a platform to instantly surface its strongest hardware, games, and accessories.
             </p>
           </div>
 
           <div
-            className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6"
+            className="ez-scrollbar-none -mx-4 flex overflow-x-auto border-y border-white/10 px-4 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10"
             role="tablist"
             aria-label="Gaming brands"
           >
@@ -48,31 +57,29 @@ export function BrandExplorer() {
                   aria-selected={active}
                   aria-controls="brand-products"
                   onClick={() => setActiveBrand(brand)}
-                  className={`group flex min-h-[92px] flex-col items-start justify-between rounded-[20px] border p-4 text-left transition duration-300 sm:min-h-[108px] sm:p-5 ${
+                  className={`group relative flex min-h-[68px] shrink-0 items-center gap-3 px-4 text-sm font-semibold transition sm:min-h-[76px] sm:px-6 ${
                     active
-                      ? "border-[#1D1D1F] bg-[#1D1D1F] text-white shadow-[0_18px_45px_rgba(17,17,19,0.18)]"
-                      : "border-white bg-white/75 text-[#1D1D1F] shadow-[0_8px_30px_rgba(17,17,19,0.04)] backdrop-blur hover:-translate-y-1 hover:border-black/10 hover:bg-white hover:shadow-[0_16px_40px_rgba(17,17,19,0.09)]"
-                  } focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#1D1D1F]`}
+                      ? "text-white"
+                      : "text-white/40 hover:text-white/75"
+                  } focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-white`}
                 >
                   <span
                     aria-hidden="true"
-                    className={`flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold transition ${
+                    className={`ez-mono flex h-8 w-8 items-center justify-center rounded-full text-[9px] font-bold transition ${
                       active
                         ? "bg-white text-black"
-                        : "bg-[#ECEEF2] text-[#1D1D1F] group-hover:bg-[#1D1D1F] group-hover:text-white"
+                        : "border border-white/10 bg-white/[0.04] text-white/45 group-hover:border-white/20"
                     }`}
                   >
                     {brandMarks[brand]}
                   </span>
-                  <span className="flex w-full items-center justify-between gap-2 text-[13px] font-semibold sm:text-sm">
-                    {brand}
-                    <span
-                      aria-hidden="true"
-                      className={`transition ${active ? "text-white/45" : "text-[#AEAEB2] group-hover:translate-x-0.5"}`}
-                    >
-                      →
-                    </span>
-                  </span>
+                  {brand}
+                  <span
+                    aria-hidden="true"
+                    className={`absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-white transition sm:inset-x-6 ${
+                      active ? "scale-x-100 opacity-100" : "scale-x-0 opacity-0"
+                    }`}
+                  />
                 </button>
               );
             })}
@@ -82,12 +89,14 @@ export function BrandExplorer() {
             id="brand-products"
             role="tabpanel"
             aria-label={`${activeBrand} products`}
-            className="mt-5 overflow-hidden rounded-[28px] border border-white bg-white/80 p-5 shadow-[0_22px_70px_rgba(17,17,19,0.08)] backdrop-blur-xl sm:mt-7 sm:rounded-[34px] sm:p-8 lg:p-10"
+            className="mt-9 sm:mt-12"
           >
             <ProductRail
               contained={false}
-              eyebrow={`${activeBrand} collection`}
-              title={`The ${activeBrand} edit.`}
+              inverse
+              eyebrow="Selected platform"
+              title={`${activeBrand} essentials.`}
+              description={brandNotes[activeBrand]}
               products={brandCollections[activeBrand]}
               variant={activeBrand === "PlayStation" || activeBrand === "Nintendo" ? "product" : "square"}
             />

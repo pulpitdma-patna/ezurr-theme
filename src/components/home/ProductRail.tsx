@@ -15,6 +15,7 @@ type ProductRailProps = {
   linkLabel?: string;
   variant?: "product" | "preorder" | "square";
   contained?: boolean;
+  inverse?: boolean;
 };
 
 function Arrow({ direction }: { direction: "left" | "right" }) {
@@ -41,6 +42,7 @@ export function ProductRail({
   linkLabel = "View all",
   variant = "product",
   contained = true,
+  inverse = false,
 }: ProductRailProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -56,7 +58,11 @@ export function ProductRail({
         type="button"
         onClick={() => scroll(-1)}
         aria-label={`Scroll ${title} products left`}
-        className="flex h-11 w-11 items-center justify-center rounded-full bg-[#E8E8ED] text-[#424245] transition hover:bg-[#D2D2D7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+        className={`flex h-11 w-11 items-center justify-center rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+          inverse
+            ? "border border-white/10 bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white"
+            : "bg-[#E8E8ED] text-[#424245] hover:bg-[#D2D2D7] focus-visible:outline-[#1D1D1F]"
+        }`}
       >
         <Arrow direction="left" />
       </button>
@@ -64,7 +70,11 @@ export function ProductRail({
         type="button"
         onClick={() => scroll(1)}
         aria-label={`Scroll ${title} products right`}
-        className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1D1D1F] text-white transition hover:bg-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+        className={`flex h-11 w-11 items-center justify-center rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+          inverse
+            ? "bg-white text-black hover:bg-white/85 focus-visible:outline-white"
+            : "bg-[#1D1D1F] text-white hover:bg-black focus-visible:outline-[#1D1D1F]"
+        }`}
       >
         <Arrow direction="right" />
       </button>
@@ -80,6 +90,7 @@ export function ProductRail({
         href={href}
         linkLabel={href ? linkLabel : undefined}
         controls={controls}
+        inverse={inverse}
       />
       <div
         ref={scrollerRef}
