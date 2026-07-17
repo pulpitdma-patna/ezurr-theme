@@ -9,15 +9,31 @@ import { FooterFull } from "@/components/layout/Footer";
 import { CountdownInline } from "@/components/ui/Countdown";
 import { RelatedProductsSection } from "@/components/product/RelatedProductsSection";
 
+const productImages = [
+  {
+    src: "https://ezurr.com/cdn/shop/files/GAMPLAY540.jpg?v=1782735956&width=533",
+    alt: "Grand Theft Auto VI PlayStation 5 box art",
+  },
+  {
+    src: "https://ezurr.com/cdn/shop/files/GAMPLAY540_1.jpg?v=1782735942&width=533",
+    alt: "Grand Theft Auto VI game artwork",
+  },
+  {
+    src: "https://ezurr.com/cdn/shop/files/GTA6_banner.webp?v=1783232356&width=800",
+    alt: "Grand Theft Auto VI promotional banner",
+  },
+];
+
 export default function ProductPage() {
   const [selectedDisc, setSelectedDisc] = useState(true);
+  const [selectedImage, setSelectedImage] = useState(0);
 
   return (
     <div className="min-h-screen bg-white">
       <MicroBar />
       <Header active="preorders" />
 
-      <div className="ez-page w-full pt-4 ez-mono flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.1em] text-[#86868B] sm:gap-2.5 sm:pt-6 sm:text-[10.5px]">
+      <div className="ez-page ez-mono flex w-full flex-wrap gap-2 pt-4 text-[9px] uppercase tracking-[0.14em] text-[#86868B] sm:gap-2.5 sm:pt-6 sm:text-[10px]">
         <Link href="/" className="hover:text-[#1D1D1F]">
           Home
         </Link>
@@ -29,123 +45,200 @@ export default function ProductPage() {
         <span className="text-[#1D1D1F]">Grand Theft Auto VI</span>
       </div>
 
-      <section className="ez-page w-full grid grid-cols-1 items-start gap-8 pt-5 sm:gap-12 sm:pt-7 lg:grid-cols-[1.15fr_1fr] lg:gap-16">
-        <div className="flex flex-col gap-3.5">
-          <div className="relative aspect-[4/3.2] overflow-hidden rounded-3xl border border-[#E8E8ED] bg-white">
-            <Image
-              src="https://ezurr.com/cdn/shop/files/GAMPLAY540.jpg?v=1782735956&width=533"
-              alt="Grand Theft Auto VI box art"
-              fill
-              className="object-contain"
-              sizes="50vw"
-              priority
-            />
+      <section className="ez-page grid w-full grid-cols-1 items-start gap-8 pb-4 pt-5 sm:gap-10 sm:pt-7 lg:grid-cols-[minmax(0,1.3fr)_minmax(390px,0.7fr)] lg:gap-8 xl:grid-cols-[minmax(0,1.45fr)_minmax(430px,0.55fr)] xl:gap-12">
+        <div className="min-w-0">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[76px_minmax(0,1fr)] sm:gap-4 xl:grid-cols-[88px_minmax(0,1fr)] xl:gap-5">
+            <div className="order-2 flex gap-2.5 overflow-x-auto pb-1 sm:order-1 sm:flex-col sm:overflow-visible sm:pb-0">
+              {productImages.map((image, index) => (
+                <button
+                  type="button"
+                  key={image.src}
+                  onClick={() => setSelectedImage(index)}
+                  aria-label={`View product image ${index + 1}`}
+                  aria-pressed={selectedImage === index}
+                  className={`relative aspect-square w-[72px] shrink-0 cursor-pointer overflow-hidden rounded-2xl border bg-white transition-all sm:w-full ${
+                    selectedImage === index
+                      ? "border-[var(--ez-accent)] shadow-[0_0_0_2px_var(--ez-accent-soft)]"
+                      : "border-[#E3E3E8] opacity-70 hover:border-[#AEAEB2] hover:opacity-100"
+                  }`}
+                >
+                  <Image
+                    src={image.src}
+                    alt=""
+                    fill
+                    className="object-contain p-1.5"
+                    sizes="88px"
+                  />
+                </button>
+              ))}
+            </div>
+
+            <div className="relative order-1 aspect-[4/3.35] min-h-[340px] overflow-hidden rounded-[24px] border border-[#E8E8ED] bg-[radial-gradient(circle_at_50%_35%,#ffffff_0%,#f8f8fa_62%,#f0f0f3_100%)] sm:order-2 sm:min-h-[520px] sm:rounded-[32px] lg:sticky lg:top-[96px] xl:min-h-[620px]">
+              <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-full border border-white/80 bg-white/85 px-3 py-2 shadow-sm backdrop-blur-md sm:left-6 sm:top-6">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--ez-accent)]" />
+                <span className="ez-mono text-[9px] font-bold uppercase tracking-[0.16em] text-[#424245]">
+                  Official India edition
+                </span>
+              </div>
+              <Image
+                src={productImages[selectedImage].src}
+                alt={productImages[selectedImage].alt}
+                fill
+                className="object-contain p-5 transition-opacity duration-300 sm:p-10 xl:p-14"
+                sizes="(min-width: 1024px) 58vw, 100vw"
+                priority
+              />
+              <div className="absolute bottom-4 right-4 rounded-full border border-white/80 bg-white/85 px-3 py-2 shadow-sm backdrop-blur-md sm:bottom-6 sm:right-6">
+                <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#6E6E73]">
+                  Image {selectedImage + 1} / {productImages.length}
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-3.5">
+
+          <div className="mt-5 grid grid-cols-3 divide-x divide-[#E3E3E8] rounded-2xl border border-[#E8E8ED] bg-white px-2 py-4 sm:mt-6 sm:px-4">
             {[
-              "https://ezurr.com/cdn/shop/files/GAMPLAY540_1.jpg?v=1782735942&width=533",
-              "https://ezurr.com/cdn/shop/files/GTA6_banner.webp?v=1783232356&width=800",
-            ].map((src) => (
-              <div
-                key={src}
-                className="relative aspect-[4/3] overflow-hidden rounded-[14px] border border-[#E8E8ED] bg-white"
-              >
-                <Image src={src} alt="" fill className="object-contain" sizes="15vw" />
+              ["Free delivery", "Across India"],
+              ["Secure preorder", "Pay ₹0 today"],
+              ["Easy cancellation", "Until dispatch"],
+            ].map(([title, text]) => (
+              <div key={title} className="min-w-0 px-2 text-center sm:px-4">
+                <div className="text-[11px] font-semibold text-[#1D1D1F] sm:text-[13px]">
+                  {title}
+                </div>
+                <div className="ez-mono mt-1 text-[8px] uppercase tracking-[0.1em] text-[#86868B] sm:text-[9px]">
+                  {text}
+                </div>
               </div>
             ))}
-            <div className="relative aspect-[4/3] overflow-hidden rounded-[14px] bg-[#F5F5F7]" />
           </div>
         </div>
 
-        <div className="flex flex-col gap-[18px] lg:sticky lg:top-[100px] lg:gap-[22px]">
-          <div className="ez-mono flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[var(--ez-accent-text)] sm:gap-2.5 sm:text-[11px]">
-            <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-[var(--ez-accent)]" />
-            Pre-order · Releases Nov 19, 2026
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            <h1 className="ez-h1 m-0 font-bold">Grand Theft Auto VI</h1>
-            <p className="ez-lead m-0 text-[#6E6E73]">
-              Standard Edition for PlayStation 5. Physical disc, region India.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3.5">
-            <span className="text-2xl font-bold tracking-[-0.02em] sm:text-[32px]">₹5,999</span>
-            <span className="ez-mono rounded-full bg-[var(--ez-accent-soft)] px-[11px] py-1.5 text-[10px] uppercase tracking-[0.12em] text-[var(--ez-accent-soft-text)]">
-              Price locked
-            </span>
-            <span className="ez-mono text-[10px] uppercase tracking-[0.12em] text-[#86868B]">
-              COD eligible
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setSelectedDisc(true)}
-              className="flex cursor-pointer flex-col gap-1 rounded-[14px] border-[1.5px] p-4 text-left transition-colors"
-              style={{
-                borderColor: selectedDisc ? "var(--ez-accent)" : "#D2D2D7",
-                background: selectedDisc ? "var(--ez-accent-panel)" : "#FFFFFF",
-              }}
-            >
-              <span className="text-[15px] font-semibold">PS5 · Disc</span>
-              <span className="ez-mono text-xs text-[#6E6E73]">Standard Edition</span>
-            </button>
-            <div className="flex cursor-not-allowed flex-col gap-1 rounded-[14px] border-[1.5px] border-dashed border-[#D2D2D7] bg-white p-4 opacity-70">
-              <span className="text-[15px] font-semibold text-[#86868B]">
-                Switch 2 · Disc
+        <aside className="overflow-hidden rounded-[28px] border border-[#E3E3E8] bg-white shadow-[0_24px_70px_rgba(17,17,19,0.09)] lg:sticky lg:top-[96px]">
+          <div className="flex flex-col gap-5 p-5 sm:p-7 xl:p-8">
+            <div className="ez-mono flex flex-wrap items-center gap-2 text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--ez-accent-text)] sm:text-[10px]">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--ez-accent)] opacity-40" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--ez-accent)]" />
               </span>
-              <span className="ez-mono text-xs text-[#AEAEB2]">Notify me</span>
+              Pre-order open
+              <span className="text-[#AEAEB2]">·</span>
+              <span className="text-[#6E6E73]">Releases Nov 19, 2026</span>
+            </div>
+
+            <div>
+              <p className="ez-mono mb-2 text-[9px] uppercase tracking-[0.18em] text-[#86868B]">
+                Rockstar Games
+              </p>
+              <h1 className="m-0 text-[clamp(2.25rem,4vw,4.25rem)] font-bold leading-[0.94] tracking-[-0.055em] text-[#111113]">
+                Grand Theft Auto VI
+              </h1>
+              <p className="mt-4 text-[15px] leading-relaxed text-[#6E6E73] sm:text-base">
+                Standard Edition for PlayStation 5. Physical disc, region India.
+              </p>
+            </div>
+
+            <div className="flex items-end justify-between gap-4 border-y border-[#E8E8ED] py-5">
+              <div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="text-[30px] font-bold leading-none tracking-[-0.04em] sm:text-[36px]">
+                    ₹5,999
+                  </span>
+                  <span className="ez-mono rounded-full bg-[var(--ez-accent-soft)] px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.13em] text-[var(--ez-accent-soft-text)]">
+                    Price locked
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-[#86868B]">Inclusive of all taxes</p>
+              </div>
+              <span className="ez-mono shrink-0 text-[9px] uppercase tracking-[0.12em] text-[#6E6E73]">
+                COD eligible
+              </span>
+            </div>
+
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm font-semibold">Choose platform</span>
+                <span className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
+                  1 option
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDisc(true)}
+                  aria-pressed={selectedDisc}
+                  className={`relative flex cursor-pointer flex-col gap-1 rounded-2xl border-[1.5px] p-4 text-left transition-all ${
+                    selectedDisc
+                      ? "border-[var(--ez-accent)] bg-[var(--ez-accent-panel)] shadow-[0_0_0_2px_var(--ez-accent-soft)]"
+                      : "border-[#D2D2D7] bg-white"
+                  }`}
+                >
+                  <span className="text-[14px] font-semibold">PS5 · Disc</span>
+                  <span className="ez-mono text-[10px] text-[#6E6E73]">Standard edition</span>
+                  <span className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--ez-accent)] text-[10px] text-white">
+                    ✓
+                  </span>
+                </button>
+                <div
+                  aria-disabled="true"
+                  className="flex cursor-not-allowed flex-col gap-1 rounded-2xl border-[1.5px] border-dashed border-[#D2D2D7] bg-[#FAFAFB] p-4 opacity-65"
+                >
+                  <span className="text-[14px] font-semibold text-[#86868B]">
+                    Switch 2 · Disc
+                  </span>
+                  <span className="ez-mono text-[10px] text-[#AEAEB2]">Coming soon</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--ez-accent-soft)] text-xs font-bold text-[var(--ez-accent-soft-text)]">
+                  ↓
+                </span>
+                <span className="ez-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--ez-accent-soft-text)]">
+                  Minimum price guarantee
+                </span>
+              </div>
+              <p className="m-0 text-[12.5px] leading-relaxed text-[#424245]">
+                If our price drops before release, you automatically get the lower
+                price. No forms, no asking.
+              </p>
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5 rounded-2xl border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] px-5 py-[18px]">
-            <div className="ez-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ez-accent-soft-text)]">
-              Minimum price guarantee
+          <div className="bg-[#1D1D1F] px-5 py-5 text-white sm:px-7 sm:py-6 xl:px-8">
+            <div className="mb-4 flex items-baseline justify-between gap-3">
+              <span className="ez-mono text-[9px] uppercase tracking-[0.15em] text-[#A1A1A6]">
+                Release countdown
+              </span>
+              <CountdownInline />
             </div>
-            <p className="m-0 text-[13.5px] leading-relaxed text-[#424245]">
-              Your price is locked at ₹5,999. If our price drops before release
-              day, we automatically refund you the difference — no forms, no asking.
-            </p>
-          </div>
-
-          <div className="flex items-baseline gap-2.5 ez-mono">
-            <span className="text-[10.5px] uppercase tracking-[0.14em] text-[#86868B]">
-              Releases in
-            </span>
-            <CountdownInline />
-          </div>
-
-          <div className="flex flex-col gap-2.5">
             <Link
               href="/checkout"
-              className="ez-btn-primary rounded-full py-[17px] text-center text-[15.5px] font-semibold"
+              className="ez-btn-primary flex min-h-14 w-full items-center justify-center rounded-full px-5 text-center text-[15px] font-semibold shadow-[0_10px_30px_oklch(0.4_0.16_var(--ez-h)/0.35)]"
             >
-              Pre-order now — ₹5,999
+              Pre-order now · ₹0 today
             </Link>
             <Link
               href="#alert"
-              className="ez-btn-outline rounded-full border border-[#D2D2D7] py-[15px] text-center text-[14.5px] font-semibold transition-colors"
+              className="mt-2.5 flex min-h-12 w-full items-center justify-center rounded-full border border-white/15 bg-white/[0.06] px-5 text-center text-[13px] font-semibold text-white transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white"
             >
               Set a price-drop alert
             </Link>
+            <div className="mt-4 grid gap-2 text-[11.5px] text-[#C7C7CC]">
+              {[
+                "Charged only when your order ships",
+                "10% off prepaid orders · Cancel before dispatch",
+              ].map((line) => (
+                <div key={line} className="flex items-start gap-2">
+                  <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-[var(--ez-accent)]" />
+                  {line}
+                </div>
+              ))}
+            </div>
           </div>
-
-          <div className="flex flex-col gap-2 pt-1 text-[13px] text-[#6E6E73]">
-            {[
-              "Pay ₹0 today — charged when it ships",
-              "10% off on prepaid orders · COD under ₹10,000",
-              "Cancel anytime before dispatch",
-            ].map((line) => (
-              <div key={line} className="flex items-center gap-2">
-                <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-[#AEAEB2]" />
-                {line}
-              </div>
-            ))}
-          </div>
-        </div>
+        </aside>
       </section>
 
       <RelatedProductsSection />

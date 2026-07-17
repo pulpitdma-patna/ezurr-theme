@@ -53,10 +53,10 @@ function Logo({ onClick }: { onClick?: () => void }) {
     <Link
       href="/"
       onClick={onClick}
-      className="flex shrink-0 items-baseline gap-2 whitespace-nowrap"
+      className="flex shrink-0 items-baseline gap-2.5 whitespace-nowrap"
     >
-      <span className="text-lg font-bold tracking-[-0.03em] sm:text-[21px]">Ezurr</span>
-      <span className="ez-mono text-[9px] uppercase tracking-[0.18em] text-[#86868B] sm:text-[9.5px]">
+      <span className="text-xl font-semibold tracking-[-0.045em] sm:text-[22px]">Ezurr</span>
+      <span className="ez-mono text-[8px] uppercase tracking-[0.2em] text-[#86868B] sm:text-[9px]">
         Play HQ
       </span>
     </Link>
@@ -83,18 +83,20 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
 
   return (
     <header
-      className="sticky top-0 z-50 border-b border-[#E8E8ED] bg-white/72 backdrop-blur-[20px]"
+      className="sticky top-0 z-50 border-b border-black/[0.06] bg-white/82 backdrop-blur-[24px]"
       style={{ WebkitBackdropFilter: "saturate(180%) blur(20px)" }}
     >
       <nav
         className={`mx-auto flex items-center gap-4 ${
-          compact ? "h-14 max-w-[1100px] px-4 sm:h-16 sm:px-6" : "h-14 px-4 sm:h-[68px] sm:px-6 lg:px-10"
+          compact
+            ? "h-14 max-w-[1100px] px-4 sm:h-16 sm:px-6"
+            : "ez-page h-14 sm:h-[72px]"
         }`}
       >
         <Logo onClick={closeMenu} />
 
         {!compact && (
-          <div className="hidden shrink-0 gap-6 text-sm font-medium text-[#424245] lg:flex xl:gap-7">
+          <div className="hidden shrink-0 gap-7 text-[13px] font-medium text-[#424245] lg:flex xl:gap-8">
             {navItems.map((item) => (
               <Link
                 key={item.key}
@@ -113,7 +115,7 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
 
         <div className="ml-auto flex items-center gap-3 sm:gap-[22px]">
           {showSearch && (
-            <div className="hidden min-w-[90px] w-[170px] shrink cursor-text items-center gap-2 rounded-full bg-[#F5F5F7] px-4 py-2 text-[13px] text-[#86868B] md:flex">
+            <div className="hidden min-w-[90px] w-[174px] shrink cursor-text items-center gap-2 rounded-full border border-black/[0.04] bg-[#F5F5F7] px-4 py-2.5 text-[13px] text-[#86868B] md:flex">
               <span className="relative h-3 w-3 shrink-0 rounded-full border-[1.6px] border-[#86868B]">
                 <span className="absolute left-[9px] top-[10px] h-[1.6px] w-[5px] rotate-45 bg-[#86868B]" />
               </span>

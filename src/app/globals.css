@@ -16,6 +16,11 @@
   --ez-accent-panel: oklch(0.97 0.014 var(--ez-h));
   --ez-accent-panel-border: oklch(0.92 0.035 var(--ez-h));
   --ez-in-stock: #3d7a4e;
+  --ez-ink: #111113;
+  --ez-soft-ink: #424245;
+  --ez-warm-surface: #f7f7f8;
+  --ez-card-shadow: 0 18px 50px rgba(17, 17, 19, 0.07);
+  --ez-card-shadow-hover: 0 28px 70px rgba(17, 17, 19, 0.12);
   --ez-page-x: 1rem;
 }
 
@@ -38,7 +43,7 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-system);
+  --font-sans: var(--font-geist);
   --font-mono: var(--font-space-mono);
 }
 
@@ -52,9 +57,11 @@ body {
   padding: 0;
   background: var(--ez-bg);
   color: var(--ez-fg);
-  font-family: var(--font-system), -apple-system, BlinkMacSystemFont, "SF Pro Display",
+  font-family: var(--font-geist), -apple-system, BlinkMacSystemFont, "SF Pro Display",
     "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
@@ -95,48 +102,48 @@ input:focus {
 }
 
 .ez-section {
-  padding-top: 3.5rem;
+  padding-top: 4.5rem;
 }
 
 @media (min-width: 768px) {
-  .ez-section {
-    padding-top: 5rem;
-  }
-}
-
-@media (min-width: 1024px) {
   .ez-section {
     padding-top: 6.5rem;
   }
 }
 
+@media (min-width: 1024px) {
+  .ez-section {
+    padding-top: 8rem;
+  }
+}
+
 .ez-display {
-  font-size: clamp(2rem, 8vw, 3.375rem);
-  line-height: 1.04;
-  letter-spacing: -0.035em;
+  font-size: clamp(2.4rem, 7vw, 5.25rem);
+  line-height: 0.98;
+  letter-spacing: -0.055em;
 }
 
 .ez-h1 {
-  font-size: clamp(1.875rem, 6vw, 2.875rem);
-  line-height: 1.08;
-  letter-spacing: -0.03em;
+  font-size: clamp(2.1rem, 5vw, 3.75rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
 }
 
 .ez-h2 {
-  font-size: clamp(1.625rem, 5vw, 2.375rem);
-  line-height: 1.08;
-  letter-spacing: -0.03em;
+  font-size: clamp(1.9rem, 4.5vw, 3.25rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
 }
 
 .ez-h3 {
-  font-size: clamp(1.5rem, 4vw, 2rem);
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
 }
 
 .ez-lead {
-  font-size: clamp(0.9375rem, 2.5vw, 1rem);
-  line-height: 1.6;
+  font-size: clamp(1rem, 2vw, 1.15rem);
+  line-height: 1.55;
 }
 
 .ez-mono {
@@ -175,8 +182,8 @@ input:focus {
 
 @media (min-width: 768px) {
   .ez-card-hover:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.08);
+    transform: translateY(-6px);
+    box-shadow: var(--ez-card-shadow-hover);
     border-color: #d2d2d7;
   }
 
@@ -184,6 +191,47 @@ input:focus {
     transform: translateY(-3px);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.06);
   }
+}
+
+.ez-section-kicker {
+  font-family: var(--font-space-mono), "Space Mono", ui-monospace, monospace;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--ez-subtle);
+}
+
+.ez-section-title {
+  margin: 0;
+  font-size: clamp(1.9rem, 4.5vw, 3.5rem);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  color: var(--ez-ink);
+}
+
+.ez-section-copy {
+  margin: 0;
+  max-width: 38rem;
+  font-size: clamp(0.95rem, 1.6vw, 1.08rem);
+  line-height: 1.6;
+  color: var(--ez-muted);
+}
+
+.ez-premium-card {
+  border: 1px solid rgba(29, 29, 31, 0.07);
+  background: #fff;
+  box-shadow: var(--ez-card-shadow);
+}
+
+.ez-scrollbar-none {
+  scrollbar-width: none;
+}
+
+.ez-scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 .ez-cta-row {

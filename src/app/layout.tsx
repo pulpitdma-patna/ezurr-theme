@@ -1,7 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Space_Mono } from "next/font/google";
+import { Geist, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeAccent } from "@/components/ThemeAccent";
+
+const geist = Geist({
+  variable: "--font-geist",
+  subsets: ["latin"],
+});
 
 const spaceMono = Space_Mono({
   variable: "--font-space-mono",
@@ -31,15 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${spaceMono.variable} min-h-screen antialiased`}
-        style={
-          {
-            "--font-system":
-              "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif",
-          } as React.CSSProperties
-        }
-      >
+      <body className={`${geist.variable} ${spaceMono.variable} min-h-screen antialiased`}>
         <ThemeAccent />
         {children}
       </body>

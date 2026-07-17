@@ -1,22 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { theme } from "@/lib/theme";
 
 const PLACEHOLDER = { dd: "--", hh: "--", mm: "--", ss: "--" };
+const clockListeners = new Set<() => void>();
+let clockNow = 0;
+let clockInterval: ReturnType<typeof setInterval> | undefined;
+
+function tickClock() {
+  clockNow = Date.now();
+  clockListeners.forEach((listener) => listener());
+}
+
+function subscribeToClock(listener: () => void) {
+  clockListeners.add(listener);
+  if (clockListeners.size === 1) {
+    tickClock();
+    clockInterval = setInterval(tickClock, 1000);
+  }
+
+  return () => {
+    clockListeners.delete(listener);
+    if (clockListeners.size === 0 && clockInterval) {
+      clearInterval(clockInterval);
+      clockInterval = undefined;
+      clockNow = 0;
+    }
+  };
+}
 
 function useCountdown() {
-  const [mounted, setMounted] = useState(false);
-  const [now, setNow] = useState(0);
-
-  useEffect(() => {
-    setMounted(true);
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  if (!mounted) return PLACEHOLDER;
+  const now = useSyncExternalStore(subscribeToClock, () => clockNow, () => 0);
+  if (!now) return PLACEHOLDER;
 
   const target = new Date(theme.releaseDate).getTime();
   let s = Math.max(0, Math.floor((target - now) / 1000));

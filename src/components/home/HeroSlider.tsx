@@ -3,13 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { CountdownBoxes } from "@/components/ui/Countdown";
+import { CountdownSummaryPanel } from "@/components/ui/Countdown";
 
 const slides = [
   {
     id: "gta",
-    badge: "Pre-order · PS5 · Releases Nov 19",
-    badgeColor: "accent" as const,
     title: "Grand Theft Auto VI.",
     subtitle: "Reserved, price locked.",
     price: "₹5,999",
@@ -17,15 +15,12 @@ const slides = [
     primaryCta: { label: "Pre-order now", href: "/checkout" },
     secondaryCta: { label: "View details", href: "/product" },
     showCountdown: true,
-    image: "https://ezurr.com/cdn/shop/files/GTA6_banner.webp?v=1783232356&width=1200",
-    imageFit: "cover" as const,
-    imageBg: "#F5F5F7",
-    bordered: false,
+    image: "/images/hero-neon-coast.png",
+    imagePosition: "center",
+    backdrop: "#11151b",
   },
   {
     id: "wolverine",
-    badge: "Pre-order · PS5 exclusive",
-    badgeColor: "accent" as const,
     title: "Marvel's Wolverine.",
     subtitle: "The claws come out.",
     price: "₹5,499",
@@ -33,15 +28,12 @@ const slides = [
     primaryCta: { label: "Pre-order now", href: "/checkout" },
     secondaryCta: { label: "View details", href: "/product" },
     showCountdown: false,
-    image: "https://ezurr.com/cdn/shop/files/PREPLAY346.jpg?v=1773153102&width=533",
-    imageFit: "contain" as const,
-    imageBg: "#FFFFFF",
-    bordered: true,
+    image: "/images/hero-wild-crimson.png",
+    imagePosition: "center",
+    backdrop: "#120e12",
   },
   {
     id: "switch2",
-    badge: "In stock · Ships in 24 hrs",
-    badgeColor: "green" as const,
     title: "Nintendo Switch 2.",
     subtitle: "Play has no home.",
     price: "₹65,000",
@@ -50,15 +42,34 @@ const slides = [
     primaryCta: { label: "Add to bag", href: "/checkout" },
     secondaryCta: { label: "View details", href: "/product" },
     showCountdown: false,
-    image: "https://ezurr.com/cdn/shop/files/CONSNIN130_1.jpg?v=1772613150&width=533",
-    imageFit: "contain" as const,
-    imageBg: "#FFFFFF",
-    bordered: true,
+    image: "/images/hero-handheld-cyan.png",
+    imagePosition: "center",
+    backdrop: "#07161b",
   },
 ];
 
+function ArrowIcon({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={direction === "left" ? "rotate-180" : ""}
+    >
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
 export function HeroSlider() {
   const [slide, setSlide] = useState(0);
+  const [paused, setPaused] = useState(false);
   const total = slides.length;
 
   const go = useCallback(
@@ -67,69 +78,73 @@ export function HeroSlider() {
   );
 
   useEffect(() => {
-    const id = setInterval(() => go(slide + 1), 6000);
+    if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => setSlide((current) => (current + 1) % total), 6500);
     return () => clearInterval(id);
-  }, [slide, go]);
+  }, [paused, total]);
 
   return (
-    <section className="relative overflow-hidden border-b border-[#E8E8ED] bg-[#F5F5F7] pb-12 md:pb-0">
+    <section
+      className="relative overflow-hidden bg-[#08090b]"
+      aria-roledescription="carousel"
+      aria-label="Featured products"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false);
+      }}
+    >
+      <p className="sr-only" aria-live="polite">
+        Slide {slide + 1} of {total}: {slides[slide].title}
+      </p>
       <div
-        className="flex transition-transform duration-[650ms] ease-[cubic-bezier(0.3,0.8,0.3,1)]"
+        className="flex transition-transform duration-700 ease-[cubic-bezier(0.3,0.8,0.3,1)] motion-reduce:transition-none"
         style={{ transform: `translateX(-${slide * 100}%)` }}
       >
-        {slides.map((s) => (
-          <div key={s.id} className="min-w-0 shrink-0 grow-0 basis-full">
-            <div className="mx-auto grid grid-cols-1 items-center gap-8 px-4 py-10 sm:gap-10 sm:px-6 sm:py-12 lg:grid-cols-[1fr_1.05fr] lg:gap-16 lg:px-12 lg:pb-[84px] lg:pt-[60px] xl:px-24">
-              {/* Image first on mobile for visual impact */}
-              <div
-                className={`relative order-1 aspect-[4/3.1] overflow-hidden rounded-2xl sm:rounded-[28px] lg:order-2 ${
-                  s.bordered ? "border border-[#E8E8ED]" : ""
-                }`}
-                style={{ background: s.imageBg }}
-              >
-                <Image
-                  src={s.image}
-                  alt={s.title}
-                  fill
-                  className={s.imageFit === "contain" ? "object-contain" : "object-cover"}
-                  sizes="(max-width: 1024px) 100vw, 50vw"
-                  priority={s.id === "gta"}
-                />
-              </div>
+        {slides.map((s, index) => (
+          <article
+            key={s.id}
+            className="relative h-[700px] min-w-0 shrink-0 grow-0 basis-full overflow-hidden sm:h-[680px] lg:h-[720px]"
+            aria-roledescription="slide"
+            aria-label={`${index + 1} of ${total}`}
+            aria-hidden={slide !== index}
+            style={{ backgroundColor: s.backdrop }}
+          >
+            <Image
+              src={s.image}
+              alt=""
+              fill
+              className="object-cover"
+              style={{ objectPosition: s.imagePosition }}
+              sizes="100vw"
+              priority={index === 0}
+            />
 
-              <div className="order-2 flex flex-col gap-4 sm:gap-6 lg:order-1">
-                <div
-                  className={`ez-mono flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.16em] sm:text-[11px] ${
-                    s.badgeColor === "green"
-                      ? "text-[#3D7A4E]"
-                      : "text-[var(--ez-accent-text)]"
-                  }`}
-                >
-                  <span
-                    className={`h-[7px] w-[7px] shrink-0 rounded-full ${
-                      s.badgeColor === "green"
-                        ? "bg-[#3D7A4E]"
-                        : "bg-[var(--ez-accent)]"
-                    }`}
-                  />
-                  {s.badge}
-                </div>
-                <h1 className="ez-display m-0 font-bold">
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,4,7,0.94)_0%,rgba(3,4,7,0.78)_39%,rgba(3,4,7,0.18)_76%,rgba(3,4,7,0.32)_100%)] sm:bg-[linear-gradient(90deg,rgba(3,4,7,0.95)_0%,rgba(3,4,7,0.74)_42%,rgba(3,4,7,0.08)_78%,rgba(3,4,7,0.22)_100%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(3,4,7,0.82)_0%,transparent_38%,rgba(3,4,7,0.14)_100%)]" />
+            <div className="absolute inset-x-0 top-0 h-px bg-white/15" />
+
+            <div className="ez-page relative z-10 flex h-full w-full items-start pb-28 pt-12 sm:items-center sm:pb-24 sm:pt-8">
+              <div className="flex w-full max-w-[720px] flex-col gap-4 text-white sm:gap-5">
+                <h1 className="m-0 max-w-[720px] text-[clamp(2.4rem,6vw,4.8rem)] font-semibold leading-[0.98] tracking-[-0.055em] text-white">
                   {s.title}
                   <br />
-                  <span className="font-medium text-[#86868B]">{s.subtitle}</span>
+                  <span className="text-[0.72em] font-medium leading-[1.05] tracking-[-0.045em] text-white/58">
+                    {s.subtitle}
+                  </span>
                 </h1>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3.5">
-                  <span className="text-2xl font-bold tracking-[-0.02em] sm:text-[30px]">
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5">
+                  <span className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-[30px]">
                     {s.price}
                   </span>
                   {"strike" in s && s.strike && (
-                    <span className="ez-mono text-sm text-[#AEAEB2] line-through sm:text-[15px]">
+                    <span className="ez-mono text-xs text-white/45 line-through sm:text-sm">
                       {s.strike}
                     </span>
                   )}
                   {"saveTag" in s && s.saveTag && (
-                    <span className="ez-mono rounded-full bg-[var(--ez-accent-soft)] px-[11px] py-1.5 text-[10px] uppercase tracking-[0.12em] text-[var(--ez-accent-soft-text)]">
+                    <span className="ez-mono rounded-full border border-[#73e798]/25 bg-[#73e798]/15 px-3 py-1.5 text-[9px] uppercase tracking-[0.12em] text-[#9df2b8]">
                       {s.saveTag}
                     </span>
                   )}
@@ -137,72 +152,83 @@ export function HeroSlider() {
                     s.tags?.map((tag) => (
                       <span
                         key={tag}
-                        className={`ez-mono text-[10px] uppercase tracking-[0.12em] ${
+                        className={`ez-mono text-[9px] uppercase tracking-[0.12em] sm:text-[10px] ${
                           tag === "Price locked"
-                            ? "rounded-full bg-[var(--ez-accent-soft)] px-[11px] py-1.5 text-[var(--ez-accent-soft-text)]"
-                            : "text-[#86868B]"
+                            ? "rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-white/80"
+                            : "text-white/55"
                         }`}
                       >
                         {tag}
                       </span>
                     ))}
                 </div>
-                <div className="ez-cta-row">
+                <div className="mt-1 flex w-full flex-col gap-3 min-[480px]:w-auto min-[480px]:flex-row min-[480px]:flex-wrap">
                   <Link
                     href={s.primaryCta.href}
-                    className="ez-btn-primary inline-flex rounded-full px-6 py-3.5 text-[15px] font-semibold sm:px-[30px] sm:py-[15px]"
+                    tabIndex={slide === index ? 0 : -1}
+                    className="inline-flex min-h-12 items-center justify-center rounded-full bg-white px-7 py-3 text-[14px] font-semibold text-[#0b0c0f] shadow-[0_12px_32px_rgba(0,0,0,0.25)] transition hover:-translate-y-0.5 hover:bg-white hover:!text-[#0b0c0f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                   >
                     {s.primaryCta.label}
                   </Link>
                   <Link
                     href={s.secondaryCta.href}
-                    className="ez-btn-outline inline-flex rounded-full border border-[#D2D2D7] px-6 py-3.5 text-[15px] font-semibold transition-colors sm:px-[26px] sm:py-[15px]"
+                    tabIndex={slide === index ? 0 : -1}
+                    className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/25 bg-white/10 px-7 py-3 text-[14px] font-semibold text-white backdrop-blur-md transition hover:-translate-y-0.5 hover:border-white/45 hover:bg-white/15 hover:!text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                   >
                     {s.secondaryCta.label}
                   </Link>
                 </div>
                 {s.showCountdown && (
-                  <div className="mt-1">
-                    <CountdownBoxes />
+                  <div className="mt-1 max-w-[370px]">
+                    <CountdownSummaryPanel />
                   </div>
                 )}
               </div>
             </div>
-          </div>
+          </article>
         ))}
       </div>
 
-      <button
-        type="button"
-        aria-label="Previous slide"
-        onClick={() => go(slide - 1)}
-        className="absolute left-2 top-[38%] hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#D2D2D7] bg-white/90 text-lg text-[#424245] transition-colors hover:border-[#1D1D1F] hover:text-[#1D1D1F] md:flex md:h-11 md:w-11 lg:left-5 lg:top-1/2"
-      >
-        ←
-      </button>
-      <button
-        type="button"
-        aria-label="Next slide"
-        onClick={() => go(slide + 1)}
-        className="absolute right-2 top-[38%] hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#D2D2D7] bg-white/90 text-lg text-[#424245] transition-colors hover:border-[#1D1D1F] hover:text-[#1D1D1F] md:flex md:h-11 md:w-11 lg:right-5 lg:top-1/2"
-      >
-        →
-      </button>
-
-      <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2 md:bottom-[26px]">
-        {slides.map((_, i) => (
-          <button
-            key={i}
-            type="button"
-            aria-label={`Go to slide ${i + 1}`}
-            onClick={() => go(i)}
-            className="h-[7px] rounded-full transition-all duration-300"
-            style={{
-              width: slide === i ? 22 : 7,
-              background: slide === i ? "var(--ez-accent)" : "#D2D2D7",
-            }}
-          />
-        ))}
+      <div className="absolute inset-x-0 bottom-6 z-20 sm:bottom-8">
+        <div className="ez-page flex w-full items-center justify-between">
+          <div className="flex items-center gap-2" role="tablist" aria-label="Choose featured product">
+          {slides.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              aria-selected={slide === i}
+              aria-label={`Show slide ${i + 1}: ${s.title}`}
+              onClick={() => go(i)}
+              className="group flex h-11 items-center justify-center px-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              <span
+                className={`block h-1 rounded-full transition-all duration-300 ${
+                  slide === i ? "w-8 bg-white" : "w-3 bg-white/35 group-hover:bg-white/65"
+                }`}
+              />
+            </button>
+          ))}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              aria-label="Previous slide"
+              onClick={() => go(slide - 1)}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/25 text-white backdrop-blur-md transition hover:border-white/40 hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              <ArrowIcon direction="left" />
+            </button>
+            <button
+              type="button"
+              aria-label="Next slide"
+              onClick={() => go(slide + 1)}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/25 text-white backdrop-blur-md transition hover:border-white/40 hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              <ArrowIcon direction="right" />
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );

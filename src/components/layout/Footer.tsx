@@ -3,16 +3,16 @@ import { navItems } from "@/lib/theme";
 
 export function FooterFull() {
   return (
-    <footer className="mt-16 border-t border-[#E8E8ED] bg-white sm:mt-24 lg:mt-28">
-      <div className="ez-page mx-auto grid grid-cols-1 gap-10 py-12 sm:grid-cols-2 sm:gap-12 sm:py-16 lg:grid-cols-4">
+    <footer className="mt-20 border-t border-black/[0.06] bg-[#F5F5F7] sm:mt-28 lg:mt-36">
+      <div className="ez-page mx-auto grid grid-cols-1 gap-10 py-14 sm:grid-cols-2 sm:gap-12 sm:py-20 lg:grid-cols-4">
         <div className="flex flex-col gap-3.5 sm:col-span-2 lg:col-span-1">
           <div className="flex items-baseline gap-2">
-            <span className="text-xl font-bold tracking-[-0.03em]">Ezurr</span>
+            <span className="text-[22px] font-semibold tracking-[-0.045em]">Ezurr</span>
             <span className="ez-mono text-[9.5px] uppercase tracking-[0.18em] text-[#86868B]">
               Play HQ
             </span>
           </div>
-          <p className="max-w-[280px] text-[13.5px] leading-relaxed text-[#6E6E73]">
+          <p className="max-w-[310px] text-sm leading-relaxed text-[#6E6E73]">
             India&apos;s ultimate gaming store — games, consoles and gear at the
             lowest price, guaranteed.
           </p>
@@ -50,7 +50,7 @@ export function FooterFull() {
           ]}
         />
       </div>
-      <div className="border-t border-[#E8E8ED]">
+      <div className="border-t border-black/[0.06]">
         <div className="ez-page mx-auto flex flex-col items-start justify-between gap-4 py-5 md:flex-row md:items-center">
           <span className="ez-mono text-[10.5px] tracking-[0.08em] text-[#86868B]">
             © 2026 EZURR
@@ -73,8 +73,8 @@ function FooterColumn({
   links: { href: string; label: string }[];
 }) {
   return (
-    <div className="flex flex-col gap-3 text-[13.5px]">
-      <span className="ez-mono mb-1 text-[10px] uppercase tracking-[0.16em] text-[#86868B]">
+    <div className="flex flex-col gap-3.5 text-sm">
+      <span className="ez-mono mb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-[#86868B]">
         {title}
       </span>
       {links.map((link) => (
