@@ -32,11 +32,13 @@ type StatusBadgeProps =
   | { kind: "custom"; label: string; className?: string };
 
 export function StatusBadge(props: StatusBadgeProps) {
-  const base = "inline-flex rounded px-2 py-0.5 text-[10px] font-semibold";
+  const base =
+    "inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[10px] font-semibold tracking-[-0.01em]";
 
   if (props.kind === "order") {
     return (
       <span className={`${base} ${orderTones[props.status]}`}>
+        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" aria-hidden />
         {orderStatusLabels[props.status]}
       </span>
     );
@@ -45,6 +47,7 @@ export function StatusBadge(props: StatusBadgeProps) {
   if (props.kind === "customer") {
     return (
       <span className={`${base} capitalize ${customerTones[props.status]}`}>
+        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" aria-hidden />
         {props.status}
       </span>
     );
@@ -53,6 +56,7 @@ export function StatusBadge(props: StatusBadgeProps) {
   if (props.kind === "product") {
     return (
       <span className={`${base} ${productTones[props.status]}`}>
+        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" aria-hidden />
         {productStatusLabels[props.status]}
       </span>
     );

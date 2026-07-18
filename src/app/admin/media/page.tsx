@@ -2,9 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ListToolbar } from "@/components/admin/ListToolbar";
-import { Phase2Banner, Phase2Badge } from "@/components/admin/Phase2Badge";
+import { Phase2PageShell } from "@/components/admin/Phase2PageShell";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { useAdminStore } from "@/hooks/useAdminStore";
 
@@ -45,49 +44,47 @@ export default function AdminMediaPage() {
   const active = assets.find((asset) => asset.id === selected) ?? assets[0] ?? null;
 
   return (
-    <div>
-      <AdminPageHeader
-        title="Media"
-        description="CDN library for product stills and merchandising — uploads stay local until Phase 2."
-        breadcrumbs={[
-          { label: "Catalog", href: "/admin/products" },
-          { label: "Media" },
-        ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <Phase2Badge />
-            <label className="inline-flex h-9 cursor-pointer items-center rounded-xl bg-[#1D1D1F] px-3.5 text-xs font-semibold text-white">
-              Upload
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const url = URL.createObjectURL(file);
-                  const asset: MediaAsset = {
-                    id: `up-${Date.now()}`,
-                    name: file.name,
-                    url,
-                    kind: "upload",
-                    bytesLabel: `${Math.round(file.size / 1024)} KB · local`,
-                  };
-                  setUploads((prev) => [asset, ...prev]);
-                  setSelected(asset.id);
-                  toast.push("File staged locally — not uploaded to CDN", "warning");
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          </div>
-        }
-      />
-      <Phase2Banner
-        title="CDN pipeline preview"
-        description="Uploads use object URLs in this browser only. Crop, variants, and signed CDN URLs arrive with the media service."
-      />
-
+    <Phase2PageShell
+      title="Media"
+      description="CDN library for product stills and merchandising — uploads stay local until Phase 2."
+      breadcrumbs={[
+        { label: "Catalog", href: "/admin/products" },
+        { label: "Media" },
+      ]}
+      bannerTitle="CDN pipeline preview"
+      bannerDescription="Uploads use object URLs in this browser only. Crop, variants, and signed CDN URLs arrive with the media service."
+      planned={[
+        "Signed CDN uploads & variants",
+        "Crop studio & focal points",
+        "Asset usage across catalog",
+      ]}
+      actions={
+        <label className="inline-flex h-9 cursor-pointer items-center rounded-xl bg-[#1D1D1F] px-3.5 text-xs font-semibold text-white">
+          Upload
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const url = URL.createObjectURL(file);
+              const asset: MediaAsset = {
+                id: `up-${Date.now()}`,
+                name: file.name,
+                url,
+                kind: "upload",
+                bytesLabel: `${Math.round(file.size / 1024)} KB · local`,
+              };
+              setUploads((prev) => [asset, ...prev]);
+              setSelected(asset.id);
+              toast.push("File staged locally — not uploaded to CDN", "warning");
+              e.target.value = "";
+            }}
+          />
+        </label>
+      }
+    >
       <ListToolbar
         resultLabel={`${assets.length} assets`}
         search={{ value: query, onChange: setQuery, placeholder: "Search media…" }}
@@ -110,12 +107,21 @@ export default function AdminMediaPage() {
               >
                 <div className="relative aspect-square bg-[#F7F7F8]">
                   {asset.url ? (
-                    <Image src={asset.url} alt="" fill className="object-contain p-3" sizes="160px" unoptimized={asset.kind === "upload"} />
+                    <Image
+                      src={asset.url}
+                      alt=""
+                      fill
+                      className="object-contain p-3"
+                      sizes="160px"
+                      unoptimized={asset.kind === "upload"}
+                    />
                   ) : null}
                 </div>
                 <div className="border-t border-black/[0.05] px-2.5 py-2">
                   <div className="truncate text-[11px] font-semibold">{asset.name}</div>
-                  <div className="ez-mono truncate text-[9px] text-[#AEAEB2]">{asset.bytesLabel}</div>
+                  <div className="ez-mono truncate text-[9px] text-[#AEAEB2]">
+                    {asset.bytesLabel}
+                  </div>
                 </div>
               </button>
             );
@@ -172,6 +178,6 @@ export default function AdminMediaPage() {
           )}
         </aside>
       </div>
-    </div>
+    </Phase2PageShell>
   );
 }

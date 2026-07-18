@@ -65,7 +65,6 @@ export default function AdminDashboardPage() {
   const bookedSales = periodOrders.reduce((sum, order) => sum + parsePrice(order.total), 0);
   const priorBooked = priorOrders.reduce((sum, order) => sum + parsePrice(order.total), 0);
   const aov = periodOrders.length ? Math.round(bookedSales / periodOrders.length) : 0;
-  const priorAov = priorOrders.length ? Math.round(priorBooked / priorOrders.length) : 0;
 
   const openStatuses = ["pending", "confirmed", "packed", "shipped", "preorder"] as const;
   const openOrders = store.orders.filter((order) =>
@@ -111,9 +110,9 @@ export default function AdminDashboardPage() {
             Live ops
           </span>
         </div>
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {alerts.length === 0 ? (
-            <div className="rounded-2xl border border-[#A6D5B0] bg-[#EAF6ED] px-4 py-3 text-sm text-[#2D6B3C] md:col-span-2 xl:col-span-3">
+            <div className="rounded-2xl border border-[#A6D5B0] bg-[#EAF6ED] px-4 py-3 text-sm text-[#2D6B3C] sm:col-span-2 xl:col-span-4">
               All clear — no COD backlog, low stock, or release holds.
             </div>
           ) : (
@@ -159,18 +158,18 @@ export default function AdminDashboardPage() {
           }
         />
         <StatCard
-          label="Prior period sales"
-          value={formatInr(priorBooked)}
-          detail={`${formatRangeLabel(priorRange)} · AOV ${formatInr(priorAov)}`}
-        />
-        <StatCard
           label="Open orders"
           value={String(openOrders.length).padStart(2, "0")}
           detail={
             pendingCod > 0
-              ? `${pendingCod} COD · ${store.products.length} SKUs · ${store.customers.length} CRM`
-              : `${store.products.length} SKUs · ${store.customers.length} customers`
+              ? `${pendingCod} COD pending · vs prior ${formatInr(priorBooked)}`
+              : `Vs prior ${formatInr(priorBooked)} · ${store.customers.length} CRM`
           }
+        />
+        <StatCard
+          label="Catalog pulse"
+          value={String(store.products.length)}
+          detail={`${store.products.filter((p) => p.stock > 0 && p.stock <= (store.settings.lowStockThreshold ?? 5)).length} low stock SKUs`}
         />
       </div>
 

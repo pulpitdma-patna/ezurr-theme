@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSelect } from "@/components/admin/AdminSelect";
@@ -13,10 +13,12 @@ import {
   type AdminOrder,
 } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
+import { useListSavedViews } from "@/hooks/useListSavedViews";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 import { formatMobileDisplay } from "@/lib/auth";
 import { bulkUpdateOrderStatus } from "@/lib/adminStore";
 import { useAdminToast } from "@/components/admin/AdminToast";
+import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -120,7 +122,16 @@ export default function AdminOrdersPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [pageSize, setPageSize] = useState(25);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [bulkConfirm, setBulkConfirm] = useState<"packed" | "shipped" | null>(null);
+  const [density, setDensity] = useState<"compact" | "comfortable">("comfortable");
+  const [viewName, setViewName] = useState("");
+  const { views, saveView, removeView } = useListSavedViews("orders");
   const toast = useAdminToast();
+  const [listLoading, setListLoading] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => setListLoading(false), 220);
+    return () => window.clearTimeout(t);
+  }, []);
   const [page, setPage] = usePagedList(
     `${status}|${payment}|${dateRange}|${dateFrom}|${dateTo}|${query}|${sortKey}|${sortDir}|${pageSize}`,
   );
@@ -337,6 +348,31 @@ export default function AdminOrdersPage() {
                 COD · {pendingCod}
               </button>
             ) : null}
+            <div
+              className="inline-flex h-9 items-center rounded-xl border border-black/[0.07] bg-white p-0.5"
+              role="group"
+              aria-label="Table density"
+            >
+              {(
+                [
+                  { id: "comfortable" as const, label: "Comfort" },
+                  { id: "compact" as const, label: "Compact" },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setDensity(option.id)}
+                  className={`h-8 rounded-lg px-2.5 text-[11px] font-semibold transition ${
+                    density === option.id
+                      ? "bg-[#1D1D1F] text-white"
+                      : "text-[#6E6E73] hover:text-[#1D1D1F]"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <IconButton label="Export CSV" onClick={exportCsv} size="md">
               <ExportIcon />
             </IconButton>
@@ -344,7 +380,66 @@ export default function AdminOrdersPage() {
         }
       />
 
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {views.map((view) => (
+          <button
+            key={view.id}
+            type="button"
+            onClick={() => {
+              setQuery(view.query);
+              setStatus(view.filters.status ?? "all");
+              setPaymentLocal(
+                view.filters.payment === "COD" || view.filters.payment === "Prepaid"
+                  ? view.filters.payment
+                  : "all",
+              );
+              setDateRange(view.filters.dateRange ?? "all");
+              setDateFrom(view.filters.dateFrom ?? "");
+              setDateTo(view.filters.dateTo ?? "");
+            }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              removeView(view.id);
+              toast.push("View removed", "neutral");
+            }}
+            className="rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#424245] hover:text-[#1D1D1F]"
+            title="Click to apply · right-click to remove"
+          >
+            {view.name}
+          </button>
+        ))}
+        <input
+          value={viewName}
+          onChange={(e) => setViewName(e.target.value)}
+          placeholder="Save view name"
+          className="h-8 rounded-lg border border-black/[0.08] bg-white px-2.5 text-xs outline-none focus:border-black/[0.14]"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            saveView({
+              name: viewName.trim() || "Orders view",
+              query,
+              filters: {
+                status,
+                payment,
+                dateRange,
+                dateFrom,
+                dateTo,
+              },
+            });
+            setViewName("");
+            toast.push("View saved", "success");
+          }}
+          className="h-8 rounded-lg bg-[#1D1D1F] px-3 text-[11px] font-semibold text-white"
+        >
+          Save view
+        </button>
+      </div>
+
       <DataTable
+        loading={listLoading}
+        density={density}
         columns={columns}
         rows={rows}
         rowKey={(row) => row.id}
@@ -387,24 +482,14 @@ export default function AdminOrdersPage() {
             <button
               type="button"
               className="h-8 rounded-lg bg-white px-3 text-xs font-semibold text-[#1D1D1F]"
-              onClick={() => {
-                const count = selectedKeys.length;
-                bulkUpdateOrderStatus(selectedKeys, "packed");
-                setSelectedKeys([]);
-                toast.push(`Marked ${count} order(s) packed`, "success");
-              }}
+              onClick={() => setBulkConfirm("packed")}
             >
               Mark packed
             </button>
             <button
               type="button"
               className="h-8 rounded-lg border border-white/20 px-3 text-xs font-semibold text-white"
-              onClick={() => {
-                const count = selectedKeys.length;
-                bulkUpdateOrderStatus(selectedKeys, "shipped");
-                setSelectedKeys([]);
-                toast.push(`Marked ${count} order(s) shipped`, "success");
-              }}
+              onClick={() => setBulkConfirm("shipped")}
             >
               Mark shipped
             </button>
@@ -417,6 +502,29 @@ export default function AdminOrdersPage() {
             </button>
           </>
         }
+      />
+
+      <ConfirmDialog
+        open={bulkConfirm !== null}
+        title={
+          bulkConfirm === "shipped"
+            ? `Mark ${selectedKeys.length} order(s) shipped?`
+            : `Mark ${selectedKeys.length} order(s) packed?`
+        }
+        description="This updates status for every selected order. You can still change individual orders afterward."
+        confirmLabel={bulkConfirm === "shipped" ? "Mark shipped" : "Mark packed"}
+        onCancel={() => setBulkConfirm(null)}
+        onConfirm={() => {
+          if (!bulkConfirm) return;
+          const count = selectedKeys.length;
+          bulkUpdateOrderStatus(selectedKeys, bulkConfirm);
+          setSelectedKeys([]);
+          setBulkConfirm(null);
+          toast.push(
+            `Marked ${count} order(s) ${bulkConfirm}`,
+            "success",
+          );
+        }}
       />
     </div>
   );

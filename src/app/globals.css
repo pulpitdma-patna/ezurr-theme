@@ -275,53 +275,273 @@ input:focus {
   display: none;
 }
 
-/* Premium checkout */
+/* Premium checkout — calm pre-order reservation desk */
 .ez-checkout-bg {
+  position: relative;
+  isolation: isolate;
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, oklch(0.94 0.04 var(--ez-h)), transparent),
-    linear-gradient(180deg, #f8f8fa 0%, #f0f0f4 100%);
+    radial-gradient(ellipse 70% 42% at 88% -8%, rgba(17, 17, 19, 0.045), transparent 58%),
+    radial-gradient(ellipse 55% 36% at 12% 0%, rgba(255, 255, 255, 0.85), transparent 55%),
+    linear-gradient(180deg, #f8f8fa 0%, #f3f3f5 52%, #eeeef1 100%);
+}
+
+.ez-checkout-shell {
+  position: relative;
+  z-index: 1;
 }
 
 .ez-checkout-panel {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(17, 17, 19, 0.06);
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 12px 40px rgba(0, 0, 0, 0.06);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+    0 1px 2px rgba(17, 17, 19, 0.03),
+    0 16px 40px rgba(17, 17, 19, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .ez-checkout-summary {
-  background: linear-gradient(165deg, #1d1d1f 0%, #2c2c2e 48%, #1a1a1c 100%);
+  background: linear-gradient(165deg, #1a1a1c 0%, #232326 46%, #111113 100%);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 24px 48px rgba(0, 0, 0, 0.18);
+    0 22px 48px rgba(17, 17, 19, 0.22);
+}
+
+.ez-checkout-summary::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, #f5f5f7 0%, rgba(245, 245, 247, 0.25) 100%);
+  opacity: 0.55;
 }
 
 .ez-checkout-input {
-  border: 1px solid #e3e3e8;
-  background: #fafafa;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  border: 1.5px solid #c7c7cc;
+  background: #fff;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
-.ez-checkout-input:focus {
-  border-color: var(--ez-accent) !important;
+.ez-checkout-input:hover {
+  border-color: #8e8e93;
+}
+
+.ez-checkout-input:focus,
+.ez-checkout-input:focus-within {
+  border-color: var(--ez-ink) !important;
   background: #fff;
-  box-shadow: 0 0 0 3px oklch(0.55 0.17 var(--ez-h) / 0.12);
+  box-shadow: 0 0 0 3px rgba(17, 17, 19, 0.1);
+}
+
+.ez-checkout-input input:focus {
+  border-color: transparent !important;
+  box-shadow: none;
 }
 
 .ez-checkout-btn-dark {
-  background: linear-gradient(180deg, #2a2a2c 0%, #1d1d1f 100%);
+  background: linear-gradient(180deg, #2a2a2c 0%, #111113 100%);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 4px 14px rgba(17, 17, 19, 0.18);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
 .ez-checkout-btn-dark:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 8px 22px rgba(17, 17, 19, 0.22);
   color: #fff;
+}
+
+.ez-checkout-progress {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.ez-checkout-progress-item {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+}
+
+.ez-checkout-progress-item:first-child {
+  flex: 0 0 auto;
+}
+
+.ez-checkout-progress-line {
+  height: 2px;
+  flex: 1;
+  min-width: 12px;
+  margin-inline: 8px;
+  background: #e3e3e8;
+  transition: background 0.25s ease;
+}
+
+.ez-checkout-progress-line.is-lit {
+  background: #1d1d1f;
+}
+
+.ez-checkout-progress-step {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  color: #86868b;
+  transition: color 0.2s ease;
+}
+
+.ez-checkout-progress-dot {
+  display: inline-flex;
+  height: 28px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1.5px solid #d2d2d7;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+@media (min-width: 640px) {
+  .ez-checkout-progress-dot {
+    height: 32px;
+    width: 32px;
+  }
+}
+
+.ez-checkout-progress-label {
+  display: none;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+@media (min-width: 640px) {
+  .ez-checkout-progress-label {
+    display: inline;
+  }
+}
+
+.ez-checkout-progress-step.is-active {
+  color: var(--ez-ink);
+}
+
+.ez-checkout-progress-step.is-active .ez-checkout-progress-dot {
+  background: #111113;
+  border-color: #111113;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(17, 17, 19, 0.18);
+}
+
+.ez-checkout-progress-step.is-done {
+  color: #6e6e73;
+}
+
+.ez-checkout-progress-step.is-done .ez-checkout-progress-dot {
+  background: #f0f0f2;
+  border-color: #c8c8ce;
+  color: #1d1d1f;
+}
+
+.ez-checkout-session {
+  border: 1px solid rgba(17, 17, 19, 0.07);
+  background: #f7f7f8;
+}
+
+.ez-checkout-step {
+  animation: checkout-step-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.ez-checkout-success {
+  animation: checkout-step-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.ez-checkout-rail-in {
+  animation: checkout-rail-in 640ms 120ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes checkout-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes checkout-rail-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ez-checkout-sticky-cta {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 40;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.94);
+  border-top: 1px solid rgba(17, 17, 19, 0.1);
+  box-shadow: 0 -10px 32px rgba(17, 17, 19, 0.08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.ez-checkout-mobile-strip {
+  box-shadow: 0 1px 2px rgba(17, 17, 19, 0.03);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ez-checkout-mobile-strip:hover {
+  border-color: rgba(17, 17, 19, 0.12);
+}
+
+.ez-checkout-trust {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ez-checkout-countdown-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.ez-checkout-countdown-rail .ez-checkout-countdown-units {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ez-checkout-countdown-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 2px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ez-checkout-countdown-unit:last-child {
+  border-right: none;
+}
+
+.ez-checkout-countdown-unit.is-accent span:first-child {
+  color: #f5f5f7;
 }
 
 /* Auth: a cinematic entry point with deliberately restrained motion. */
@@ -472,5 +692,39 @@ input:focus {
 
   .auth-submit::after {
     transition: none;
+  }
+}
+
+/* Admin packing slip — hide shell chrome, print order content */
+@media print {
+  .admin-chrome,
+  .admin-print-hide {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .admin-shell-body {
+    padding-left: 0 !important;
+    margin: 0 !important;
+  }
+
+  .admin-shell-main {
+    padding: 0 !important;
+  }
+
+  .admin-print-packing {
+    color: #111 !important;
+  }
+
+  .admin-print-packing .admin-print-slip {
+    break-inside: avoid;
+  }
+
+  .admin-print-packing a {
+    text-decoration: none !important;
+    color: inherit !important;
   }
 }

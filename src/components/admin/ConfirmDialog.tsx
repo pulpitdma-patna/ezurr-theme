@@ -35,12 +35,23 @@ export function ConfirmDialog({
     const focusables = panel?.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
+    // Prefer Cancel as first focus (safe default) — already first in DOM
     focusables?.[0]?.focus();
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
         onCancel();
+        return;
+      }
+      if (event.key === "Enter" && !danger) {
+        const tag = (event.target as HTMLElement)?.tagName;
+        if (tag === "BUTTON" || tag === "A" || tag === "TEXTAREA") return;
+        event.preventDefault();
+        onConfirm();
         return;
       }
       if (event.key !== "Tab" || !panel) return;
@@ -61,10 +72,11 @@ export function ConfirmDialog({
 
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      document.body.style.overflow = prevOverflow;
       document.removeEventListener("keydown", onKeyDown);
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onCancel]);
+  }, [open, onCancel, onConfirm, danger]);
 
   if (!open) return null;
 
@@ -72,7 +84,7 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
         aria-label="Dismiss"
         onClick={onCancel}
       />
@@ -82,28 +94,40 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
-        className="relative w-full max-w-sm rounded-lg border border-black/[0.08] bg-white p-5 shadow-lg"
+        className="relative w-full max-w-sm rounded-2xl border border-black/[0.08] bg-white p-5 shadow-[0_24px_60px_rgba(17,17,19,0.18)]"
       >
-        <h2 id={titleId} className="text-sm font-semibold tracking-[-0.02em] text-[#1D1D1F]">
-          {title}
-        </h2>
-        {description ? (
-          <p id={descId} className="mt-2 text-sm text-[#6E6E73]">
-            {description}
-          </p>
-        ) : null}
+        <div className="flex items-start gap-3">
+          {danger ? (
+            <span
+              className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#FEF3F2] text-[#B42318]"
+              aria-hidden
+            >
+              !
+            </span>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <h2 id={titleId} className="text-sm font-semibold tracking-[-0.02em] text-[#1D1D1F]">
+              {title}
+            </h2>
+            {description ? (
+              <p id={descId} className="mt-2 text-sm text-[#6E6E73]">
+                {description}
+              </p>
+            ) : null}
+          </div>
+        </div>
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="h-8 rounded-md border border-black/10 px-3 text-xs font-semibold text-[#1D1D1F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+            className="h-9 rounded-xl border border-black/10 px-3.5 text-xs font-semibold text-[#1D1D1F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
           >
             {cancelLabel}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className={`h-8 rounded-md px-3 text-xs font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${
+            className={`h-9 rounded-xl px-3.5 text-xs font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${
               danger ? "bg-[#B42318] hover:bg-[#912018]" : "bg-[#1D1D1F] hover:bg-[#2C2C2E]"
             }`}
           >

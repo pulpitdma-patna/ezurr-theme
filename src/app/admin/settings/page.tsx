@@ -128,15 +128,6 @@ export default function AdminSettingsPage() {
         description="Workspace preferences for your storefront, checkout, and ops alerts."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {msg ? (
-              <span
-                role="status"
-                aria-live="polite"
-                className="inline-flex h-8 items-center rounded-full border border-[#A6D5B0] bg-[#EAF6ED] px-3 text-[11px] font-semibold text-[#2D6B3C]"
-              >
-                {msg}
-              </span>
-            ) : null}
             <Link
               href="/"
               className="inline-flex h-8 items-center rounded-lg border border-black/10 bg-white px-3 text-xs font-semibold transition hover:bg-[#F5F5F7]"
@@ -483,8 +474,7 @@ export default function AdminSettingsPage() {
             title="Team"
             description="Staff roles for this HQ (UI gate only until Phase 2 authZ)."
           >
-            <DemoRolePicker />
-            <div className="mt-4 overflow-hidden rounded-xl border border-black/[0.08]">
+            <div className="overflow-hidden rounded-xl border border-black/[0.08]">
               <table className="w-full text-left text-sm">
                 <thead className="bg-[#F7F7F8] ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
                   <tr>
@@ -510,10 +500,11 @@ export default function AdminSettingsPage() {
               </table>
             </div>
             <p className="mt-3 text-xs text-[#86868B]">
-              Use the demo role switcher above to preview UI gates.{" "}
+              Manage invites and the permissions matrix on{" "}
               <Link href="/admin/team" className="font-semibold text-[#424245] hover:underline">
-                Open Team invites &amp; matrix →
+                Team
               </Link>
+              . Demo role switcher lives in Danger zone.
             </p>
           </SettingsSection>
 
@@ -603,7 +594,8 @@ export default function AdminSettingsPage() {
             description="Irreversible demo actions for this browser’s localStorage."
             danger
           >
-            <div className="grid gap-3 sm:grid-cols-2">
+            <DemoRolePicker />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-black/[0.08] bg-white p-4">
                 <div className="text-sm font-semibold text-[#1D1D1F]">Reset theme knobs</div>
                 <p className="mt-1 text-xs text-[#86868B]">
@@ -631,7 +623,7 @@ export default function AdminSettingsPage() {
                 </button>
               </div>
             </div>
-            <details className="rounded-xl border border-black/[0.06] bg-[#FAFAFB] px-4 py-3 text-xs text-[#86868B]">
+            <details className="mt-4 rounded-xl border border-black/[0.06] bg-[#FAFAFB] px-4 py-3 text-xs text-[#86868B]">
               <summary className="cursor-pointer font-semibold text-[#6E6E73]">
                 Demo auth note
               </summary>

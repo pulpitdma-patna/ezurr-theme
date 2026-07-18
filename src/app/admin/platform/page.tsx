@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Phase2Banner, Phase2Badge } from "@/components/admin/Phase2Badge";
+import { Phase2PageShell } from "@/components/admin/Phase2PageShell";
 import { SettingsToggle } from "@/components/admin/settings/SettingsToggle";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -27,18 +26,19 @@ export default function AdminPlatformPage() {
   const [optimisticLock, setOptimisticLock] = useState(true);
 
   return (
-    <div>
-      <AdminPageHeader
-        title="Platform"
-        description="Enterprise infrastructure surfaces — designed for a future API swap."
-        breadcrumbs={[
-          { label: "System", href: "/admin/settings" },
-          { label: "Platform" },
-        ]}
-        actions={<Phase2Badge />}
-      />
-      <Phase2Banner />
-
+    <Phase2PageShell
+      title="Platform"
+      description="Enterprise infrastructure surfaces — designed for a future API swap."
+      breadcrumbs={[
+        { label: "System", href: "/admin/settings" },
+        { label: "Platform" },
+      ]}
+      planned={[
+        "Replace localStorage with API persistence",
+        "Server-enforced authZ / SSO",
+        "Provider webhooks & delivery queues",
+      ]}
+    >
       <div className="mb-5 flex flex-wrap gap-1.5 rounded-2xl border border-black/[0.06] bg-white p-1.5">
         {TABS.map((item) => {
           const active = tab === item.id;
@@ -52,7 +52,11 @@ export default function AdminPlatformPage() {
               }`}
             >
               <div className="text-xs font-semibold">{item.label}</div>
-              <div className={`ez-mono text-[9px] uppercase tracking-[0.1em] ${active ? "text-white/50" : "text-[#AEAEB2]"}`}>
+              <div
+                className={`ez-mono text-[9px] uppercase tracking-[0.1em] ${
+                  active ? "text-white/50" : "text-[#AEAEB2]"
+                }`}
+              >
                 {item.hint}
               </div>
             </button>
@@ -64,10 +68,16 @@ export default function AdminPlatformPage() {
         <section className="space-y-4 rounded-2xl border border-black/[0.06] bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">API endpoint</h3>
-            <StatusBadge kind="custom" label="Mock · disconnected" className="bg-[#FEF3C7] text-[#92400E]" />
+            <StatusBadge
+              kind="custom"
+              label="Mock · disconnected"
+              className="bg-[#FEF3C7] text-[#92400E]"
+            />
           </div>
           <label className="block">
-            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">Base URL</span>
+            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+              Base URL
+            </span>
             <input
               value={apiBase}
               onChange={(e) => setApiBase(e.target.value)}
@@ -80,8 +90,13 @@ export default function AdminPlatformPage() {
               { label: "Store version", value: "local v6" },
               { label: "Migration status", value: "Idle" },
             ].map((card) => (
-              <div key={card.label} className="rounded-xl border border-black/[0.06] bg-[#F7F7F8] px-3 py-3">
-                <div className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">{card.label}</div>
+              <div
+                key={card.label}
+                className="rounded-xl border border-black/[0.06] bg-[#F7F7F8] px-3 py-3"
+              >
+                <div className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
+                  {card.label}
+                </div>
                 <div className="mt-1 text-sm font-semibold">{card.value}</div>
               </div>
             ))}
@@ -160,7 +175,9 @@ export default function AdminPlatformPage() {
             <StatusBadge
               kind="custom"
               label={queuePaused ? "Paused" : "Simulated"}
-              className={queuePaused ? "bg-[#FEE4E2] text-[#B42318]" : "bg-[#EAF6ED] text-[#2D6B3C]"}
+              className={
+                queuePaused ? "bg-[#FEE4E2] text-[#B42318]" : "bg-[#EAF6ED] text-[#2D6B3C]"
+              }
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -169,8 +186,13 @@ export default function AdminPlatformPage() {
               { label: "Email / WhatsApp", value: "Simulated" },
               { label: "Dead-letter", value: "0" },
             ].map((card) => (
-              <div key={card.label} className="rounded-xl border border-black/[0.06] bg-[#F7F7F8] px-3 py-3">
-                <div className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">{card.label}</div>
+              <div
+                key={card.label}
+                className="rounded-xl border border-black/[0.06] bg-[#F7F7F8] px-3 py-3"
+              >
+                <div className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
+                  {card.label}
+                </div>
                 <div className="mt-1 text-sm font-semibold">{card.value}</div>
               </div>
             ))}
@@ -208,10 +230,16 @@ export default function AdminPlatformPage() {
                 Another editor saved stock 4 → 6 while you had 4 → 2. Choose theirs, yours, or merge.
               </p>
               <div className="mt-2 flex gap-2">
-                <button type="button" className="h-7 rounded-md bg-[#1D1D1F] px-2.5 text-[11px] font-semibold text-white">
+                <button
+                  type="button"
+                  className="h-7 rounded-md bg-[#1D1D1F] px-2.5 text-[11px] font-semibold text-white"
+                >
                   Keep theirs
                 </button>
-                <button type="button" className="h-7 rounded-md border border-black/10 bg-white px-2.5 text-[11px] font-semibold text-[#1D1D1F]">
+                <button
+                  type="button"
+                  className="h-7 rounded-md border border-black/10 bg-white px-2.5 text-[11px] font-semibold text-[#1D1D1F]"
+                >
                   Keep yours
                 </button>
               </div>
@@ -219,6 +247,6 @@ export default function AdminPlatformPage() {
           </div>
         </section>
       ) : null}
-    </div>
+    </Phase2PageShell>
   );
 }

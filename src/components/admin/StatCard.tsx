@@ -18,8 +18,8 @@ export function StatCard({
   const dark = tone === "dark";
   return (
     <article
-      className={`rounded-lg p-4 ${
-        dark ? "bg-[#1D1D1F] text-white" : "border border-black/[0.08] bg-white"
+      className={`rounded-2xl p-4 ${
+        dark ? "bg-[#1D1D1F] text-white" : "border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]"
       }`}
     >
       <span

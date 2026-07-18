@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckoutHeader } from "@/components/layout/Header";
 import { CountdownBoxes, CountdownSummaryPanel } from "@/components/ui/Countdown";
 import { formatReleaseLabel, useLiveThemeSettings } from "@/hooks/useLiveThemeSettings";
 import { createDemoCheckoutOrder } from "@/lib/adminStore";
-import { getSession } from "@/lib/auth";
+import {
+  formatMobileDisplay,
+  getSession,
+  normalizeMobile,
+  type AuthSession,
+} from "@/lib/auth";
 
 const PRICE = 5999;
+const PRODUCT_IMG =
+  "https://ezurr.com/cdn/shop/files/GAMPLAY540.jpg?v=1782735956&width=533";
 
 function fmt(n: number) {
   return "₹" + Math.round(n).toLocaleString("en-IN");
@@ -21,209 +28,357 @@ const STEPS = [
   { num: 3, label: "Review" },
 ] as const;
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+type FormState = {
+  mobile: string;
+  firstName: string;
+  lastName: string;
+  address: string;
+  city: string;
+  pincode: string;
+  upiId: string;
+};
+
+const EMPTY_FORM: FormState = {
+  mobile: "",
+  firstName: "",
+  lastName: "",
+  address: "",
+  city: "",
+  pincode: "",
+  upiId: "",
+};
+
+function FieldLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
-    <label className="ez-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[#86868B]">
+    <label
+      htmlFor={htmlFor}
+      className="ez-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[#6E6E73]"
+    >
       {children}
     </label>
   );
 }
 
 function CheckoutInput({
+  id,
   type = "text",
   placeholder,
+  value,
+  onChange,
   className = "",
+  required,
+  inputMode,
+  autoComplete,
 }: {
+  id?: string;
   type?: string;
   placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
   className?: string;
+  required?: boolean;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  autoComplete?: string;
 }) {
   return (
     <input
+      id={id}
       type={type}
       placeholder={placeholder}
-      className={`ez-checkout-input w-full rounded-xl px-4 py-3.5 text-[15px] text-[#1D1D1F] ${className}`}
+      value={value}
+      required={required}
+      inputMode={inputMode}
+      autoComplete={autoComplete}
+      onChange={(e) => onChange(e.target.value)}
+      className={`ez-checkout-input w-full rounded-[12px] px-4 py-3.5 text-[15px] text-[var(--ez-fg)] outline-none ${className}`}
     />
   );
 }
 
-function MobileInput() {
+function CheckoutProgress({ step }: { step: number }) {
   return (
-    <div className="flex flex-col gap-2">
-      <FieldLabel>Mobile no.</FieldLabel>
-      <div className="ez-checkout-input flex overflow-hidden rounded-xl">
-        <span className="ez-mono flex shrink-0 items-center border-r border-[#E3E3E8] bg-[#F0F0F4] px-3.5 text-[13px] font-medium text-[#424245]">
-          +91
-        </span>
-        <input
-          type="tel"
-          inputMode="numeric"
-          placeholder="98765 43210"
-          className="min-w-0 flex-1 border-none bg-transparent px-4 py-3.5 text-[15px] outline-none"
-        />
-      </div>
-      <p className="m-0 text-[12px] text-[#86868B]">
-        Order updates and OTP will be sent to this number.
-      </p>
-    </div>
-  );
-}
-
-function Stepper({ step }: { step: number }) {
-  return (
-    <div className="flex items-center gap-0">
+    <nav aria-label="Checkout progress" className="ez-checkout-progress">
       {STEPS.map(({ num, label }, i) => {
         const done = step > num;
         const active = step === num;
         return (
-          <div key={num} className="flex flex-1 items-center">
-            {i > 0 && (
+          <div key={num} className="ez-checkout-progress-item">
+            {i > 0 ? (
               <span
-                className="h-px flex-1 transition-colors duration-300"
-                style={{
-                  background: done || active ? "var(--ez-accent)" : "#E3E3E8",
-                }}
+                className={`ez-checkout-progress-line ${done || active ? "is-lit" : ""}`}
+                aria-hidden
               />
-            )}
-            <div className="flex shrink-0 items-center gap-2 px-1 sm:px-2">
-              <span
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full ez-mono text-[11px] font-medium transition-all duration-300 sm:h-8 sm:w-8"
-                style={{
-                  background: done
-                    ? "var(--ez-accent-soft)"
-                    : active
-                      ? "#1D1D1F"
-                      : "#FFFFFF",
-                  color: done
-                    ? "var(--ez-accent-soft-text)"
-                    : active
-                      ? "#FFFFFF"
-                      : "#86868B",
-                  border: `1.5px solid ${
-                    done
-                      ? "var(--ez-accent-panel-border)"
-                      : active
-                        ? "#1D1D1F"
-                        : "#D2D2D7"
-                  }`,
-                  boxShadow: active ? "0 4px 12px rgba(0,0,0,0.15)" : "none",
-                }}
-              >
+            ) : null}
+            <div
+              className={`ez-checkout-progress-step ${active ? "is-active" : ""} ${done ? "is-done" : ""}`}
+            >
+              <span className="ez-checkout-progress-dot ez-mono" aria-hidden>
                 {done ? "✓" : num}
               </span>
-              <span
-                className="hidden text-[13px] font-semibold sm:inline"
-                style={{ color: active ? "#1D1D1F" : done ? "#6E6E73" : "#86868B" }}
-              >
-                {label}
-              </span>
+              <span className="ez-checkout-progress-label">{label}</span>
             </div>
-            {i < STEPS.length - 1 && (
-              <span
-                className="h-px flex-1 transition-colors duration-300"
-                style={{
-                  background: step > num ? "var(--ez-accent)" : "#E3E3E8",
-                }}
-              />
-            )}
           </div>
         );
       })}
-    </div>
+    </nav>
   );
 }
 
-function OrderSummary({
+function TrustRail() {
+  return (
+    <ul className="ez-checkout-trust ez-mono flex flex-wrap gap-x-3 gap-y-1 text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+      <li>Cancel anytime</li>
+      <li aria-hidden>·</li>
+      <li>Charged on ship</li>
+      <li aria-hidden>·</li>
+      <li>Price match</li>
+    </ul>
+  );
+}
+
+function OrderSummaryRail({
   isPrepaid,
   pct,
   discount,
   lockedTotal,
+  releaseLabel,
 }: {
   isPrepaid: boolean;
   pct: number;
   discount: number;
   lockedTotal: string;
+  releaseLabel: string;
 }) {
   return (
-    <aside className="ez-checkout-summary relative order-1 flex flex-col gap-5 overflow-hidden rounded-3xl p-6 text-[#F5F5F7] sm:p-7 lg:order-2 lg:sticky lg:top-8">
-      <div className="pointer-events-none absolute inset-0 opacity-40" aria-hidden>
-        <div
-          className="absolute -right-16 -top-16 h-48 w-48 rounded-full blur-3xl"
-          style={{ background: "oklch(0.55 0.17 var(--ez-h))" }}
-        />
-      </div>
-
-      <div className="relative flex items-center gap-4">
-        <div className="relative h-[72px] w-[88px] shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-1">
-          <Image
-            src="https://ezurr.com/cdn/shop/files/GAMPLAY540.jpg?v=1782735956&width=533"
-            alt="GTA VI"
-            fill
-            className="object-contain"
-            sizes="88px"
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="truncate text-[17px] font-semibold tracking-[-0.01em]">
-            Grand Theft Auto VI
-          </span>
-          <span className="ez-mono text-[10px] uppercase tracking-[0.12em] text-[#A1A1A6]">
-            PS5 · Standard · Pre-order
-          </span>
-        </div>
-      </div>
-
-      <div className="relative h-px bg-white/10" />
-
-      <div className="relative flex flex-col gap-3 text-[14px]">
-        <div className="flex justify-between gap-4">
-          <span className="text-[#A1A1A6]">GTA VI · Standard Edition</span>
-          <span className="ez-mono shrink-0 text-[13px]">₹5,999</span>
-        </div>
-        {isPrepaid && (
-          <div className="flex justify-between gap-4">
-            <span className="text-[#A1A1A6]">Prepaid discount ({pct}%)</span>
-            <span className="ez-mono shrink-0 text-[13px] text-[#7DD99A]">
-              −{fmt(discount)}
+    <aside className="ez-checkout-summary ez-checkout-rail-in relative hidden flex-col overflow-hidden rounded-[20px] p-6 text-[#F5F5F7] lg:sticky lg:top-8 lg:flex lg:p-7">
+      <div className="relative z-[1] flex flex-col gap-6">
+        <div>
+          <div className="ez-mono text-[9px] uppercase tracking-[0.18em] text-[#86868B]">
+            Due today
+          </div>
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <span className="ez-mono text-[44px] font-bold leading-none tracking-tight text-white">
+              ₹0
+            </span>
+            <span className="pb-1 text-right text-[12px] leading-snug text-[#A1A1A6]">
+              {isPrepaid
+                ? `Authorize now · ${lockedTotal} on ${releaseLabel}`
+                : `Pay ${lockedTotal} on delivery`}
             </span>
           </div>
-        )}
-        <div className="flex justify-between gap-4">
-          <span className="text-[#A1A1A6]">Shipping</span>
-          <span className="ez-mono shrink-0 text-[13px] text-[#7DD99A]">FREE</span>
         </div>
-        <div className="flex justify-between gap-4">
-          <span className="text-[#A1A1A6]">
-            {isPrepaid ? "Charged on release day" : "Pay on delivery"}
-          </span>
-          <span className="ez-mono shrink-0 text-[13px]">{lockedTotal}</span>
+
+        <div className="flex items-center gap-3.5 rounded-[14px] border border-white/[0.08] bg-white/[0.04] p-3">
+          <div className="relative h-[72px] w-[64px] shrink-0 overflow-hidden rounded-lg bg-white/[0.06]">
+            <Image src={PRODUCT_IMG} alt="" fill className="object-contain p-1" sizes="64px" />
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-semibold tracking-[-0.02em]">
+              Grand Theft Auto VI
+            </div>
+            <div className="ez-mono mt-1 text-[10px] uppercase tracking-[0.12em] text-[#A1A1A6]">
+              PS5 · Standard
+            </div>
+            <div className="ez-mono mt-2 text-[11px] text-[#C7C7CC]">Locked {lockedTotal}</div>
+          </div>
         </div>
-      </div>
 
-      <div className="relative h-px bg-white/10" />
+        <div className="flex flex-col gap-2.5 text-[13px]">
+          <div className="flex justify-between gap-3">
+            <span className="text-[#86868B]">Subtotal</span>
+            <span className="ez-mono shrink-0 text-[#E8E8ED]">{fmt(PRICE)}</span>
+          </div>
+          {isPrepaid ? (
+            <div className="flex justify-between gap-3">
+              <span className="text-[#86868B]">Prepaid ({pct}%)</span>
+              <span className="ez-mono shrink-0 text-[#8FD9A8]">−{fmt(discount)}</span>
+            </div>
+          ) : null}
+          <div className="flex justify-between gap-3">
+            <span className="text-[#86868B]">Shipping</span>
+            <span className="ez-mono shrink-0 text-[#8FD9A8]">FREE</span>
+          </div>
+          <div className="mt-1 flex justify-between gap-3 border-t border-white/[0.1] pt-3">
+            <span className="text-[#A1A1A6]">
+              {isPrepaid ? "On release" : "On delivery"}
+            </span>
+            <span className="ez-mono shrink-0 font-semibold text-[#F5F5F7]">{lockedTotal}</span>
+          </div>
+        </div>
 
-      <div className="relative flex items-baseline justify-between">
-        <span className="text-[15px] font-semibold text-[#E8E8ED]">Due today</span>
-        <span className="ez-mono text-2xl font-bold tracking-tight">₹0</span>
-      </div>
-
-      <CountdownSummaryPanel />
-
-      <div className="relative flex items-start gap-2.5 rounded-2xl border border-[oklch(0.78_0.1_var(--ez-h)/0.25)] bg-[oklch(0.55_0.17_var(--ez-h)/0.12)] px-4 py-3">
-        <span className="mt-0.5 text-[var(--ez-accent-text)]">◆</span>
-        <p className="m-0 text-[12.5px] leading-relaxed text-[#C7C7CC]">
-          Minimum price guarantee — if the price drops before release, the
-          difference is refunded automatically.
-        </p>
+        <CountdownSummaryPanel variant="rail" />
+        <TrustRail />
       </div>
     </aside>
+  );
+}
+
+function MobileSummaryStrip({
+  lockedTotal,
+  onOpen,
+}: {
+  lockedTotal: string;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="ez-checkout-mobile-strip flex w-full items-center gap-3 rounded-[14px] border border-black/[0.06] bg-white px-3 py-3 text-left lg:hidden"
+    >
+      <div className="relative h-12 w-[54px] shrink-0 overflow-hidden rounded-md bg-[#F0F0F4]">
+        <Image src={PRODUCT_IMG} alt="" fill className="object-contain p-0.5" sizes="54px" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] font-semibold tracking-[-0.01em]">GTA VI · PS5</div>
+        <div className="ez-mono text-[10px] uppercase tracking-[0.12em] text-[#86868B]">
+          Locked {lockedTotal}
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">Due</div>
+        <div className="ez-mono text-lg font-bold leading-none">₹0</div>
+      </div>
+    </button>
+  );
+}
+
+function StickyFooterCta({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="ez-checkout-sticky-cta lg:hidden">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
+            Due today
+          </div>
+          <div className="ez-mono text-lg font-bold leading-none">₹0</div>
+        </div>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onClick}
+          className="ez-checkout-btn-dark shrink-0 rounded-full px-7 py-3.5 text-[14px] font-semibold disabled:opacity-50"
+        >
+          {label}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MobileSummarySheet({
+  open,
+  onClose,
+  isPrepaid,
+  pct,
+  discount,
+  lockedTotal,
+  releaseLabel,
+}: {
+  open: boolean;
+  onClose: () => void;
+  isPrepaid: boolean;
+  pct: number;
+  discount: number;
+  lockedTotal: string;
+  releaseLabel: string;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/45"
+        aria-label="Close summary"
+        onClick={onClose}
+      />
+      <div className="ez-checkout-summary absolute inset-x-0 bottom-0 max-h-[85vh] overflow-auto rounded-t-[22px] p-5 text-[#F5F5F7]">
+        <div className="mb-5 flex items-center justify-between">
+          <span className="text-sm font-semibold">Order summary</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ez-mono text-[10px] uppercase tracking-[0.14em] text-[#A1A1A6]"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mb-5">
+          <div className="ez-mono text-[9px] uppercase tracking-[0.18em] text-[#86868B]">
+            Due today
+          </div>
+          <div className="mt-1.5 flex items-end justify-between gap-3">
+            <span className="ez-mono text-[40px] font-bold leading-none tracking-tight">₹0</span>
+            <span className="pb-1 text-right text-[12px] text-[#A1A1A6]">
+              {isPrepaid ? `Charged ${lockedTotal} on ship` : `Pay ${lockedTotal} at door`}
+            </span>
+          </div>
+        </div>
+
+        <div className="mb-5 flex items-center gap-3">
+          <div className="relative h-14 w-[50px] shrink-0 overflow-hidden rounded-md bg-white/[0.06]">
+            <Image src={PRODUCT_IMG} alt="" fill className="object-contain p-0.5" sizes="50px" />
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-[14px] font-semibold">Grand Theft Auto VI</div>
+            <div className="ez-mono text-[10px] uppercase tracking-[0.12em] text-[#A1A1A6]">
+              PS5 · Standard · Locked {lockedTotal}
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-5 flex flex-col gap-2 text-[13px]">
+          <div className="flex justify-between">
+            <span className="text-[#86868B]">Subtotal</span>
+            <span className="ez-mono">{fmt(PRICE)}</span>
+          </div>
+          {isPrepaid ? (
+            <div className="flex justify-between">
+              <span className="text-[#86868B]">Prepaid ({pct}%)</span>
+              <span className="ez-mono text-[#8FD9A8]">−{fmt(discount)}</span>
+            </div>
+          ) : null}
+          <div className="flex justify-between">
+            <span className="text-[#86868B]">Shipping</span>
+            <span className="ez-mono text-[#8FD9A8]">FREE</span>
+          </div>
+          <div className="flex justify-between border-t border-white/[0.1] pt-2">
+            <span className="text-[#A1A1A6]">{isPrepaid ? "On release" : "On delivery"}</span>
+            <span className="ez-mono font-semibold">{lockedTotal}</span>
+          </div>
+        </div>
+
+        <p className="mb-4 m-0 text-[12px] leading-relaxed text-[#A1A1A6]">
+          Releases {releaseLabel}. Nothing charged until then.
+        </p>
+        <CountdownSummaryPanel variant="rail" />
+        <div className="mt-4">
+          <TrustRail />
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default function CheckoutPage() {
   const [step, setStep] = useState(1);
   const [placed, setPlaced] = useState(false);
+  const [orderId, setOrderId] = useState<string | null>(null);
   const [method, setMethod] = useState<"prepaid" | "cod">("prepaid");
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [session, setSessionState] = useState<AuthSession | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [stepKey, setStepKey] = useState(0);
 
   const liveTheme = useLiveThemeSettings();
   const pct = liveTheme.prepaidDiscount;
@@ -234,319 +389,472 @@ export default function CheckoutPage() {
   const lockedTotal = isPrepaid ? prepaidTotal : fmt(PRICE);
   const codAvailable = liveTheme.codEnabled !== false;
 
+  useEffect(() => {
+    const s = getSession();
+    setSessionState(s);
+    if (s) {
+      setForm((prev) => ({
+        ...prev,
+        mobile: prev.mobile || normalizeMobile(s.mobile),
+        firstName: prev.firstName || s.name.split(" ")[0] || "",
+        lastName: prev.lastName || s.name.split(" ").slice(1).join(" ") || "",
+      }));
+    }
+  }, []);
+
+  const patch = (partial: Partial<FormState>) => setForm((prev) => ({ ...prev, ...partial }));
+
+  const fullName = [form.firstName, form.lastName].filter(Boolean).join(" ").trim();
+  const shipLine = [form.address, form.city, form.pincode].filter(Boolean).join(", ");
+
   const goto = (s: number) => {
     setStep(s);
+    setStepKey((k) => k + 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const placeOrder = () => {
+    const result = createDemoCheckoutOrder({
+      name: fullName || session?.name || "Guest Player",
+      mobile: form.mobile || session?.mobile || "9876500001",
+      city: form.city || "Bengaluru",
+      payment: isPrepaid ? "Prepaid" : "COD",
+      total: lockedTotal,
+      addressLine1: form.address || undefined,
+      pincode: form.pincode || undefined,
+    });
+    setOrderId(result.orderId);
+    setPlaced(true);
     window.scrollTo(0, 0);
   };
+
+  const canContinueDetails =
+    normalizeMobile(form.mobile).length === 10 &&
+    form.address.trim().length > 3 &&
+    form.firstName.trim() &&
+    form.city.trim() &&
+    form.pincode.trim().length >= 6;
 
   if (placed) {
     return (
       <div className="ez-checkout-bg min-h-screen">
-        <CheckoutHeader />
-        <main className="ez-page w-full py-14 pb-20 sm:py-20">
-          <div className="mx-auto flex max-w-[640px] flex-col items-center gap-6 text-center">
-            <span className="ez-mono rounded-full border border-[var(--ez-accent-panel-border)] bg-white px-5 py-2 text-[10px] uppercase tracking-[0.16em] text-[var(--ez-accent-soft-text)] shadow-sm sm:text-[11px]">
-              Order EZ-88412
-            </span>
-            <h1 className="ez-display m-0 font-bold">You&apos;re in line.</h1>
-            <p className="m-0 max-w-[460px] text-base leading-relaxed text-[#6E6E73] sm:text-[16.5px]">
-              Grand Theft Auto VI · PS5 is reserved at{" "}
-              <span className="font-semibold text-[#1D1D1F]">{lockedTotal}, locked</span>.
-              We&apos;ll text you when it ships — and sooner if the price drops in
-              your favor.
-            </p>
-            <CountdownBoxes size="large" />
-            <div className="mt-2 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:justify-center">
-              <Link
-                href="/"
-                className="ez-checkout-btn-dark w-full rounded-full px-8 py-3.5 text-center text-[15px] font-semibold sm:w-auto"
-              >
-                Back to store
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setPlaced(false);
-                  setStep(1);
-                  setMethod("prepaid");
-                }}
-                className="w-full rounded-full border border-[#D2D2D7] bg-white px-6 py-3.5 text-sm font-semibold text-[#424245] transition-colors hover:border-[#1D1D1F] sm:w-auto"
-              >
-                Restart demo
-              </button>
+        <div className="ez-checkout-shell">
+          <CheckoutHeader label="Secure pre-order" shortLabel="Secure" />
+          <main className="ez-page w-full py-14 pb-20 sm:py-20">
+            <div className="ez-checkout-success mx-auto flex max-w-[520px] flex-col items-center gap-5 text-center">
+              <span className="ez-mono rounded-full border border-black/[0.08] bg-white px-4 py-1.5 text-[10px] uppercase tracking-[0.16em] text-[#6E6E73] shadow-sm">
+                {orderId ?? "Reserved"}
+              </span>
+              <h1 className="ez-display m-0 font-bold tracking-[-0.04em]">You&apos;re in line.</h1>
+              <p className="m-0 max-w-[420px] text-[15px] leading-relaxed text-[#6E6E73]">
+                GTA VI · PS5 reserved at{" "}
+                <span className="font-semibold text-[var(--ez-fg)]">{lockedTotal}</span>. We&apos;ll
+                text {formatMobileDisplay(form.mobile || session?.mobile || "")} when it ships.
+              </p>
+              <CountdownBoxes size="large" />
+              <TrustRail />
+              <div className="mt-2 flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <Link
+                  href="/"
+                  className="ez-checkout-btn-dark w-full rounded-full px-8 py-3.5 text-center text-[15px] font-semibold sm:w-auto"
+                >
+                  Back to store
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlaced(false);
+                    setOrderId(null);
+                    setStep(1);
+                    setMethod("prepaid");
+                  }}
+                  className="w-full rounded-full px-4 py-3 text-[13px] font-medium text-[#86868B] hover:text-[#424245] sm:w-auto"
+                >
+                  Restart demo
+                </button>
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     );
   }
 
+  const primaryLabel =
+    step === 1 ? "Continue" : step === 2 ? "Review" : "Place pre-order · ₹0";
+
+  const primaryAction = () => {
+    if (step === 1 && canContinueDetails) goto(2);
+    else if (step === 2) goto(3);
+    else if (step === 3) placeOrder();
+  };
+
   return (
-    <div className="ez-checkout-bg min-h-screen">
-      <CheckoutHeader />
+    <div className="ez-checkout-bg min-h-screen pb-28 lg:pb-0">
+      <div className="ez-checkout-shell">
+        <CheckoutHeader label="Secure pre-order" shortLabel="Secure" />
 
-      <main className="ez-page w-full py-8 pb-16 sm:py-12 sm:pb-24">
-        <div className="mb-6 sm:mb-8">
-          <p className="ez-mono m-0 text-[10px] uppercase tracking-[0.18em] text-[#86868B]">
-            Pre-order checkout
-          </p>
-          <h1 className="ez-h2 m-0 mt-2 font-bold">Reserve Grand Theft Auto VI</h1>
-        </div>
-
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.35fr_1fr] lg:gap-8">
-          <div className="ez-checkout-panel order-2 rounded-3xl p-5 sm:p-8 lg:order-1">
-            <Stepper step={step} />
-
-            <div className="mt-8 sm:mt-10">
-              {step === 1 && (
-                <div className="flex flex-col gap-5 sm:gap-6">
-                  <div>
-                    <h2 className="ez-h3 m-0 font-bold">Where should it go?</h2>
-                    <p className="mt-2 text-[14px] leading-relaxed text-[#6E6E73]">
-                      Delivery details for your physical copy. Pay nothing until
-                      release day.
-                    </p>
-                  </div>
-
-                  <MobileInput />
-
-                  <div className="flex flex-col gap-2">
-                    <FieldLabel>Address</FieldLabel>
-                    <CheckoutInput placeholder="Flat, street and area" />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
-                    {[
-                      ["First name", "Arjun"],
-                      ["Last name", "Mehta"],
-                    ].map(([label, placeholder]) => (
-                      <div key={label} className="flex flex-col gap-2">
-                        <FieldLabel>{label}</FieldLabel>
-                        <CheckoutInput placeholder={placeholder} />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1.4fr_1fr] sm:gap-5">
-                    {[
-                      ["City", "Mumbai"],
-                      ["PIN code", "400001"],
-                    ].map(([label, placeholder]) => (
-                      <div key={label} className="flex flex-col gap-2">
-                        <FieldLabel>{label}</FieldLabel>
-                        <CheckoutInput
-                          placeholder={placeholder}
-                          type={label === "PIN code" ? "tel" : "text"}
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => goto(2)}
-                    className="ez-checkout-btn-dark mt-2 w-full rounded-full border-none py-4 text-[15px] font-semibold sm:py-[17px]"
-                  >
-                    Continue to payment
-                  </button>
-                </div>
-              )}
-
-              {step === 2 && (
-                <div className="flex flex-col gap-5 sm:gap-6">
-                  <div>
-                    <h2 className="ez-h3 m-0 font-bold">How would you like to pay?</h2>
-                    <p className="mt-2 text-[14px] text-[#6E6E73]">
-                      Choose prepaid for {pct}% off, or pay at your door on delivery.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {(
-                      [
-                        {
-                          id: "prepaid" as const,
-                          title: "Prepaid · UPI or card",
-                          sub: `SAVE ${pct}% — PAY ${prepaidTotal}`,
-                          subClass: "text-[var(--ez-accent-soft-text)]",
-                        },
-                        ...(codAvailable
-                          ? [
-                              {
-                                id: "cod" as const,
-                                title: "Cash on delivery",
-                                sub: `PAY ${fmt(PRICE)} AT YOUR DOOR`,
-                                subClass: "text-[#6E6E73]",
-                              },
-                            ]
-                          : []),
-                      ] as const
-                    ).map((opt) => {
-                      const selected = method === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => setMethod(opt.id)}
-                          className="cursor-pointer rounded-2xl border-[1.5px] p-4 text-left transition-all duration-200 sm:p-5"
-                          style={{
-                            borderColor: selected ? "var(--ez-accent)" : "#E3E3E8",
-                            background: selected ? "var(--ez-accent-panel)" : "#FAFAFA",
-                            boxShadow: selected
-                              ? "0 0 0 3px oklch(0.55 0.17 var(--ez-h) / 0.1)"
-                              : "none",
-                          }}
-                        >
-                          <span className="block text-[15px] font-semibold">{opt.title}</span>
-                          <span className={`ez-mono mt-1.5 block text-[11px] ${opt.subClass}`}>
-                            {opt.sub}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="rounded-2xl border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] px-5 py-4 text-[13.5px] leading-relaxed text-[#424245]">
-                    {isPrepaid
-                      ? `Nothing is charged today. Your payment method is authorized now and charged ${prepaidTotal} (with your ${pct}% prepaid discount) when it ships on ${releaseLabel}.`
-                      : `Pay ${fmt(PRICE)} in cash or UPI when it arrives at your door. Available on orders under ₹10,000.`}
-                  </div>
-
-                  {isPrepaid && (
-                    <div className="flex flex-col gap-5">
-                      <div className="flex flex-col gap-2">
-                        <FieldLabel>UPI ID or card number</FieldLabel>
-                        <CheckoutInput
-                          placeholder="name@upi · 1234 5678 9012 3456"
-                          className="ez-mono text-sm"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        {["Expiry", "CVC"].map((label) => (
-                          <div key={label} className="flex flex-col gap-2">
-                            <FieldLabel>{label}</FieldLabel>
-                            <CheckoutInput
-                              placeholder={label === "Expiry" ? "MM / YY" : "123"}
-                              className="ez-mono text-sm"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <button
-                      type="button"
-                      onClick={() => goto(3)}
-                      className="ez-checkout-btn-dark w-full rounded-full border-none py-4 text-[15px] font-semibold sm:flex-1"
-                    >
-                      Review order
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => goto(1)}
-                      className="border-none bg-transparent py-3 text-sm font-semibold text-[#6E6E73] hover:text-[#1D1D1F]"
-                    >
-                      Back
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {step === 3 && (
-                <div className="flex flex-col gap-5 sm:gap-6">
-                  <div>
-                    <h2 className="ez-h3 m-0 font-bold">One last look</h2>
-                    <p className="mt-2 text-[14px] text-[#6E6E73]">
-                      Confirm your details before we lock in your pre-order.
-                    </p>
-                  </div>
-
-                  <div className="overflow-hidden rounded-2xl border border-[#E8E8ED] bg-[#FAFAFA]">
-                    {[
-                      ["Item", "Grand Theft Auto VI · PS5 · Standard"],
-                      ["Releases", releaseLabel],
-                      ["Ships to", "Your entered address"],
-                      ["Mobile", "+91 · Your entered number"],
-                      [
-                        "Payment",
-                        isPrepaid ? "UPI / CARD · PREPAID" : "CASH ON DELIVERY",
-                      ],
-                    ].map(([label, value], i, arr) => (
-                      <div
-                        key={label}
-                        className={`flex flex-col gap-1 bg-white px-5 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:py-4 ${
-                          i < arr.length - 1 ? "border-b border-[#F0F0F4]" : ""
-                        }`}
-                      >
-                        <span className="ez-mono text-[10px] uppercase tracking-[0.14em] text-[#86868B]">
-                          {label}
-                        </span>
-                        <span
-                          className={`text-sm font-semibold sm:text-[14.5px] ${
-                            label === "Payment" ? "ez-mono text-[13px]" : ""
-                          }`}
-                        >
-                          {value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="rounded-2xl border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] px-5 py-4">
-                    <span className="ez-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ez-accent-soft-text)]">
-                      Price locked at {lockedTotal}
-                    </span>
-                    <p className="mt-1.5 mb-0 text-[13.5px] leading-relaxed text-[#424245]">
-                      If our price drops before {releaseLabel}, you pay the lower price —
-                      refunded automatically.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const session = getSession();
-                        createDemoCheckoutOrder({
-                          name: session?.name ?? "Guest Player",
-                          mobile: session?.mobile ?? "9876500001",
-                          city: "Bengaluru",
-                          payment: isPrepaid ? "Prepaid" : "COD",
-                          total: lockedTotal,
-                        });
-                        setPlaced(true);
-                        window.scrollTo(0, 0);
-                      }}
-                      className="ez-checkout-btn-dark w-full rounded-full border-none py-4 text-[15px] font-semibold sm:flex-1"
-                    >
-                      Place pre-order — ₹0 today
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => goto(2)}
-                      className="border-none bg-transparent py-3 text-sm font-semibold text-[#6E6E73] hover:text-[#1D1D1F]"
-                    >
-                      Back
-                    </button>
-                  </div>
-                  <p className="m-0 text-center text-[12.5px] text-[#86868B]">
-                    Cancel anytime before dispatch. No fees, no questions.
-                  </p>
-                </div>
-              )}
+        <main className="ez-page w-full py-6 sm:py-10 sm:pb-16">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-8">
+            <div className="max-w-[36rem]">
+              <p className="ez-mono m-0 text-[10px] uppercase tracking-[0.2em] text-[#86868B]">
+                Pre-order reservation
+              </p>
+              <h1 className="m-0 mt-2 text-[26px] font-bold tracking-[-0.045em] text-[var(--ez-fg)] sm:text-[34px]">
+                Reserve your copy
+              </h1>
+              <p className="m-0 mt-2 text-[14px] leading-relaxed text-[#6E6E73] sm:text-[15px]">
+                Grand Theft Auto VI · PS5 — locked at {lockedTotal}. Nothing charged until release.
+              </p>
             </div>
           </div>
 
-          <OrderSummary
-            isPrepaid={isPrepaid}
-            pct={pct}
-            discount={discount}
-            lockedTotal={lockedTotal}
-          />
-        </div>
-      </main>
+          <MobileSummaryStrip lockedTotal={lockedTotal} onOpen={() => setSummaryOpen(true)} />
+
+          <div className="mt-5 grid grid-cols-1 items-start gap-7 lg:mt-0 lg:grid-cols-[minmax(0,1.2fr)_360px] lg:gap-10">
+            <div className="ez-checkout-panel min-w-0 rounded-[20px] p-5 sm:p-7 lg:p-8">
+              <CheckoutProgress step={step} />
+
+              {session ? (
+                <div className="ez-checkout-session mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[14px] px-4 py-3.5">
+                  <div>
+                    <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+                      Playing as
+                    </div>
+                    <div className="mt-0.5 text-sm font-semibold">{session.name}</div>
+                    <div className="ez-mono text-[11px] text-[#86868B]">
+                      {formatMobileDisplay(session.mobile)}
+                    </div>
+                  </div>
+                  <Link
+                    href="/auth"
+                    className="text-xs font-semibold text-[#424245] underline-offset-2 hover:underline"
+                  >
+                    Switch account
+                  </Link>
+                </div>
+              ) : (
+                <div className="ez-checkout-session mt-6 flex flex-wrap items-center justify-between gap-2 rounded-[14px] px-4 py-3.5">
+                  <p className="m-0 text-[13px] text-[#6E6E73]">
+                    Guest checkout — or{" "}
+                    <Link
+                      href="/auth"
+                      className="font-semibold text-[var(--ez-fg)] underline-offset-2 hover:underline"
+                    >
+                      sign in with OTP
+                    </Link>
+                  </p>
+                </div>
+              )}
+
+              <div key={stepKey} className="ez-checkout-step mt-7 sm:mt-8">
+                {step === 1 && (
+                  <form
+                    className="flex flex-col gap-5"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (canContinueDetails) goto(2);
+                    }}
+                  >
+                    <div>
+                      <h2 className="m-0 text-[19px] font-bold tracking-[-0.03em] sm:text-[21px]">
+                        Where should it go?
+                      </h2>
+                      <p className="mt-1.5 text-[13px] leading-relaxed text-[#6E6E73] sm:text-[14px]">
+                        Delivery for your physical copy. Nothing due until release.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <FieldLabel htmlFor="mobile">Mobile</FieldLabel>
+                      <div className="ez-checkout-input flex overflow-hidden rounded-[12px]">
+                        <span className="ez-mono flex shrink-0 items-center border-r border-[#D2D2D7] bg-[#F5F5F7] px-3.5 text-[13px] font-medium text-[#424245]">
+                          +91
+                        </span>
+                        <input
+                          id="mobile"
+                          type="tel"
+                          inputMode="numeric"
+                          autoComplete="tel-national"
+                          required
+                          value={form.mobile}
+                          onChange={(e) => patch({ mobile: normalizeMobile(e.target.value) })}
+                          placeholder="98765 43210"
+                          className="min-w-0 flex-1 border-none bg-transparent px-4 py-3.5 text-[15px] outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <FieldLabel htmlFor="address">Address</FieldLabel>
+                      <CheckoutInput
+                        id="address"
+                        required
+                        value={form.address}
+                        onChange={(v) => patch({ address: v })}
+                        placeholder="Flat, street and area"
+                        autoComplete="street-address"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                      <div className="flex flex-col gap-2">
+                        <FieldLabel htmlFor="first">First name</FieldLabel>
+                        <CheckoutInput
+                          id="first"
+                          required
+                          value={form.firstName}
+                          onChange={(v) => patch({ firstName: v })}
+                          placeholder="Arjun"
+                          autoComplete="given-name"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <FieldLabel htmlFor="last">Last name</FieldLabel>
+                        <CheckoutInput
+                          id="last"
+                          value={form.lastName}
+                          onChange={(v) => patch({ lastName: v })}
+                          placeholder="Mehta"
+                          autoComplete="family-name"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1.4fr_1fr] sm:gap-5">
+                      <div className="flex flex-col gap-2">
+                        <FieldLabel htmlFor="city">City</FieldLabel>
+                        <CheckoutInput
+                          id="city"
+                          required
+                          value={form.city}
+                          onChange={(v) => patch({ city: v })}
+                          placeholder="Mumbai"
+                          autoComplete="address-level2"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <FieldLabel htmlFor="pin">PIN code</FieldLabel>
+                        <CheckoutInput
+                          id="pin"
+                          type="tel"
+                          required
+                          value={form.pincode}
+                          onChange={(v) => patch({ pincode: v.replace(/\D/g, "").slice(0, 6) })}
+                          placeholder="400001"
+                          inputMode="numeric"
+                          autoComplete="postal-code"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={!canContinueDetails}
+                      className="ez-checkout-btn-dark mt-1 hidden w-full rounded-full border-none py-4 text-[15px] font-semibold disabled:opacity-40 lg:block"
+                    >
+                      Continue to payment
+                    </button>
+                  </form>
+                )}
+
+                {step === 2 && (
+                  <div className="flex flex-col gap-5">
+                    <div>
+                      <h2 className="m-0 text-[19px] font-bold tracking-[-0.03em] sm:text-[21px]">
+                        How will you pay?
+                      </h2>
+                      <p className="mt-1.5 text-[13px] text-[#6E6E73] sm:text-[14px]">
+                        Prepaid saves {pct}%. Charged on release — not today.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {(
+                        [
+                          {
+                            id: "prepaid" as const,
+                            title: "Prepaid · UPI",
+                            sub: `Save ${pct}% · ${prepaidTotal}`,
+                          },
+                          ...(codAvailable
+                            ? [
+                                {
+                                  id: "cod" as const,
+                                  title: "Cash on delivery",
+                                  sub: `Pay ${fmt(PRICE)} at door`,
+                                },
+                              ]
+                            : []),
+                        ] as const
+                      ).map((opt) => {
+                        const selected = method === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setMethod(opt.id)}
+                            className={`rounded-[14px] border-[1.5px] px-4 py-4 text-left transition-all duration-200 ${
+                              selected
+                                ? "border-[var(--ez-ink)] bg-[#F7F7F8] shadow-[0_0_0_3px_rgba(17,17,19,0.08)]"
+                                : "border-[#E0E0E5] bg-white hover:border-[#C8C8CE]"
+                            }`}
+                          >
+                            <span className="block text-[14px] font-semibold sm:text-[15px]">
+                              {opt.title}
+                            </span>
+                            <span className="ez-mono mt-1.5 block text-[11px] text-[#6E6E73]">
+                              {opt.sub}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {isPrepaid ? (
+                      <div className="flex flex-col gap-2">
+                        <FieldLabel htmlFor="upi">UPI ID</FieldLabel>
+                        <CheckoutInput
+                          id="upi"
+                          value={form.upiId}
+                          onChange={(v) => patch({ upiId: v })}
+                          placeholder="name@upi"
+                          className="ez-mono text-sm"
+                          autoComplete="off"
+                        />
+                        <p className="m-0 text-[12px] leading-relaxed text-[#86868B]">
+                          We authorize now and charge {prepaidTotal} when it ships on {releaseLabel}.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="m-0 rounded-[14px] border border-black/[0.06] bg-[#F7F7F8] px-4 py-3.5 text-[13px] leading-relaxed text-[#6E6E73]">
+                        Pay {fmt(PRICE)} in cash or UPI when the courier arrives. Available under
+                        ₹10,000.
+                      </p>
+                    )}
+
+                    <div className="hidden gap-3 lg:flex lg:items-center">
+                      <button
+                        type="button"
+                        onClick={() => goto(3)}
+                        className="ez-checkout-btn-dark flex-1 rounded-full border-none py-4 text-[15px] font-semibold"
+                      >
+                        Review order
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => goto(1)}
+                        className="px-3 py-3 text-sm font-semibold text-[#6E6E73] hover:text-[var(--ez-fg)]"
+                      >
+                        Back
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => goto(1)}
+                      className="self-start text-sm font-semibold text-[#6E6E73] lg:hidden"
+                    >
+                      ← Back
+                    </button>
+                  </div>
+                )}
+
+                {step === 3 && (
+                  <div className="flex flex-col gap-5">
+                    <div>
+                      <h2 className="m-0 text-[19px] font-bold tracking-[-0.03em] sm:text-[21px]">
+                        Confirm reservation
+                      </h2>
+                      <p className="mt-1.5 text-[13px] text-[#6E6E73] sm:text-[14px]">
+                        One guarantee: if the price drops before release, you pay the lower amount.
+                      </p>
+                    </div>
+
+                    <dl className="overflow-hidden rounded-[14px] border border-black/[0.08] bg-[#FAFAFB]">
+                      {[
+                        ["Item", "GTA VI · PS5 · Standard"],
+                        ["Releases", releaseLabel],
+                        ["Ships to", shipLine || "—"],
+                        ["Mobile", formatMobileDisplay(form.mobile)],
+                        [
+                          "Payment",
+                          isPrepaid
+                            ? `UPI prepaid · ${form.upiId || "authorize later"}`
+                            : "Cash on delivery",
+                        ],
+                        ["Locked", lockedTotal],
+                      ].map(([label, value], idx) => (
+                        <div
+                          key={label}
+                          className={`flex flex-col gap-0.5 px-4 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 ${
+                            idx > 0 ? "border-t border-black/[0.06]" : ""
+                          }`}
+                        >
+                          <dt className="ez-mono text-[10px] uppercase tracking-[0.14em] text-[#86868B]">
+                            {label}
+                          </dt>
+                          <dd className="m-0 text-sm font-semibold sm:text-right">{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+
+                    <div className="hidden gap-3 lg:flex lg:items-center">
+                      <button
+                        type="button"
+                        onClick={placeOrder}
+                        className="ez-checkout-btn-dark flex-1 rounded-full border-none py-4 text-[15px] font-semibold"
+                      >
+                        Place pre-order — ₹0 today
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => goto(2)}
+                        className="px-3 py-3 text-sm font-semibold text-[#6E6E73] hover:text-[var(--ez-fg)]"
+                      >
+                        Back
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => goto(2)}
+                      className="self-start text-sm font-semibold text-[#6E6E73] lg:hidden"
+                    >
+                      ← Back
+                    </button>
+                    <p className="m-0 text-center text-[12px] text-[#86868B] lg:text-left">
+                      Cancel anytime before dispatch.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <OrderSummaryRail
+              isPrepaid={isPrepaid}
+              pct={pct}
+              discount={discount}
+              lockedTotal={lockedTotal}
+              releaseLabel={releaseLabel}
+            />
+          </div>
+        </main>
+
+        <StickyFooterCta
+          label={primaryLabel}
+          onClick={primaryAction}
+          disabled={step === 1 && !canContinueDetails}
+        />
+
+        <MobileSummarySheet
+          open={summaryOpen}
+          onClose={() => setSummaryOpen(false)}
+          isPrepaid={isPrepaid}
+          pct={pct}
+          discount={discount}
+          lockedTotal={lockedTotal}
+          releaseLabel={releaseLabel}
+        />
+      </div>
     </div>
   );
 }

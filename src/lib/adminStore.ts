@@ -929,6 +929,9 @@ export function createDemoCheckoutOrder(input: {
   city: string;
   payment: "Prepaid" | "COD";
   total: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  pincode?: string;
 }) {
   hydrate();
   const at = nowIso();
@@ -989,8 +992,9 @@ export function createDemoCheckoutOrder(input: {
           actor: "Storefront",
         },
       ],
-      addressLine1: "Checkout address",
-      pincode: "560001",
+      addressLine1: input.addressLine1?.trim() || "Checkout address",
+      addressLine2: input.addressLine2?.trim() || undefined,
+      pincode: input.pincode?.trim() || "560001",
     };
     return {
       ...prev,

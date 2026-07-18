@@ -275,6 +275,22 @@ function IconChevron() {
   );
 }
 
+function IconSidebarToggle({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.75" />
+      <path d="M9 4v16" stroke="currentColor" strokeWidth="1.75" />
+      <path
+        d={collapsed ? "M14 9l3 3-3 3" : "M16 9l-3 3 3 3"}
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 const pageTitles: { match: (path: string) => boolean; title: string; crumb?: string; crumbHref?: string }[] = [
   { match: (p) => p === "/admin", title: "Dashboard", crumb: "Overview", crumbHref: "/admin" },
   { match: (p) => p.startsWith("/admin/analytics"), title: "Analytics", crumb: "Overview", crumbHref: "/admin" },
@@ -412,11 +428,15 @@ const navSubmenus: NavGroup[] = [
   },
 ];
 
-const SIDEBAR_W = "w-[256px]";
-const SIDEBAR_PL = "lg:pl-[256px]";
+const SIDEBAR_W_EXPANDED = "w-[256px]";
+const SIDEBAR_W_COLLAPSED = "w-[72px]";
+const SIDEBAR_PL_EXPANDED = "lg:pl-[256px]";
+const SIDEBAR_PL_COLLAPSED = "lg:pl-[72px]";
 
 const NAV_OPEN_STORAGE_KEY = "ezurr-admin-nav-open";
 const NAV_OPEN_EVENT = "ezurr-admin-nav-open";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "ezurr-admin-sidebar-collapsed";
+const SIDEBAR_COLLAPSED_EVENT = "ezurr-admin-sidebar-collapsed";
 
 function isActive(pathname: string, href: string) {
   if (href === "/admin") return pathname === "/admin";
@@ -468,30 +488,71 @@ function writeNavOpenPrefs(prefs: Record<string, boolean>) {
   }
 }
 
-function SidebarBrand({ onNavigate }: { onNavigate?: () => void }) {
+function getSidebarCollapsedSnapshot() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "1" ? "1" : "0";
+  } catch {
+    return "0";
+  }
+}
+
+function getSidebarCollapsedServerSnapshot() {
+  return "0";
+}
+
+function subscribeSidebarCollapsed(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(SIDEBAR_COLLAPSED_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(SIDEBAR_COLLAPSED_EVENT, onStoreChange);
+  };
+}
+
+function writeSidebarCollapsed(collapsed: boolean) {
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, collapsed ? "1" : "0");
+    window.dispatchEvent(new Event(SIDEBAR_COLLAPSED_EVENT));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function SidebarBrand({
+  onNavigate,
+  collapsed = false,
+}: {
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
   const { settings } = useAdminStore();
   const name = settings.storeName?.trim() || "Ezurr HQ";
   return (
     <Link
       href="/admin"
       onClick={onNavigate}
-      className="group flex items-center gap-3 rounded-2xl px-1 py-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      title={collapsed ? name : undefined}
+      className={`group flex items-center rounded-2xl py-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+        collapsed ? "justify-center px-0" : "gap-3 px-1"
+      }`}
     >
       <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#2A2A2E] to-[#141416] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] ring-1 ring-white/10">
         <span className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.18),transparent_55%)]" />
         <span className="relative text-[11px] font-semibold tracking-[-0.04em] text-white">EZ</span>
       </span>
-      <span className="min-w-0">
-        <span className="block truncate text-[15px] font-semibold tracking-[-0.035em] text-white">
-          {name}
-        </span>
-        <span className="mt-0.5 flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] shadow-[0_0_6px_rgba(52,199,89,0.7)]" />
-          <span className="ez-mono text-[8px] uppercase tracking-[0.16em] text-white/40">
-            Live ops
+      {!collapsed ? (
+        <span className="min-w-0">
+          <span className="block truncate text-[15px] font-semibold tracking-[-0.035em] text-white">
+            {name}
+          </span>
+          <span className="mt-0.5 flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] shadow-[0_0_6px_rgba(52,199,89,0.7)]" />
+            <span className="ez-mono text-[8px] uppercase tracking-[0.16em] text-white/40">
+              Live ops
+            </span>
           </span>
         </span>
-      </span>
+      ) : null}
     </Link>
   );
 }
@@ -501,13 +562,40 @@ function NavLinkItem({
   pathname,
   onNavigate,
   nested = false,
+  collapsed = false,
 }: {
   item: NavItem;
   pathname: string;
   onNavigate?: () => void;
   nested?: boolean;
+  collapsed?: boolean;
 }) {
   const active = isActive(pathname, item.href);
+  if (collapsed) {
+    return (
+      <Link
+        href={item.href}
+        onClick={onNavigate}
+        title={item.label}
+        aria-label={item.label}
+        className={`group relative flex items-center justify-center rounded-xl p-2 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+          active
+            ? "bg-white text-[#111113] shadow-[0_8px_24px_rgba(0,0,0,0.28)]"
+            : "text-white/55 hover:bg-white/[0.06] hover:text-white"
+        }`}
+      >
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
+            active
+              ? "bg-[#111113] text-white"
+              : "bg-white/[0.06] text-white/45 group-hover:bg-white/10 group-hover:text-white/80"
+          }`}
+        >
+          {item.icon}
+        </span>
+      </Link>
+    );
+  }
   return (
     <Link
       href={item.href}
@@ -546,15 +634,157 @@ function NavSubmenu({
   open,
   onToggle,
   onNavigate,
+  collapsed = false,
 }: {
   group: NavGroup;
   pathname: string;
   open: boolean;
   onToggle: () => void;
   onNavigate?: () => void;
+  collapsed?: boolean;
 }) {
   const panelId = useId();
   const routeActive = groupHasActive(pathname, group.items);
+  const [flyoutOpen, setFlyoutOpen] = useState(false);
+  const [flyoutPos, setFlyoutPos] = useState<{ top: number; left: number } | null>(null);
+  const flyoutRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const flyoutCloseTimerRef = useRef<number | null>(null);
+
+  function syncFlyoutPos() {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setFlyoutPos({ top: rect.top, left: rect.right + 8 });
+  }
+
+  function openFlyout() {
+    if (flyoutCloseTimerRef.current) {
+      window.clearTimeout(flyoutCloseTimerRef.current);
+      flyoutCloseTimerRef.current = null;
+    }
+    syncFlyoutPos();
+    setFlyoutOpen(true);
+  }
+
+  function scheduleCloseFlyout() {
+    if (flyoutCloseTimerRef.current) window.clearTimeout(flyoutCloseTimerRef.current);
+    flyoutCloseTimerRef.current = window.setTimeout(() => {
+      setFlyoutOpen(false);
+      flyoutCloseTimerRef.current = null;
+    }, 140);
+  }
+
+  useEffect(() => {
+    if (!collapsed || !flyoutOpen) return;
+    function onPointer(event: MouseEvent) {
+      const target = event.target as Node;
+      if (flyoutRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      setFlyoutOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setFlyoutOpen(false);
+    }
+    window.addEventListener("resize", syncFlyoutPos);
+    window.addEventListener("scroll", syncFlyoutPos, true);
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", syncFlyoutPos);
+      window.removeEventListener("scroll", syncFlyoutPos, true);
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [collapsed, flyoutOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (flyoutCloseTimerRef.current) window.clearTimeout(flyoutCloseTimerRef.current);
+    };
+  }, []);
+
+  if (collapsed) {
+    return (
+      <div className="relative" onMouseEnter={openFlyout} onMouseLeave={scheduleCloseFlyout}>
+        <button
+          ref={triggerRef}
+          type="button"
+          title={group.label}
+          aria-label={group.label}
+          aria-expanded={flyoutOpen}
+          aria-haspopup="true"
+          onClick={() => {
+            if (flyoutOpen) {
+              setFlyoutOpen(false);
+            } else {
+              openFlyout();
+            }
+          }}
+          className={`group flex w-full items-center justify-center rounded-xl p-2 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+            routeActive || flyoutOpen
+              ? "bg-white/[0.08] text-white"
+              : "text-white/50 hover:bg-white/[0.06] hover:text-white"
+          }`}
+        >
+          <span
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
+              routeActive
+                ? "bg-white/12 text-white"
+                : "bg-white/[0.05] text-white/40 group-hover:bg-white/10 group-hover:text-white/75"
+            }`}
+          >
+            {group.icon}
+          </span>
+        </button>
+        {flyoutOpen && flyoutPos ? (
+          <div
+            ref={flyoutRef}
+            role="menu"
+            aria-label={group.label}
+            style={{ top: flyoutPos.top, left: flyoutPos.left }}
+            className="fixed z-50 min-w-[200px] rounded-xl border border-white/10 bg-[#141416] py-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+            onMouseEnter={openFlyout}
+            onMouseLeave={scheduleCloseFlyout}
+          >
+            <div className="border-b border-white/[0.06] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/45">
+              {group.label}
+            </div>
+            <ul className="flex flex-col gap-0.5 px-1.5 py-1.5">
+              {group.items.map((item) => {
+                const active = isActive(pathname, item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      role="menuitem"
+                      title={item.label}
+                      onClick={() => {
+                        setFlyoutOpen(false);
+                        onNavigate?.();
+                      }}
+                      className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+                        active
+                          ? "bg-white text-[#111113]"
+                          : "text-white/55 hover:bg-white/[0.06] hover:text-white"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+                          active ? "bg-[#111113] text-white" : "text-white/35"
+                        }`}
+                      >
+                        {item.icon}
+                      </span>
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -634,9 +864,11 @@ function NavSubmenu({
 function SidebarNav({
   pathname,
   onNavigate,
+  collapsed = false,
 }: {
   pathname: string;
   onNavigate?: () => void;
+  collapsed?: boolean;
 }) {
   const prefsRaw = useSyncExternalStore(
     subscribeNavOpenPrefs,
@@ -644,28 +876,46 @@ function SidebarNav({
     getNavOpenPrefsServerSnapshot,
   );
   const prefs = parseNavOpenPrefs(prefsRaw);
-  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [manual, setManual] = useState<Record<string, boolean>>({});
+  const prevPathRef = useRef(pathname);
+
+  // Clear manual collapses/expands on navigation so active groups auto-open again.
+  if (pathname !== prevPathRef.current) {
+    prevPathRef.current = pathname;
+    setManual({});
+  }
 
   function isGroupOpen(group: NavGroup) {
-    if (groupHasActive(pathname, group.items)) return true;
-    if (Object.prototype.hasOwnProperty.call(overrides, group.label)) {
-      return overrides[group.label];
+    // Manual toggle wins (allows collapse while a child route is active).
+    if (Object.prototype.hasOwnProperty.call(manual, group.label)) {
+      return manual[group.label];
     }
+    if (groupHasActive(pathname, group.items)) return true;
     return prefs[group.label] === true;
   }
 
   function toggleGroup(group: NavGroup) {
     const nextOpen = !isGroupOpen(group);
-    setOverrides((prev) => ({ ...prev, [group.label]: nextOpen }));
+    setManual((prev) => ({ ...prev, [group.label]: nextOpen }));
     writeNavOpenPrefs({ ...prefs, [group.label]: nextOpen });
   }
 
   return (
-    <nav className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-5" aria-label="Admin">
+    <nav
+      className={`flex flex-1 flex-col gap-2 overflow-y-auto overflow-x-visible py-5 ${
+        collapsed ? "px-2" : "px-3"
+      }`}
+      aria-label="Admin"
+    >
       <ul className="flex flex-col gap-1">
         {topLevelNav.map((item) => (
           <li key={item.href}>
-            <NavLinkItem item={item} pathname={pathname} onNavigate={onNavigate} />
+            <NavLinkItem
+              item={item}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              collapsed={collapsed}
+            />
           </li>
         ))}
       </ul>
@@ -678,6 +928,7 @@ function SidebarNav({
             open={isGroupOpen(group)}
             onToggle={() => toggleGroup(group)}
             onNavigate={onNavigate}
+            collapsed={collapsed}
           />
         ))}
       </div>
@@ -685,23 +936,53 @@ function SidebarNav({
   );
 }
 
-function SidebarFooter({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarFooter({
+  onNavigate,
+  collapsed = false,
+  onToggleCollapsed,
+}: {
+  onNavigate?: () => void;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+}) {
   return (
-    <div className="space-y-2 border-t border-white/[0.06] p-3">
+    <div className={`space-y-2 border-t border-white/[0.06] ${collapsed ? "p-2" : "p-3"}`}>
+      {onToggleCollapsed ? (
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={`flex w-full items-center rounded-xl bg-white/[0.04] text-white/55 ring-1 ring-white/[0.06] transition hover:bg-white/[0.08] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+            collapsed ? "justify-center p-2.5" : "gap-3 px-2.5 py-2.5 text-[13px] font-medium"
+          }`}
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] text-white/50">
+            <IconSidebarToggle collapsed={collapsed} />
+          </span>
+          {!collapsed ? <span>Collapse</span> : null}
+        </button>
+      ) : null}
       <Link
         href="/"
         onClick={onNavigate}
-        className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-2.5 py-2.5 text-[13px] font-medium text-white/65 ring-1 ring-white/[0.06] transition hover:bg-white/[0.08] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        title={collapsed ? "Storefront" : undefined}
+        aria-label={collapsed ? "Storefront" : undefined}
+        className={`flex items-center rounded-xl bg-white/[0.04] text-[13px] font-medium text-white/65 ring-1 ring-white/[0.06] transition hover:bg-white/[0.08] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+          collapsed ? "justify-center p-2.5" : "gap-3 px-2.5 py-2.5"
+        }`}
       >
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] text-white/50">
           <IconStore />
         </span>
-        <span className="min-w-0">
-          <span className="block leading-tight">Storefront</span>
-          <span className="ez-mono text-[8px] uppercase tracking-[0.14em] text-white/30">
-            Open shop
+        {!collapsed ? (
+          <span className="min-w-0">
+            <span className="block leading-tight">Storefront</span>
+            <span className="ez-mono text-[8px] uppercase tracking-[0.14em] text-white/30">
+              Open shop
+            </span>
           </span>
-        </span>
+        ) : null}
       </Link>
     </div>
   );
@@ -710,13 +991,18 @@ function SidebarFooter({ onNavigate }: { onNavigate?: () => void }) {
 function SidebarShell({
   children,
   className = "",
+  allowFlyouts = false,
 }: {
   children: ReactNode;
   className?: string;
+  /** When true, avoid clipping hover flyouts from the collapsed rail. */
+  allowFlyouts?: boolean;
 }) {
   return (
     <div
-      className={`relative flex h-full flex-col overflow-hidden bg-[#0C0C0E] ${className}`}
+      className={`relative flex h-full flex-col bg-[#0C0C0E] ${
+        allowFlyouts ? "overflow-visible" : "overflow-hidden"
+      } ${className}`}
     >
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_-10%,rgba(255,255,255,0.09),transparent_50%),radial-gradient(ellipse_at_80%_110%,rgba(255,255,255,0.04),transparent_45%)]"
@@ -739,11 +1025,20 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [accountOpen, setAccountOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const sidebarCollapsedRaw = useSyncExternalStore(
+    subscribeSidebarCollapsed,
+    getSidebarCollapsedSnapshot,
+    getSidebarCollapsedServerSnapshot,
+  );
+  const sidebarCollapsed = sidebarCollapsedRaw === "1";
   const searchId = useId();
   const drawerRef = useRef<HTMLElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
   const alertsRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const goChordRef = useRef(false);
+  const goChordTimerRef = useRef<number | null>(null);
   const pageMeta = resolvePageMeta(pathname);
 
   if (pathname !== drawerPath) {
@@ -827,15 +1122,58 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [alertsOpen]);
 
   useEffect(() => {
+    function isTypingTarget(target: EventTarget | null) {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target.isContentEditable
+      );
+    }
+
     function onKey(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        setPaletteQuery("");
         setPaletteOpen(true);
+        goChordRef.current = false;
+        return;
+      }
+
+      if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      if (event.key === "/") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        goChordRef.current = false;
+        return;
+      }
+
+      if (event.key.toLowerCase() === "g" && !event.repeat) {
+        goChordRef.current = true;
+        if (goChordTimerRef.current) window.clearTimeout(goChordTimerRef.current);
+        goChordTimerRef.current = window.setTimeout(() => {
+          goChordRef.current = false;
+        }, 800);
+        return;
+      }
+
+      if (goChordRef.current && event.key.toLowerCase() === "o") {
+        event.preventDefault();
+        goChordRef.current = false;
+        router.push("/admin/orders");
       }
     }
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (goChordTimerRef.current) window.clearTimeout(goChordTimerRef.current);
+    };
+  }, [router]);
 
   if (!ready || !isAdminSession(session)) {
     return (
@@ -852,48 +1190,56 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     router.push("/auth");
   }
 
-  function handleSearch(event: React.FormEvent) {
-    event.preventDefault();
-    const raw = search.trim();
-    const q = raw.toLowerCase();
-    if (!q) return;
-    if (/^ezx/i.test(raw)) {
-      router.push(`/admin/orders?q=${encodeURIComponent(raw)}`);
-      return;
-    }
-    if (q.includes("order") || q.includes("cod")) {
-      router.push(`/admin/orders?q=${encodeURIComponent(raw)}`);
-      return;
-    }
-    if (q.includes("coupon")) {
-      router.push(`/admin/coupons?q=${encodeURIComponent(raw)}`);
-      return;
-    }
-    if (q.includes("customer") || q.startsWith("cus")) {
-      router.push(`/admin/customers?q=${encodeURIComponent(raw)}`);
-      return;
-    }
-    router.push(`/admin/products?q=${encodeURIComponent(raw)}`);
+  function openPalette(seed = "") {
+    setPaletteQuery(seed);
+    setPaletteOpen(true);
   }
 
-  const nav = <SidebarNav pathname={pathname} />;
+  function handleSearch(event: React.FormEvent) {
+    event.preventDefault();
+    openPalette(search.trim());
+  }
+
+  function toggleSidebarCollapsed() {
+    writeSidebarCollapsed(!sidebarCollapsed);
+  }
+
+  const sidebarWidthClass = sidebarCollapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W_EXPANDED;
+  const sidebarPadClass = sidebarCollapsed ? SIDEBAR_PL_COLLAPSED : SIDEBAR_PL_EXPANDED;
 
   return (
     <AdminToastProvider>
     <div className="min-h-screen bg-[#F0F0F2] lg:flex">
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <aside className={`fixed inset-y-0 left-0 z-40 hidden ${SIDEBAR_W} lg:flex`}>
-        <SidebarShell className="w-full border-r border-white/[0.06]">
-          <div className="px-4 pb-2 pt-5">
-            <SidebarBrand />
+      <CommandPalette
+        open={paletteOpen}
+        initialQuery={paletteQuery}
+        onClose={() => {
+          setPaletteOpen(false);
+          setPaletteQuery("");
+        }}
+      />
+      <aside
+        className={`admin-chrome fixed inset-y-0 left-0 z-40 hidden transition-[width] duration-200 ease-out lg:flex ${sidebarWidthClass} ${
+          sidebarCollapsed ? "overflow-visible" : ""
+        }`}
+      >
+        <SidebarShell
+          allowFlyouts={sidebarCollapsed}
+          className="w-full border-r border-white/[0.06]"
+        >
+          <div className={`pb-2 pt-5 ${sidebarCollapsed ? "px-2" : "px-4"}`}>
+            <SidebarBrand collapsed={sidebarCollapsed} />
           </div>
-          {nav}
-          <SidebarFooter />
+          <SidebarNav pathname={pathname} collapsed={sidebarCollapsed} />
+          <SidebarFooter
+            collapsed={sidebarCollapsed}
+            onToggleCollapsed={toggleSidebarCollapsed}
+          />
         </SidebarShell>
       </aside>
 
       {drawerOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="admin-chrome fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
@@ -926,8 +1272,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
 
-      <div className={`flex min-h-screen min-w-0 flex-1 flex-col ${SIDEBAR_PL}`}>
-        <header className="sticky top-0 z-30 border-b border-black/[0.06] bg-white/90 shadow-[0_1px_0_rgba(17,17,19,0.03)] backdrop-blur-xl">
+      <div
+        className={`admin-shell-body flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-200 ease-out ${sidebarPadClass}`}
+      >
+        <header className="admin-chrome sticky top-0 z-30 border-b border-black/[0.06] bg-white/90 shadow-[0_1px_0_rgba(17,17,19,0.03)] backdrop-blur-xl">
           <div className="flex h-14 items-center gap-3 px-3 sm:gap-4 sm:px-5 lg:px-6">
             <button
               type="button"
@@ -961,12 +1309,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     </>
                   ) : null}
                   <li aria-hidden>/</li>
-                  <li className="text-[#86868B]">{pageMeta.title}</li>
+                  <li className="font-medium text-[#6E6E73]">{pageMeta.title}</li>
                 </ol>
               </nav>
-              <div className="truncate text-sm font-semibold tracking-[-0.02em] text-[#1D1D1F]">
-                {pageMeta.title}
-              </div>
             </div>
 
             <div className="hidden h-7 w-px shrink-0 bg-black/[0.08] sm:block" aria-hidden />
@@ -988,12 +1333,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  onFocus={() => openPalette(search.trim())}
                   placeholder="Search products, orders, customers…"
                   className="h-10 w-full rounded-xl border border-black/[0.07] bg-[#F7F7F8] pl-9 pr-14 text-sm outline-none transition placeholder:text-[#AEAEB2] hover:bg-[#F3F3F5] focus:border-black/[0.12] focus:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
                 />
                 <button
                   type="button"
-                  onClick={() => setPaletteOpen(true)}
+                  onClick={() => openPalette(search.trim())}
                   className="absolute right-2.5 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-md border border-black/[0.08] bg-white px-1.5 py-0.5 ez-mono text-[9px] text-[#86868B] transition hover:bg-[#F5F5F7] sm:inline-flex"
                   aria-label="Open command palette"
                 >
@@ -1150,7 +1496,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 px-3 py-4 sm:px-5 sm:py-5 lg:px-6">{children}</main>
+        <main className="admin-shell-main flex-1 px-3 py-4 sm:px-5 sm:py-5 lg:px-6">{children}</main>
       </div>
     </div>
     </AdminToastProvider>

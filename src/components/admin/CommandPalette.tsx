@@ -38,9 +38,11 @@ const NAV_ITEMS: PaletteItem[] = [
 export function CommandPalette({
   open,
   onClose,
+  initialQuery = "",
 }: {
   open: boolean;
   onClose: () => void;
+  initialQuery?: string;
 }) {
   const router = useRouter();
   const store = useAdminStore();
@@ -53,7 +55,7 @@ export function CommandPalette({
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setQuery("");
+      setQuery(initialQuery);
       setActive(0);
     }
   }
@@ -84,7 +86,7 @@ export function CommandPalette({
       })),
     ];
     const all = [...NAV_ITEMS, ...entityItems];
-    if (!q) return all.slice(0, 24);
+    if (!q) return all.slice(0, 28);
     return all
       .filter(
         (item) =>
@@ -92,8 +94,24 @@ export function CommandPalette({
           item.hint?.toLowerCase().includes(q) ||
           item.group.toLowerCase().includes(q),
       )
-      .slice(0, 24);
+      .slice(0, 28);
   }, [query, store.orders, store.products, store.customers]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, PaletteItem[]>();
+    for (const item of items) {
+      const list = map.get(item.group) ?? [];
+      list.push(item);
+      map.set(item.group, list);
+    }
+    return Array.from(map.entries());
+  }, [items]);
+
+  const flatIndex = (groupIndex: number, itemIndex: number) => {
+    let n = 0;
+    for (let g = 0; g < groupIndex; g++) n += grouped[g][1].length;
+    return n + itemIndex;
+  };
 
   const safeActive = Math.min(active, Math.max(items.length - 1, 0));
 
@@ -158,39 +176,78 @@ export function CommandPalette({
             aria-autocomplete="list"
           />
         </div>
-        <ul id={listId} role="listbox" className="max-h-[360px] overflow-y-auto py-2">
+        <div id={listId} role="listbox" className="max-h-[360px] overflow-y-auto py-1">
           {items.length === 0 ? (
-            <li className="px-4 py-8 text-center text-sm text-[#86868B]">No matches</li>
+            <p className="px-4 py-8 text-center text-sm text-[#86868B]">No matches</p>
           ) : (
-            items.map((item, index) => (
-              <li key={item.id} role="option" aria-selected={index === safeActive}>
-                <button
-                  type="button"
-                  className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition ${
-                    index === safeActive ? "bg-[#F5F5F7]" : "hover:bg-[#F7F7F8]"
-                  }`}
-                  onMouseEnter={() => setActive(index)}
-                  onClick={() => {
-                    router.push(item.href);
-                    onClose();
-                  }}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium text-[#1D1D1F]">{item.label}</span>
-                    {item.hint ? (
-                      <span className="block truncate text-xs text-[#86868B]">{item.hint}</span>
-                    ) : null}
+            grouped.map(([group, groupItems], gi) => (
+              <div key={group}>
+                <div className="sticky top-0 z-[1] bg-white/95 px-4 py-1.5 backdrop-blur-sm">
+                  <span className="ez-mono text-[9px] font-medium uppercase tracking-[0.14em] text-[#AEAEB2]">
+                    {group}
                   </span>
-                  <span className="ez-mono shrink-0 text-[9px] uppercase tracking-[0.12em] text-[#AEAEB2]">
-                    {item.group}
-                  </span>
-                </button>
-              </li>
+                </div>
+                <ul>
+                  {groupItems.map((item, ii) => {
+                    const index = flatIndex(gi, ii);
+                    return (
+                      <li key={item.id} role="option" aria-selected={index === safeActive}>
+                        <button
+                          type="button"
+                          className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition ${
+                            index === safeActive ? "bg-[#F5F5F7]" : "hover:bg-[#F7F7F8]"
+                          }`}
+                          onMouseEnter={() => setActive(index)}
+                          onClick={() => {
+                            router.push(item.href);
+                            onClose();
+                          }}
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium text-[#1D1D1F]">
+                              {item.label}
+                            </span>
+                            {item.hint ? (
+                              <span className="block truncate text-xs text-[#86868B]">
+                                {item.hint}
+                              </span>
+                            ) : null}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             ))
           )}
-        </ul>
-        <div className="border-t border-black/[0.06] px-4 py-2 ez-mono text-[9px] uppercase tracking-[0.12em] text-[#AEAEB2]">
-          ↑↓ navigate · Enter open · Esc close
+        </div>
+        <div className="border-t border-black/[0.06] px-4 py-2.5">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 ez-mono text-[9px] uppercase tracking-[0.12em] text-[#AEAEB2]">
+            <span>
+              <kbd className="rounded border border-black/[0.08] bg-[#F7F7F8] px-1 py-0.5 text-[#6E6E73]">
+                ⌘K
+              </kbd>{" "}
+              open
+            </span>
+            <span>
+              <kbd className="rounded border border-black/[0.08] bg-[#F7F7F8] px-1 py-0.5 text-[#6E6E73]">
+                /
+              </kbd>{" "}
+              focus search
+            </span>
+            <span>
+              <kbd className="rounded border border-black/[0.08] bg-[#F7F7F8] px-1 py-0.5 text-[#6E6E73]">
+                g
+              </kbd>{" "}
+              then{" "}
+              <kbd className="rounded border border-black/[0.08] bg-[#F7F7F8] px-1 py-0.5 text-[#6E6E73]">
+                o
+              </kbd>{" "}
+              → orders
+            </span>
+            <span>↑↓ navigate · Enter open · Esc close</span>
+          </div>
         </div>
       </div>
     </div>

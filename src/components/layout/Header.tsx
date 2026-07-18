@@ -235,18 +235,18 @@ export function CheckoutHeader({
   shortLabel?: string;
 } = {}) {
   return (
-    <header className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 border-b border-black/[0.06] bg-white/90 backdrop-blur-xl">
       <nav className="ez-page flex h-14 w-full items-center justify-between gap-3 sm:h-16">
         <Logo />
-        <div className="flex items-center gap-2 rounded-full border border-[#E8E8ED] bg-[#FAFAFA] px-3 py-1.5 sm:gap-2.5 sm:px-4">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#86868B" strokeWidth="2" aria-hidden>
+        <div className="flex items-center gap-2 rounded-full border border-[#E5E5EA] bg-[#F7F7F8] px-3 py-1.5 sm:gap-2.5 sm:px-4">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6E6E73" strokeWidth="2" aria-hidden>
             <rect x="5" y="11" width="14" height="10" rx="2" />
             <path d="M8 11V7a4 4 0 0 1 8 0v4" />
           </svg>
-          <span className="ez-mono hidden text-[10px] uppercase tracking-[0.14em] text-[#86868B] sm:inline">
+          <span className="ez-mono hidden text-[10px] uppercase tracking-[0.14em] text-[#6E6E73] sm:inline">
             {label}
           </span>
-          <span className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B] sm:hidden">
+          <span className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#6E6E73] sm:hidden">
             {shortLabel}
           </span>
         </div>

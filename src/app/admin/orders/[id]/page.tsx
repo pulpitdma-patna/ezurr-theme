@@ -148,7 +148,7 @@ export default function AdminOrderDetailPage({
   }
 
   return (
-    <div>
+    <div className="admin-print-packing">
       <AdminPageHeader
         title={order.id}
         description={`Placed ${formatDate(order.placedAt)} · ${order.city}`}
@@ -157,7 +157,7 @@ export default function AdminOrderDetailPage({
           { label: order.id },
         ]}
         actions={
-          <>
+          <div className="admin-print-hide flex flex-wrap items-center gap-2">
             <StatusBadge kind="order" status={order.status} />
             <Link
               href="/admin/orders"
@@ -165,27 +165,25 @@ export default function AdminOrderDetailPage({
             >
               All orders
             </Link>
-          </>
+          </div>
         }
       />
 
-      {savedMsg ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mb-4 rounded-md border border-[#A6D5B0] bg-[#EAF6ED] px-4 py-2.5 text-sm text-[#2D6B3C]"
-        >
-          {savedMsg}
-        </div>
-      ) : null}
+      <div className="admin-print-hide mb-3 rounded-xl border border-dashed border-black/[0.1] bg-[#FAFAFB] px-3 py-2 text-[11px] text-[#6E6E73]">
+        Print packing slip hides navigation and status actions — only lines, ship-to, and totals remain.
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-4">
-          <section className="overflow-hidden rounded-lg border border-black/[0.08] bg-white">
+          <section className="admin-print-slip overflow-hidden rounded-2xl border border-black/[0.06] bg-white">
             <div className="flex items-center justify-between border-b border-black/[0.05] bg-[#F7F7F8] px-4 py-2.5">
               <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-                Line items · {order.items.length}
+                Packing slip · {order.id}
               </span>
+              <span className="text-[11px] text-[#86868B]">{formatDate(order.placedAt)}</span>
+            </div>
+            <div className="border-b border-black/[0.05] px-4 py-2.5 text-xs text-[#6E6E73]">
+              Line items · {order.items.length}
             </div>
             <ul className="divide-y divide-black/[0.05]">
               {order.items.map((item) => (
@@ -193,7 +191,7 @@ export default function AdminOrderDetailPage({
                   key={`${item.productKey}-${item.sku}`}
                   className="grid gap-3 p-4 sm:grid-cols-[64px_1fr_auto] sm:items-center"
                 >
-                  <div className="relative aspect-square overflow-hidden rounded-md bg-[#F7F7F8]">
+                  <div className="admin-print-hide relative aspect-square overflow-hidden rounded-md bg-[#F7F7F8]">
                     {item.image ? (
                       <Image
                         src={item.image}
@@ -212,7 +210,7 @@ export default function AdminOrderDetailPage({
                     <p className="mt-0.5 text-[11px] text-[#86868B]">
                       Qty {item.qty}
                       {item.productKey ? (
-                        <>
+                        <span className="admin-print-hide">
                           {" · "}
                           <Link
                             href={`/admin/products/${encodeURIComponent(item.productKey)}/edit`}
@@ -220,7 +218,7 @@ export default function AdminOrderDetailPage({
                           >
                             Edit SKU
                           </Link>
-                        </>
+                        </span>
                       ) : null}
                     </p>
                   </div>
@@ -231,7 +229,7 @@ export default function AdminOrderDetailPage({
           </section>
 
           {digitalLines.length > 0 ? (
-            <section className="rounded-lg border border-black/[0.08] bg-white p-4">
+            <section className="admin-print-hide rounded-2xl border border-black/[0.06] bg-white p-4">
               <h2 className="mb-1 text-sm font-semibold tracking-[-0.02em]">Digital fulfillment</h2>
               <p className="mb-3 text-xs text-[#86868B]">
                 Assign vault codes to this order. Digital lines do not decrement physical stock.
@@ -308,92 +306,14 @@ export default function AdminOrderDetailPage({
             </section>
           ) : null}
 
-          <section className="rounded-lg border border-black/[0.08] bg-white p-4">
+          <section className="admin-print-hide rounded-2xl border border-black/[0.06] bg-white p-4">
             <h2 className="mb-3 text-sm font-semibold tracking-[-0.02em]">Timeline</h2>
             <OrderTimeline events={order.timeline} />
           </section>
         </div>
 
-        <aside className="space-y-3">
-          <div className="rounded-lg border border-black/[0.08] bg-white p-4">
-            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-              Customer
-            </span>
-            <div className="mt-2 text-sm font-semibold tracking-[-0.02em]">{order.customerName}</div>
-            <div className="ez-mono mt-1 text-[11px] text-[#86868B]">
-              {formatMobileDisplay(order.customerMobile)}
-            </div>
-            <div className="mt-2 text-xs text-[#6E6E73]">{order.city}</div>
-            <div className="mt-3 rounded-md bg-[#F7F7F8] px-3 py-2 text-xs text-[#424245]">
-              <div className="ez-mono mb-1 text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
-                Ship to
-              </div>
-              <div>{order.addressLine1 ?? `${order.customerName}`}</div>
-              <div>{order.addressLine2 ?? order.city}</div>
-              <div className="ez-mono mt-0.5">{order.pincode ?? "—"} · {order.city}</div>
-            </div>
-            {order.customerId ? (
-              <Link
-                href={`/admin/customers/${order.customerId}`}
-                className="mt-3 inline-flex text-xs font-semibold text-[#424245]"
-              >
-                View customer →
-              </Link>
-            ) : null}
-          </div>
-
-          <div className="rounded-lg border border-black/[0.08] bg-white p-4">
-            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-              Payment
-            </span>
-            <div className="mt-2 flex items-baseline justify-between gap-3">
-              <span className="text-xl font-semibold tracking-[-0.04em]">{order.total}</span>
-              <span className="text-xs text-[#6E6E73]">{order.payment}</span>
-            </div>
-            {order.payment === "COD" && order.cashCollected ? (
-              <p className="mt-2 text-[11px] font-medium text-[#2D6B3C]">Cash collected</p>
-            ) : null}
-            {order.status === "refunded" ? (
-              <p className="mt-2 text-[11px] font-medium text-[#9F1239]">
-                Refunded {formatInr(order.refundAmount ?? parsePrice(order.total))}
-              </p>
-            ) : null}
-            {order.stockDeducted ? (
-              <p className="mt-1 text-[11px] text-[#86868B]">Stock reserved in ledger</p>
-            ) : null}
-          </div>
-
-          <OrderTaxInvoicePanel order={order} />
-
-          <form
-            onSubmit={saveMeta}
-            className="space-y-3 rounded-lg border border-black/[0.08] bg-white p-4"
-          >
-            <Field label="Tracking">
-              <input
-                value={tracking}
-                onChange={(e) => setTracking(e.target.value)}
-                className="w-full rounded-md border border-black/[0.08] bg-[#F7F7F8] px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-                placeholder="Carrier AWB"
-              />
-            </Field>
-            <Field label="Notes">
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                className="w-full rounded-md border border-black/[0.08] bg-[#F7F7F8] px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-              />
-            </Field>
-            <button
-              type="submit"
-              className="h-8 w-full rounded-md border border-black/10 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-            >
-              Save tracking / notes
-            </button>
-          </form>
-
-          <div className="rounded-lg border border-black/[0.08] bg-white p-4">
+        <aside className="space-y-3 lg:sticky lg:top-20 lg:self-start">
+          <div className="admin-print-hide rounded-2xl border border-black/[0.06] bg-white p-4 shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
             <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
               Status actions
             </span>
@@ -404,7 +324,7 @@ export default function AdminOrderDetailPage({
                     key={next}
                     type="button"
                     onClick={() => applyStatus(next)}
-                    className={`h-9 rounded-md px-3 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${
+                    className={`h-9 rounded-xl px-3 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${
                       next === "cancelled"
                         ? "border border-[#F5C2C0] text-[#B42318] hover:bg-[#FFF5F5]"
                         : "bg-[#1D1D1F] text-white hover:bg-[#2C2C2E]"
@@ -433,7 +353,7 @@ export default function AdminOrderDetailPage({
                   }
                   setConfirmRefund(true);
                 }}
-                className="mt-2 h-9 w-full rounded-md border border-[#F5C2C0] text-xs font-semibold text-[#B42318] hover:bg-[#FFF5F5]"
+                className="mt-2 h-9 w-full rounded-xl border border-[#F5C2C0] text-xs font-semibold text-[#B42318] hover:bg-[#FFF5F5]"
               >
                 Record refund
               </button>
@@ -441,11 +361,91 @@ export default function AdminOrderDetailPage({
             <button
               type="button"
               onClick={() => window.print()}
-              className="mt-2 h-9 w-full rounded-md border border-black/10 text-xs font-semibold"
+              className="mt-2 h-9 w-full rounded-xl border border-black/10 text-xs font-semibold"
             >
               Print packing slip
             </button>
           </div>
+
+          <div className="admin-print-slip rounded-2xl border border-black/[0.06] bg-white p-4">
+            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+              Customer
+            </span>
+            <div className="mt-2 text-sm font-semibold tracking-[-0.02em]">{order.customerName}</div>
+            <div className="ez-mono mt-1 text-[11px] text-[#86868B]">
+              {formatMobileDisplay(order.customerMobile)}
+            </div>
+            <div className="mt-2 text-xs text-[#6E6E73]">{order.city}</div>
+            <div className="mt-3 rounded-xl bg-[#F7F7F8] px-3 py-2 text-xs text-[#424245]">
+              <div className="ez-mono mb-1 text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
+                Ship to
+              </div>
+              <div>{order.addressLine1 ?? `${order.customerName}`}</div>
+              <div>{order.addressLine2 ?? order.city}</div>
+              <div className="ez-mono mt-0.5">{order.pincode ?? "—"} · {order.city}</div>
+            </div>
+            {order.customerId ? (
+              <Link
+                href={`/admin/customers/${order.customerId}`}
+                className="admin-print-hide mt-3 inline-flex text-xs font-semibold text-[#424245]"
+              >
+                View customer →
+              </Link>
+            ) : null}
+          </div>
+
+          <div className="admin-print-slip rounded-2xl border border-black/[0.06] bg-white p-4">
+            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+              Payment
+            </span>
+            <div className="mt-2 flex items-baseline justify-between gap-3">
+              <span className="text-xl font-semibold tracking-[-0.04em]">{order.total}</span>
+              <span className="text-xs text-[#6E6E73]">{order.payment}</span>
+            </div>
+            {order.payment === "COD" && order.cashCollected ? (
+              <p className="mt-2 text-[11px] font-medium text-[#2D6B3C]">Cash collected</p>
+            ) : null}
+            {order.status === "refunded" ? (
+              <p className="mt-2 text-[11px] font-medium text-[#9F1239]">
+                Refunded {formatInr(order.refundAmount ?? parsePrice(order.total))}
+              </p>
+            ) : null}
+            {order.stockDeducted ? (
+              <p className="mt-1 text-[11px] text-[#86868B]">Stock reserved in ledger</p>
+            ) : null}
+          </div>
+
+          <div className="admin-print-hide">
+            <OrderTaxInvoicePanel order={order} />
+          </div>
+
+          <form
+            onSubmit={saveMeta}
+            className="admin-print-hide space-y-3 rounded-2xl border border-black/[0.06] bg-white p-4"
+          >
+            <Field label="Tracking">
+              <input
+                value={tracking}
+                onChange={(e) => setTracking(e.target.value)}
+                className="w-full rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+                placeholder="Carrier AWB"
+              />
+            </Field>
+            <Field label="Notes">
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className="w-full rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+              />
+            </Field>
+            <button
+              type="submit"
+              className="h-9 w-full rounded-xl border border-black/10 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+            >
+              Save tracking / notes
+            </button>
+          </form>
         </aside>
       </div>
 

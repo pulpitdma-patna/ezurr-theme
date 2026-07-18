@@ -114,13 +114,6 @@ export default function AdminReportDetailPage() {
                 {toast}
               </span>
             ) : null}
-            <button
-              type="button"
-              onClick={exportCsv}
-              className="h-9 rounded-lg border border-black/[0.1] bg-white px-3 text-xs font-semibold text-[#1D1D1F]"
-            >
-              Export CSV
-            </button>
             <Link
               href="/admin/reports"
               className="inline-flex h-9 items-center rounded-lg border border-black/[0.1] bg-[#F7F7F8] px-3 text-xs font-semibold text-[#1D1D1F]"
@@ -131,7 +124,7 @@ export default function AdminReportDetailPage() {
         }
       />
 
-      <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-black/[0.06] bg-white p-3 shadow-[0_1px_2px_rgba(17,17,19,0.03)] sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4 sticky top-14 z-20 -mx-0 flex flex-col gap-3 rounded-2xl border border-black/[0.06] bg-white/95 p-3 shadow-[0_1px_2px_rgba(17,17,19,0.03)] backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
         <ReportDateFilter
           preset={filters.preset}
           onPresetChange={filters.setPreset}
@@ -155,6 +148,13 @@ export default function AdminReportDetailPage() {
             className="h-9 rounded-lg bg-[#1D1D1F] px-3 text-xs font-semibold text-white"
           >
             Save view
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="h-9 rounded-lg border border-black/[0.1] bg-white px-3 text-xs font-semibold text-[#1D1D1F]"
+          >
+            Export CSV
           </button>
         </div>
       </div>

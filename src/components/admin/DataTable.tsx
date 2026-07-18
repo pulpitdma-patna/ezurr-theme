@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 
 export type DataTableColumn<T> = {
   key: string;
@@ -33,6 +34,7 @@ type DataTableProps<T> = {
   bulkBar?: ReactNode;
   loading?: boolean;
   skeletonRows?: number;
+  density?: "compact" | "comfortable";
 };
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -60,8 +62,11 @@ export function DataTable<T>({
   bulkBar,
   loading,
   skeletonRows = 6,
+  density = "comfortable",
 }: DataTableProps<T>) {
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const cellPad = density === "compact" ? "px-2.5 py-1.5 sm:px-3" : "px-3 py-2.5 sm:px-4";
+  const headPad = density === "compact" ? "px-2.5 py-1.5 sm:px-3" : "px-3 py-2.5 sm:px-4";
   const total = rows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
@@ -93,7 +98,7 @@ export function DataTable<T>({
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-black/[0.06] bg-[#FAFAFB]">
               {selectable ? (
-                <th className="w-10 px-3 py-2.5">
+                <th className={`w-10 ${headPad}`}>
                   <input
                     ref={selectAllRef}
                     type="checkbox"
@@ -109,7 +114,7 @@ export function DataTable<T>({
                 return (
                   <th
                     key={column.key}
-                    className={`ez-mono px-3 py-2.5 text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B] sm:px-4 ${
+                    className={`ez-mono ${headPad} text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B] ${
                       column.hideOnMobile ? "hidden md:table-cell" : ""
                     } ${column.className ?? ""}`}
                   >
@@ -137,14 +142,14 @@ export function DataTable<T>({
               ? Array.from({ length: skeletonRows }).map((_, index) => (
                   <tr key={`sk-${index}`} className="border-b border-black/[0.04]">
                     {selectable ? (
-                      <td className="px-3 py-3">
+                      <td className={cellPad}>
                         <div className="h-3.5 w-3.5 animate-pulse rounded bg-[#E8E8ED]" />
                       </td>
                     ) : null}
                     {columns.map((column) => (
                       <td
                         key={column.key}
-                        className={`px-3 py-3 sm:px-4 ${
+                        className={`${cellPad} ${
                           column.hideOnMobile ? "hidden md:table-cell" : ""
                         }`}
                       >
@@ -159,10 +164,13 @@ export function DataTable<T>({
               <tr>
                 <td
                   colSpan={columns.length + (selectable ? 1 : 0)}
-                  className="px-5 py-12 text-center"
+                  className="px-2 py-2"
                 >
-                  <p className="text-sm text-[#86868B]">{emptyMessage}</p>
-                  {emptyAction ? <div className="mt-3 flex justify-center">{emptyAction}</div> : null}
+                  <AdminEmptyState
+                    compact
+                    title={emptyMessage}
+                    action={emptyAction}
+                  />
                 </td>
               </tr>
             ) : null}
@@ -180,7 +188,7 @@ export function DataTable<T>({
                     } ${selected ? "bg-[#F0F0F2]/80" : ""}`}
                   >
                     {selectable ? (
-                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <td className={cellPad} onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selected}
@@ -193,7 +201,7 @@ export function DataTable<T>({
                     {columns.map((column) => (
                       <td
                         key={column.key}
-                        className={`px-3 py-2.5 text-sm text-[#1D1D1F] sm:px-4 ${
+                        className={`${cellPad} text-sm text-[#1D1D1F] ${
                           column.hideOnMobile ? "hidden md:table-cell" : ""
                         } ${column.className ?? ""}`}
                       >

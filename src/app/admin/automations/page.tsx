@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { AdminSelect } from "@/components/admin/AdminSelect";
 import { AutomationBuilder } from "@/components/admin/AutomationBuilder";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { ListToolbar } from "@/components/admin/ListToolbar";
-import { StatCard } from "@/components/admin/StatCard";
 import type {
   AdminAutomationRule,
   AdminAutomationRun,
@@ -166,28 +166,38 @@ export default function AdminAutomationsPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Active rules"
-          value={String(enabledCount)}
-          detail={`${pausedCount} paused · ${automations.length} total`}
-          tone="dark"
-        />
-        <StatCard
-          label="Run history"
-          value={String(automationRuns.length)}
-          detail={`${completedRuns} completed`}
-        />
-        <StatCard
-          label="Blocked / skipped"
-          value={String(blockedRuns)}
-          detail="Usually missing integrations"
-        />
-        <StatCard
-          label="Templates"
-          value={String(automationTemplates.length)}
-          detail="Starter recipes ready to use"
-        />
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-black/[0.06] bg-white px-3.5 py-2.5 text-xs text-[#6E6E73]">
+        <span>
+          <span className="font-semibold text-[#1D1D1F]">{enabledCount}</span> active
+        </span>
+        <span className="text-[#D0D0D5]" aria-hidden>
+          ·
+        </span>
+        <span>
+          <span className="font-semibold text-[#1D1D1F]">{pausedCount}</span> paused
+        </span>
+        <span className="text-[#D0D0D5]" aria-hidden>
+          ·
+        </span>
+        <span>
+          <span className="font-semibold text-[#1D1D1F]">{automationRuns.length}</span> runs
+          <span className="text-[#AEAEB2]"> ({completedRuns} ok)</span>
+        </span>
+        <span className="text-[#D0D0D5]" aria-hidden>
+          ·
+        </span>
+        <span>
+          <span className="font-semibold text-[#1D1D1F]">{blockedRuns}</span> blocked
+        </span>
+        <span className="text-[#D0D0D5]" aria-hidden>
+          ·
+        </span>
+        <Link
+          href="/admin/automations/templates"
+          className="font-semibold text-[#424245] hover:underline"
+        >
+          {automationTemplates.length} templates →
+        </Link>
       </div>
 
       <div
@@ -292,11 +302,11 @@ export default function AdminAutomationsPage() {
             ))}
           </div>
         ) : (
-          <EmptyState
+          <AdminEmptyState
             title="No rules match"
-            body="Try another trigger, status, or search — or start from a template."
-            actions={
-              <>
+            description="Try another trigger, status, or search — or start from a template."
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -314,7 +324,7 @@ export default function AdminAutomationsPage() {
                 >
                   Browse templates
                 </Link>
-              </>
+              </div>
             }
           />
         )
@@ -332,10 +342,10 @@ export default function AdminAutomationsPage() {
           ) : null}
         </div>
       ) : (
-        <EmptyState
+        <AdminEmptyState
           title="No runs yet"
-          body="Test a rule or change an order status to see outcomes here."
-          actions={
+          description="Test a rule or change an order status to see outcomes here."
+          action={
             <button
               type="button"
               onClick={() => {
@@ -569,40 +579,6 @@ function Toggle({
         }`}
       />
     </button>
-  );
-}
-
-function EmptyState({
-  title,
-  body,
-  actions,
-}: {
-  title: string;
-  body: string;
-  actions?: ReactNode;
-}) {
-  return (
-    <div className="rounded-2xl border border-dashed border-black/[0.12] bg-white px-5 py-14 text-center">
-      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#F0F0F2] text-[#6E6E73]">
-        <BoltIcon />
-      </div>
-      <h2 className="mt-4 text-sm font-semibold text-[#1D1D1F]">{title}</h2>
-      <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-[#86868B]">{body}</p>
-      {actions ? <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{actions}</div> : null}
-    </div>
-  );
-}
-
-function BoltIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M13 2 4 14h7l-1 8 10-14h-7l1-6Z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 

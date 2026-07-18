@@ -140,10 +140,51 @@ function SummaryUnit({
 }
 
 /** Premium segmented countdown for dark checkout summary */
-export function CountdownSummaryPanel() {
+export function CountdownSummaryPanel({
+  variant = "panel",
+}: {
+  variant?: "panel" | "rail";
+} = {}) {
   const { dd, hh, mm, ss } = useCountdown();
   const settings = useLiveThemeSettings();
   const releaseLabel = formatReleaseLabel(settings.releaseDate);
+
+  if (variant === "rail") {
+    return (
+      <div className="ez-checkout-countdown-rail">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="ez-mono text-[9px] uppercase tracking-[0.18em] text-[#A1A1A6]">
+            Releases in
+          </span>
+          <span className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#6E6E73]">
+            {releaseLabel}
+          </span>
+        </div>
+        <div className="ez-checkout-countdown-units">
+          {(
+            [
+              [dd, "Days", false],
+              [hh, "Hrs", false],
+              [mm, "Min", false],
+              [ss, "Sec", true],
+            ] as const
+          ).map(([value, label, accent]) => (
+            <div
+              key={label}
+              className={`ez-checkout-countdown-unit ${accent ? "is-accent" : ""}`}
+            >
+              <span className="ez-mono text-lg font-bold leading-none tracking-tight text-[#F5F5F7]">
+                {value}
+              </span>
+              <span className="ez-mono text-[8px] uppercase tracking-[0.16em] text-[#86868B]">
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-white/[0.03] p-3.5 backdrop-blur-md sm:p-4">

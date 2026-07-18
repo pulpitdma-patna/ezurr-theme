@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminSelect } from "@/components/admin/AdminSelect";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
+import { FilterBar } from "@/components/admin/FilterBar";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import type { AdminActivityEntry } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
@@ -33,10 +34,19 @@ function entityHref(entry: AdminActivityEntry) {
 }
 
 export default function AdminActivityPage() {
+  const router = useRouter();
   const store = useAdminStore();
   const [query, setQuery] = useSearchQueryParam();
   const [entityType, setEntityType] = useState("all");
   const [page, setPage] = usePagedList(`${query}|${entityType}`);
+
+  const entityCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: store.activityLog.length };
+    for (const entry of store.activityLog) {
+      counts[entry.entityType] = (counts[entry.entityType] ?? 0) + 1;
+    }
+    return counts;
+  }, [store.activityLog]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -108,19 +118,22 @@ export default function AdminActivityPage() {
           placeholder: "Search actions, entities…",
         }}
         filters={
-          <AdminSelect
-            label="Entity"
+          <FilterBar
             value={entityType}
             onChange={setEntityType}
             options={[
-              { value: "all", label: "All entities" },
-              { value: "order", label: "Orders" },
-              { value: "product", label: "Products" },
-              { value: "customer", label: "Customers" },
-              { value: "inventory", label: "Inventory" },
-              { value: "settings", label: "Settings" },
-              { value: "automation", label: "Automations" },
-              { value: "system", label: "System" },
+              { value: "all", label: "All", count: entityCounts.all },
+              { value: "order", label: "Orders", count: entityCounts.order ?? 0 },
+              { value: "product", label: "Products", count: entityCounts.product ?? 0 },
+              { value: "customer", label: "Customers", count: entityCounts.customer ?? 0 },
+              { value: "inventory", label: "Inventory", count: entityCounts.inventory ?? 0 },
+              { value: "settings", label: "Settings", count: entityCounts.settings ?? 0 },
+              {
+                value: "automation",
+                label: "Automations",
+                count: entityCounts.automation ?? 0,
+              },
+              { value: "system", label: "System", count: entityCounts.system ?? 0 },
             ]}
           />
         }
@@ -138,6 +151,7 @@ export default function AdminActivityPage() {
           page={page}
           pageSize={25}
           onPageChange={setPage}
+          onRowClick={(row) => router.push(entityHref(row))}
         />
       )}
     </div>

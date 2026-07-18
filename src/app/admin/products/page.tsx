@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -24,6 +25,7 @@ import {
 } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAutoBanner } from "@/hooks/useAutoBanner";
+import { useListSavedViews } from "@/hooks/useListSavedViews";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 import { adjustStock, publishProducts, unpublishProducts, upsertProduct } from "@/lib/adminStore";
 import { useSearchParams } from "next/navigation";
@@ -84,6 +86,14 @@ export default function AdminProductsPage() {
   const [form, setForm] = useState<ProductFormValues>(emptyForm);
   const [toast, setToast] = useAutoBanner();
   const [openedFromNewParam, setOpenedFromNewParam] = useState(false);
+  const [listLoading, setListLoading] = useState(true);
+  const [viewName, setViewName] = useState("");
+  const { views, saveView, removeView } = useListSavedViews("products");
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setListLoading(false), 220);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const activeProduct = useMemo(
     () => (activeKey ? (store.products.find((p) => p.key === activeKey) ?? null) : null),
@@ -350,7 +360,7 @@ export default function AdminProductsPage() {
     <div>
       <AdminPageHeader
         title="Products"
-        description="Publish drafts, fix stock, and keep SKUs ready for the storefront."
+        description="Quick edit in the drawer · full editor for deep catalog fields and media."
       />
 
       <ListToolbar
@@ -406,7 +416,52 @@ export default function AdminProductsPage() {
         }
       />
 
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {views.map((view) => (
+          <button
+            key={view.id}
+            type="button"
+            onClick={() => {
+              setQuery(view.query);
+              setCategory((view.filters.category as AdminProductCategory | "all") || "all");
+              setBrand(view.filters.brand || "all");
+            }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              removeView(view.id);
+              setToast("View removed");
+            }}
+            className="rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#424245] hover:text-[#1D1D1F]"
+            title="Click to apply · right-click to remove"
+          >
+            {view.name}
+          </button>
+        ))}
+        <input
+          value={viewName}
+          onChange={(e) => setViewName(e.target.value)}
+          placeholder="Save view name"
+          className="h-8 rounded-lg border border-black/[0.08] bg-white px-2.5 text-xs outline-none focus:border-black/[0.14]"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            saveView({
+              name: viewName.trim() || "Products view",
+              query,
+              filters: { category, brand: brandFilter },
+            });
+            setViewName("");
+            setToast("View saved");
+          }}
+          className="h-8 rounded-lg bg-[#1D1D1F] px-3 text-[11px] font-semibold text-white"
+        >
+          Save view
+        </button>
+      </div>
+
       <DataTable
+        loading={listLoading}
         columns={columns}
         rows={rows}
         rowKey={(row) => row.key}
@@ -506,8 +561,14 @@ export default function AdminProductsPage() {
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#1D1D1F] px-4 text-xs font-semibold text-white"
               >
                 <PencilIcon />
-                Edit
+                Quick edit
               </button>
+              <Link
+                href={`/admin/products/${encodeURIComponent(activeProduct.key)}/edit`}
+                className="inline-flex h-9 items-center rounded-lg border border-black/10 px-4 text-xs font-semibold"
+              >
+                Full editor
+              </Link>
             </div>
           ) : null
         }

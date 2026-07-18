@@ -2,11 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { ListToolbar } from "@/components/admin/ListToolbar";
-import { Phase2Banner, Phase2Badge } from "@/components/admin/Phase2Badge";
+import { Phase2PageShell } from "@/components/admin/Phase2PageShell";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { useStaffRole } from "@/hooks/useStaffRole";
@@ -173,32 +172,30 @@ export default function AdminTeamPage() {
   ];
 
   return (
-    <div>
-      <AdminPageHeader
-        title="Team & access"
-        description="Invites, roles, and a live permissions matrix. Enforcement stays UI-only until Phase 2 authZ."
-        breadcrumbs={[
-          { label: "System", href: "/admin/settings" },
-          { label: "Team" },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Phase2Badge />
-            <button
-              type="button"
-              onClick={() => setInviteOpen(true)}
-              className="inline-flex h-9 items-center rounded-xl bg-[#1D1D1F] px-3.5 text-xs font-semibold text-white"
-            >
-              Invite staff
-            </button>
-          </div>
-        }
-      />
-      <Phase2Banner
-        title="Staff directory preview"
-        description="Invites never send email. Demo role below still gates mutations across HQ."
-      />
-
+    <Phase2PageShell
+      title="Team & access"
+      description="Invites, roles, and a live permissions matrix. Enforcement stays UI-only until Phase 2 authZ."
+      breadcrumbs={[
+        { label: "System", href: "/admin/settings" },
+        { label: "Team" },
+      ]}
+      bannerTitle="Staff directory preview"
+      bannerDescription="Invites never send email. Demo role below still gates mutations across HQ."
+      planned={[
+        "Server-enforced authZ / SSO",
+        "Invite email delivery",
+        "Seat billing & audit export",
+      ]}
+      actions={
+        <button
+          type="button"
+          onClick={() => setInviteOpen(true)}
+          className="inline-flex h-9 items-center rounded-xl bg-[#1D1D1F] px-3.5 text-xs font-semibold text-white"
+        >
+          Invite staff
+        </button>
+      }
+    >
       <section className="mb-5 rounded-2xl border border-black/[0.06] bg-white p-4">
         <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
           Your demo session role
@@ -337,6 +334,6 @@ export default function AdminTeamPage() {
         }}
         onCancel={() => setRevokeId(null)}
       />
-    </div>
+    </Phase2PageShell>
   );
 }
