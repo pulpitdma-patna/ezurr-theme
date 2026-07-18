@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { SectionHeading } from "@/components/home/SectionHeading";
 
 const orders = [
   {
@@ -36,11 +37,14 @@ const orders = [
 export default function OrdersPage() {
   return (
     <div>
-      <span className="ez-section-kicker">Purchase history</span>
-      <h1 className="mt-3 text-[clamp(2.1rem,5vw,3.75rem)] font-semibold leading-none tracking-[-0.05em]">Your orders.</h1>
-      <p className="mt-4 text-base text-[#6E6E73]">Track current deliveries and revisit past purchases.</p>
+      <SectionHeading
+        titleAs="h1"
+        eyebrow="Purchase history"
+        title="Your orders."
+        description="Track current deliveries and revisit past purchases."
+      />
 
-      <div className="mt-8 flex gap-2 overflow-x-auto pb-2">
+      <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
         {["All orders", "In progress", "Pre-orders", "Delivered"].map((filter, index) => (
           <button
             key={filter}

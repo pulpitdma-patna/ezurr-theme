@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
+import { clearSession, formatMobileDisplay } from "@/lib/auth";
+import { useAuthSession } from "@/hooks/useAuthSession";
 
 const accountLinks = [
   { href: "/account", label: "Overview", icon: "⌂" },
@@ -11,19 +14,36 @@ const accountLinks = [
   { href: "/account/profile", label: "Profile", icon: "○" },
 ];
 
+const fallback = {
+  name: "Arjun Patel",
+  initials: "AP",
+  mobile: "9876543210",
+};
+
 export function AccountShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { session } = useAuthSession();
+
+  const name = session?.name ?? fallback.name;
+  const initials = session?.initials ?? fallback.initials;
+  const mobile = formatMobileDisplay(session?.mobile ?? fallback.mobile);
+
+  function signOut() {
+    clearSession();
+    router.push("/auth");
+  }
 
   return (
-    <div className="ez-page py-8 sm:py-12 lg:py-16">
+    <div className="ez-page py-6 sm:py-8 lg:py-10">
       <div className="mb-8 flex items-center gap-4 lg:hidden">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1D1D1F] text-sm font-semibold text-white">
-          AP
+          {initials}
         </div>
         <div>
-          <div className="font-semibold tracking-[-0.02em]">Arjun Patel</div>
+          <div className="font-semibold tracking-[-0.02em]">{name}</div>
           <div className="ez-mono mt-0.5 text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
-            +91 98765 43210
+            {mobile}
           </div>
         </div>
       </div>
@@ -47,15 +67,15 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
 
       <div className="grid gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-14">
         <aside className="hidden lg:block">
-          <div className="sticky top-28 overflow-hidden rounded-[28px] border border-black/[0.07] bg-[#F7F7F8] p-4">
+          <div className="sticky top-24 overflow-hidden rounded-[28px] border border-black/[0.07] bg-[#F7F7F8] p-4">
             <div className="flex items-center gap-3 border-b border-black/[0.06] p-3 pb-6">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1D1D1F] text-sm font-semibold text-white">
-                AP
+                {initials}
               </div>
               <div className="min-w-0">
-                <div className="truncate font-semibold tracking-[-0.02em]">Arjun Patel</div>
+                <div className="truncate font-semibold tracking-[-0.02em]">{name}</div>
                 <div className="ez-mono mt-0.5 text-[8px] uppercase tracking-[0.1em] text-[#86868B]">
-                  +91 98765 43210
+                  {mobile}
                 </div>
               </div>
             </div>
@@ -87,12 +107,13 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
               })}
             </nav>
 
-            <Link
-              href="/auth"
-              className="mt-3 flex items-center gap-3 border-t border-black/[0.06] px-4 pt-5 text-sm font-medium text-[#B42318] hover:!text-[#B42318]"
+            <button
+              type="button"
+              onClick={signOut}
+              className="mt-3 flex w-full items-center gap-3 border-t border-black/[0.06] px-4 pt-5 text-left text-sm font-medium text-[#B42318] hover:text-[#912018]"
             >
               Sign out
-            </Link>
+            </button>
           </div>
         </aside>
         <div className="min-w-0">{children}</div>

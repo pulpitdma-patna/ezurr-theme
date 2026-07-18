@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { navItems, type NavKey } from "@/lib/theme";
+import { useAuthSession } from "@/hooks/useAuthSession";
 
 function BagIcon() {
   return (
@@ -71,6 +72,9 @@ type HeaderProps = {
 
 export function Header({ active, showSearch = false, compact = false }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { session, ready } = useAuthSession();
+  const accountHref = session ? "/account" : "/auth";
+  const accountLabel = session ? "Account" : "Sign in";
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
@@ -124,10 +128,12 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
           )}
           {!compact && (
             <Link
-              href="#account"
-              className="hidden text-sm font-medium text-[#424245] hover:text-[#1D1D1F] sm:inline"
+              href={accountHref}
+              className={`hidden text-sm font-medium text-[#424245] hover:text-[#1D1D1F] sm:inline ${
+                ready ? "opacity-100" : "opacity-0"
+              }`}
             >
-              Sign in
+              {accountLabel}
             </Link>
           )}
           <Link
@@ -180,11 +186,11 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
                 </Link>
               ))}
               <Link
-                href="#account"
+                href={accountHref}
                 onClick={closeMenu}
                 className="rounded-xl px-4 py-3.5 text-[15px] font-medium text-[#424245] sm:hidden"
               >
-                Sign in
+                {accountLabel}
               </Link>
               {showSearch && (
                 <div className="mt-2 flex items-center gap-2 rounded-full bg-[#F5F5F7] px-4 py-3 text-[13px] text-[#86868B] md:hidden">
@@ -202,7 +208,13 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
   );
 }
 
-export function CheckoutHeader() {
+export function CheckoutHeader({
+  label = "Secure pre-order · 256-bit",
+  shortLabel = "Secure · 256-bit",
+}: {
+  label?: string;
+  shortLabel?: string;
+} = {}) {
   return (
     <header className="border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
       <nav className="ez-page flex h-14 w-full items-center justify-between gap-3 sm:h-16">
@@ -213,10 +225,10 @@ export function CheckoutHeader() {
             <path d="M8 11V7a4 4 0 0 1 8 0v4" />
           </svg>
           <span className="ez-mono hidden text-[10px] uppercase tracking-[0.14em] text-[#86868B] sm:inline">
-            Secure pre-order · 256-bit
+            {label}
           </span>
           <span className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B] sm:hidden">
-            Secure · 256-bit
+            {shortLabel}
           </span>
         </div>
       </nav>

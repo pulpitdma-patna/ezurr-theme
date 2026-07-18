@@ -1,18 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { SectionHeading } from "@/components/home/SectionHeading";
 
 export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
 
   return (
     <div>
-      <span className="ez-section-kicker">Personal details</span>
-      <h1 className="mt-3 text-[clamp(2.1rem,5vw,3.75rem)] font-semibold leading-none tracking-[-0.05em]">Your profile.</h1>
-      <p className="mt-4 text-base text-[#6E6E73]">Keep your contact information current for faster checkout and delivery updates.</p>
+      <SectionHeading
+        titleAs="h1"
+        eyebrow="Personal details"
+        title="Your profile."
+        description="Keep your contact information current for faster checkout and delivery updates."
+      />
 
       <form
-        className="mt-8 max-w-3xl rounded-[28px] border border-black/[0.07] p-5 sm:p-8"
+        className="mt-2 max-w-3xl rounded-[28px] border border-black/[0.07] p-5 sm:p-8"
         onSubmit={(event) => {
           event.preventDefault();
           setSaved(true);

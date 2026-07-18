@@ -102,18 +102,18 @@ input:focus {
 }
 
 .ez-section {
-  padding-top: 4.5rem;
+  padding-top: 2.75rem;
 }
 
 @media (min-width: 768px) {
   .ez-section {
-    padding-top: 6.5rem;
+    padding-top: 3.75rem;
   }
 }
 
 @media (min-width: 1024px) {
   .ez-section {
-    padding-top: 8rem;
+    padding-top: 5rem;
   }
 }
 
@@ -197,7 +197,7 @@ input:focus {
   font-family: var(--font-space-mono), "Space Mono", ui-monospace, monospace;
   font-size: 0.625rem;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   line-height: 1.4;
   text-transform: uppercase;
   color: var(--ez-subtle);
@@ -205,18 +205,18 @@ input:focus {
 
 .ez-section-title {
   margin: 0;
-  font-size: clamp(1.9rem, 4.5vw, 3.5rem);
-  font-weight: 650;
-  line-height: 1;
+  font-size: clamp(1.75rem, 4vw, 3rem);
+  font-weight: 600;
+  line-height: 1.05;
   letter-spacing: -0.045em;
   color: var(--ez-ink);
 }
 
 .ez-section-copy {
   margin: 0;
-  max-width: 38rem;
-  font-size: clamp(0.95rem, 1.6vw, 1.08rem);
-  line-height: 1.6;
+  max-width: 36rem;
+  font-size: clamp(0.9375rem, 1.5vw, 1.0625rem);
+  line-height: 1.55;
   color: var(--ez-muted);
 }
 

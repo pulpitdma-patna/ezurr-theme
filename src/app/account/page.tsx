@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { SectionHeading } from "@/components/home/SectionHeading";
 
 const stats = [
   { label: "Orders", value: "03", detail: "1 arriving soon" },
@@ -10,15 +11,12 @@ const stats = [
 export default function AccountPage() {
   return (
     <div>
-      <div className="mb-8 sm:mb-10">
-        <span className="ez-section-kicker">Your account</span>
-        <h1 className="mt-3 text-[clamp(2.2rem,5vw,4.25rem)] font-semibold leading-[0.98] tracking-[-0.055em]">
-          Welcome back, Arjun.
-        </h1>
-        <p className="mt-4 max-w-2xl text-base leading-relaxed text-[#6E6E73]">
-          Track orders, manage your details, and pick up where you left off.
-        </p>
-      </div>
+      <SectionHeading
+        titleAs="h1"
+        eyebrow="Your account"
+        title="Welcome back, Arjun."
+        description="Track orders, manage your details, and pick up where you left off."
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         {stats.map((stat, index) => (
@@ -38,16 +36,13 @@ export default function AccountPage() {
       </div>
 
       <section className="mt-10 rounded-[28px] border border-black/[0.07] p-5 sm:p-7">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <span className="ez-section-kicker">Latest order</span>
-            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">Arriving tomorrow.</h2>
-          </div>
-          <Link href="/account/orders" className="text-sm font-semibold text-[#424245]">
-            View all orders →
-          </Link>
-        </div>
-
+        <SectionHeading
+          className="!mb-5 sm:!mb-6"
+          eyebrow="Latest order"
+          title="Arriving tomorrow."
+          href="/account/orders"
+          linkLabel="View all orders"
+        />
         <div className="mt-6 grid gap-6 rounded-[22px] bg-[#F7F7F8] p-4 sm:grid-cols-[110px_1fr_auto] sm:items-center sm:p-5">
           <div className="relative aspect-square overflow-hidden rounded-2xl bg-white">
             <Image

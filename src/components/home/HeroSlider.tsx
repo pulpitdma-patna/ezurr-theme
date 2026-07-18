@@ -16,7 +16,7 @@ const slides = [
     secondaryCta: { label: "View details", href: "/product" },
     showCountdown: true,
     image: "/images/hero-neon-coast.png",
-    imagePosition: "center",
+    imagePosition: "68% 22%",
     backdrop: "#11151b",
   },
   {
@@ -29,7 +29,7 @@ const slides = [
     secondaryCta: { label: "View details", href: "/product" },
     showCountdown: false,
     image: "/images/hero-wild-crimson.png",
-    imagePosition: "center",
+    imagePosition: "78% 30%",
     backdrop: "#120e12",
   },
   {
@@ -43,7 +43,7 @@ const slides = [
     secondaryCta: { label: "View details", href: "/product" },
     showCountdown: false,
     image: "/images/hero-handheld-cyan.png",
-    imagePosition: "center",
+    imagePosition: "72% 35%",
     backdrop: "#07161b",
   },
 ];
@@ -105,7 +105,7 @@ export function HeroSlider() {
         {slides.map((s, index) => (
           <article
             key={s.id}
-            className="relative h-[700px] min-w-0 shrink-0 grow-0 basis-full overflow-hidden sm:h-[680px] lg:h-[720px]"
+            className="relative h-[580px] min-w-0 shrink-0 grow-0 basis-full overflow-hidden sm:h-[620px] lg:h-[680px] xl:h-[720px] 2xl:h-[760px]"
             aria-roledescription="slide"
             aria-label={`${index + 1} of ${total}`}
             aria-hidden={slide !== index}
@@ -122,11 +122,11 @@ export function HeroSlider() {
             />
 
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,4,7,0.94)_0%,rgba(3,4,7,0.78)_39%,rgba(3,4,7,0.18)_76%,rgba(3,4,7,0.32)_100%)] sm:bg-[linear-gradient(90deg,rgba(3,4,7,0.95)_0%,rgba(3,4,7,0.74)_42%,rgba(3,4,7,0.08)_78%,rgba(3,4,7,0.22)_100%)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(3,4,7,0.82)_0%,transparent_38%,rgba(3,4,7,0.14)_100%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(3,4,7,0.78)_0%,transparent_42%,rgba(3,4,7,0.06)_100%)]" />
             <div className="absolute inset-x-0 top-0 h-px bg-white/15" />
 
-            <div className="ez-page relative z-10 flex h-full w-full items-start pb-28 pt-12 sm:items-center sm:pb-24 sm:pt-8">
-              <div className="flex w-full max-w-[720px] flex-col gap-4 text-white sm:gap-5">
+            <div className="ez-page relative z-10 flex h-full w-full items-start pb-24 pt-10 sm:items-center sm:pb-20 sm:pt-6">
+              <div className="flex w-full max-w-[720px] flex-col gap-3.5 text-white sm:gap-4">
                 <h1 className="m-0 max-w-[720px] text-[clamp(2.4rem,6vw,4.8rem)] font-semibold leading-[0.98] tracking-[-0.055em] text-white">
                   {s.title}
                   <br />

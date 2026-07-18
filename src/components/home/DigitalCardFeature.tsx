@@ -6,23 +6,27 @@ export function DigitalCardFeature() {
     <section className="ez-page ez-section" aria-labelledby="digital-cards-title">
       <div className="overflow-hidden rounded-[30px] bg-[#101012] px-6 py-10 sm:rounded-[38px] sm:px-10 sm:py-14 lg:grid lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:gap-12 lg:px-14 lg:py-16">
         <div className="mb-9 lg:mb-0">
-          <span className="ez-section-kicker !text-white/45">Instant delivery</span>
+          <div className="flex items-center gap-3">
+            <span aria-hidden="true" className="h-px w-6 shrink-0 bg-white/35" />
+            <span className="ez-section-kicker !text-white/50">Instant delivery</span>
+          </div>
           <h2
             id="digital-cards-title"
-            className="mt-3 text-[clamp(2.2rem,5vw,4rem)] font-semibold leading-[0.98] tracking-[-0.05em] text-white"
+            className="ez-section-title mt-3.5 !text-white"
           >
             More play.
             <br />
             Zero waiting.
           </h2>
-          <p className="mt-5 max-w-[460px] text-base leading-relaxed text-white/60">
+          <p className="ez-section-copy mt-3 !text-white/55">
             Wallet top-ups, memberships, and digital codes delivered securely to your mobile.
           </p>
           <Link
             href="/game-cards"
-            className="mt-7 inline-flex min-h-12 items-center rounded-full bg-white px-6 text-sm font-semibold text-[#1D1D1F] transition hover:bg-white/90 hover:!text-[#1D1D1F]"
+            className="mt-7 inline-flex min-h-11 items-center rounded-full bg-white px-5 text-sm font-semibold text-[#1D1D1F] transition hover:bg-white/90 hover:!text-[#1D1D1F]"
           >
-            Explore game cards <span aria-hidden="true" className="ml-2">→</span>
+            Explore game cards
+            <span aria-hidden="true" className="ml-1.5 text-[13px] opacity-60">→</span>
           </Link>
         </div>
 

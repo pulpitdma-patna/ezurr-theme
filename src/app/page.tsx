@@ -103,9 +103,11 @@ export default function HomePage() {
             imageAlt="Abstract violet glass and futuristic coastal city"
             theme="violet"
             fullWidth
+            imagePosition="70% center"
           />
         )}
 
+        <BrandExplorer />
         <ProductRail
           eyebrow="Playing now"
           title="Games worth disappearing into."
@@ -114,7 +116,14 @@ export default function HomePage() {
           href="/games"
           linkLabel="All games"
         />
-        <BrandExplorer />
+        <ProductRail
+          eyebrow="Choose your platform"
+          title="Power your next era."
+          products={featuredConsoles}
+          href="/consoles"
+          linkLabel="All consoles"
+          variant="square"
+        />
         <EditorialBanner
           eyebrow="Build your perfect setup"
           title="Control every detail."
@@ -125,14 +134,7 @@ export default function HomePage() {
           imageAlt="Premium racing simulator in a minimalist studio"
           theme="light"
           fullWidth
-        />
-        <ProductRail
-          eyebrow="Choose your platform"
-          title="Power your next era."
-          products={featuredConsoles}
-          href="/consoles"
-          linkLabel="All consoles"
-          variant="square"
+          imagePosition="62% 40%"
         />
         <ProductRail
           eyebrow="Ready to ship"
