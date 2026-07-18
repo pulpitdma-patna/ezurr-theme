@@ -1,10 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SectionHeading } from "@/components/home/SectionHeading";
+import { useAccountStore } from "@/hooks/useAccountStore";
+import { useAuthSession } from "@/hooks/useAuthSession";
+import { updateProfileExtras } from "@/lib/accountStore";
+import { formatMobileDisplay, updateSessionProfile } from "@/lib/auth";
 
 export default function ProfilePage() {
+  const { session } = useAuthSession();
+  const account = useAccountStore();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [dob, setDob] = useState(account.dob);
+  const [gender, setGender] = useState(account.gender);
+  const [notify, setNotify] = useState(account.notify);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!session) return;
+    const parts = session.name.split(/\s+/);
+    setFirstName(parts[0] ?? "");
+    setLastName(parts.slice(1).join(" "));
+  }, [session]);
 
   return (
     <div>
@@ -16,33 +34,41 @@ export default function ProfilePage() {
       />
 
       <form
-        className="mt-2 max-w-3xl rounded-[28px] border border-black/[0.07] p-5 sm:p-8"
+        className="mt-2 max-w-3xl rounded-2xl border border-black/[0.07] p-5 sm:p-8"
         onSubmit={(event) => {
           event.preventDefault();
+          const name = [firstName, lastName].filter(Boolean).join(" ").trim();
+          updateSessionProfile({ name: name || session?.name });
+          updateProfileExtras({ dob, gender, notify });
           setSaved(true);
+          window.setTimeout(() => setSaved(false), 2500);
         }}
       >
         <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="First name" defaultValue="Arjun" />
-          <Field label="Last name" defaultValue="Patel" />
+          <Field label="First name" value={firstName} onChange={setFirstName} />
+          <Field label="Last name" value={lastName} onChange={setLastName} />
           <div className="sm:col-span-2">
-            <label className="mb-2 block text-sm font-semibold text-[#424245]" htmlFor="mobile">Mobile number</label>
-            <div className="flex rounded-2xl border border-black/10 bg-[#F8F8FA] focus-within:border-[#1D1D1F] focus-within:ring-1 focus-within:ring-[#1D1D1F]">
-              <span className="flex items-center border-r border-black/[0.07] px-4 text-sm font-semibold text-[#6E6E73]">+91</span>
-              <input
-                id="mobile"
-                inputMode="numeric"
-                defaultValue="9876543210"
-                className="min-h-14 w-full bg-transparent px-4 text-base outline-none"
-              />
-              <button type="button" className="mr-2 self-center rounded-full bg-white px-3 py-2 text-xs font-semibold shadow-sm">Change</button>
+            <label className="mb-2 block text-sm font-semibold text-[#424245]" htmlFor="mobile">
+              Mobile number
+            </label>
+            <div className="flex min-h-14 items-center rounded-2xl border border-black/10 bg-[#F8F8FA] px-4 text-base text-[#6E6E73]">
+              {formatMobileDisplay(session?.mobile ?? "")}
             </div>
-            <p className="mt-2 text-xs text-[#86868B]">A verification code is required when changing your number.</p>
+            <p className="mt-2 text-xs text-[#86868B]">
+              Mobile is your sign-in identity in this demo — change via a new OTP session.
+            </p>
           </div>
-          <Field label="Date of birth" defaultValue="1995-08-18" type="date" />
+          <Field label="Date of birth" value={dob} onChange={setDob} type="date" />
           <div>
-            <label className="mb-2 block text-sm font-semibold text-[#424245]" htmlFor="gender">Gender</label>
-            <select id="gender" defaultValue="Prefer not to say" className="min-h-14 w-full rounded-2xl border border-black/10 bg-[#F8F8FA] px-4 outline-none">
+            <label className="mb-2 block text-sm font-semibold text-[#424245]" htmlFor="gender">
+              Gender
+            </label>
+            <select
+              id="gender"
+              value={gender}
+              onChange={(e) => setGender(e.target.value)}
+              className="min-h-14 w-full rounded-2xl border border-black/10 bg-[#F8F8FA] px-4 outline-none"
+            >
               <option>Prefer not to say</option>
               <option>Male</option>
               <option>Female</option>
@@ -51,30 +77,83 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        <fieldset className="mt-8 border-t border-black/[0.06] pt-6">
+          <legend className="text-sm font-semibold text-[#1D1D1F]">Notifications</legend>
+          <p className="mt-1 text-xs text-[#86868B]">Local prefs only — no messages leave this browser.</p>
+          <div className="mt-4 space-y-3">
+            {(
+              [
+                ["email", "Order emails"],
+                ["whatsapp", "WhatsApp updates"],
+                ["marketing", "Offers & drops"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="flex items-center justify-between gap-3 text-sm">
+                <span>{label}</span>
+                <input
+                  type="checkbox"
+                  checked={notify[key]}
+                  onChange={(e) => setNotify((prev) => ({ ...prev, [key]: e.target.checked }))}
+                  className="h-4 w-4 accent-[#1D1D1F]"
+                />
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
         <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-black/[0.06] pt-6">
-          <button type="submit" className="min-h-12 rounded-full bg-[#1D1D1F] px-6 text-sm font-semibold text-white">Save changes</button>
-          {saved && <span className="text-sm font-medium text-[#2D6B3C]">Profile updated</span>}
+          <button
+            type="submit"
+            className="min-h-12 rounded-full bg-[#1D1D1F] px-6 text-sm font-semibold text-white"
+          >
+            Save changes
+          </button>
+          {saved ? (
+            <span className="text-sm font-medium text-[#2D6B3C]">Profile updated</span>
+          ) : null}
         </div>
       </form>
 
-      <section className="mt-8 max-w-3xl rounded-[24px] border border-[#F0C7C2] bg-[#FFF8F7] p-5 sm:p-6">
+      <section className="mt-8 max-w-3xl rounded-2xl border border-[#F0C7C2] bg-[#FFF8F7] p-5 sm:p-6">
         <h2 className="font-semibold text-[#7A271A]">Delete account</h2>
-        <p className="mt-2 text-sm leading-relaxed text-[#9A4A40]">Permanently remove your account and personal data. Existing orders remain available for statutory recordkeeping.</p>
-        <button type="button" className="mt-4 text-sm font-semibold text-[#B42318]">Request account deletion</button>
+        <p className="mt-2 text-sm leading-relaxed text-[#9A4A40]">
+          Permanently remove your account and personal data. Existing orders remain available for
+          statutory recordkeeping.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.alert("Deletion request recorded for this demo (no data wiped).")}
+          className="mt-4 text-sm font-semibold text-[#B42318]"
+        >
+          Request account deletion
+        </button>
       </section>
     </div>
   );
 }
 
-function Field({ label, defaultValue, type = "text" }: { label: string; defaultValue: string; type?: string }) {
+function Field({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+}) {
   const id = label.toLowerCase().replaceAll(" ", "-");
   return (
     <div>
-      <label className="mb-2 block text-sm font-semibold text-[#424245]" htmlFor={id}>{label}</label>
+      <label className="mb-2 block text-sm font-semibold text-[#424245]" htmlFor={id}>
+        {label}
+      </label>
       <input
         id={id}
         type={type}
-        defaultValue={defaultValue}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         className="min-h-14 w-full rounded-2xl border border-black/10 bg-[#F8F8FA] px-4 text-base outline-none transition focus:border-[#1D1D1F] focus:ring-1 focus:ring-[#1D1D1F]"
       />
     </div>

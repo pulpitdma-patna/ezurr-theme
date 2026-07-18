@@ -96,3 +96,23 @@ export function clearSession() {
   window.localStorage.removeItem(STORAGE_KEY);
   window.dispatchEvent(new Event("ezurr-auth-change"));
 }
+
+export function updateSessionProfile(input: { name?: string; mobile?: string }) {
+  const current = getSession();
+  if (!current) return null;
+  const name = input.name?.trim() || current.name;
+  const mobile = input.mobile ? normalizeMobile(input.mobile) : current.mobile;
+  const parts = name.split(/\s+/).filter(Boolean);
+  const initials =
+    parts.length >= 2
+      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      : name.slice(0, 2).toUpperCase() || current.initials;
+  const next: AuthSession = {
+    ...current,
+    name,
+    mobile: isValidMobile(mobile) ? mobile : current.mobile,
+    initials,
+  };
+  setSession(next);
+  return next;
+}

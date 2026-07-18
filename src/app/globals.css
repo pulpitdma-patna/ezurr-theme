@@ -188,8 +188,19 @@ input:focus {
   }
 
   .ez-product-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.06);
+    transform: translateY(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ez-product-card,
+  .ez-product-card:hover {
+    transform: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .ez-product-card img {
+    transform: none !important;
   }
 }
 

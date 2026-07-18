@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   createSession,
@@ -149,8 +149,15 @@ function BrandPanel() {
   );
 }
 
+function safeNextPath(raw: string | null) {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 export default function AuthPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = safeNextPath(searchParams.get("next"));
   const [step, setStep] = useState<"mobile" | "otp">("mobile");
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
@@ -158,11 +165,16 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
 
+  function destination(session: ReturnType<typeof createSession>) {
+    if (isAdminSession(session)) return "/admin";
+    return nextPath && nextPath.startsWith("/account") ? nextPath : "/account";
+  }
+
   useEffect(() => {
     const session = getSession();
     if (!session) return;
-    router.replace(isAdminSession(session) ? "/admin" : "/account");
-  }, [router]);
+    router.replace(destination(session));
+  }, [router, nextPath]);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -198,7 +210,7 @@ export default function AuthPage() {
     await new Promise((resolve) => setTimeout(resolve, 700));
     const session = createSession(mobile);
     setSession(session);
-    router.push(isAdminSession(session) ? "/admin" : "/account");
+    router.push(destination(session));
   }
 
   return (

@@ -65,6 +65,7 @@ export function FooterFull() {
             { href: "/auth", label: "Sign in" },
             { href: "/account", label: "My account" },
             { href: "/account/orders", label: "Orders" },
+            { href: "/account/digital", label: "Digital vault" },
             { href: "/account/wishlist", label: "Wishlist" },
             { href: "/checkout", label: "Checkout" },
           ]}

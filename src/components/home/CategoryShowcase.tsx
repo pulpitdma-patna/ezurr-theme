@@ -3,13 +3,23 @@ import Link from "next/link";
 import { homeCategories } from "@/data/home";
 import { SectionHeading } from "./SectionHeading";
 
-export function CategoryShowcase() {
+type CategoryShowcaseProps = {
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+};
+
+export function CategoryShowcase({
+  eyebrow = "Start exploring",
+  title = "Shop by category.",
+  description = "Jump directly into the collection built for what you want to play next.",
+}: CategoryShowcaseProps) {
   return (
     <section className="ez-page ez-section" aria-label="Shop by category">
       <SectionHeading
-        eyebrow="Start exploring"
-        title="Shop by category."
-        description="Jump directly into the collection built for what you want to play next."
+        eyebrow={eyebrow}
+        title={title}
+        description={description}
         controls={
           <span className="ez-mono hidden rounded-full border border-black/[0.08] bg-[#F5F5F7] px-4 py-2 text-[9px] uppercase tracking-[0.15em] text-[#6E6E73] sm:inline-flex">
             05 collections

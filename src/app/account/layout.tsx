@@ -1,7 +1,10 @@
-import { MicroBar } from "@/components/layout/MicroBar";
-import { Header } from "@/components/layout/Header";
-import { FooterCompact } from "@/components/layout/Footer";
+"use client";
+
+import { AccountAuthGate } from "@/components/account/AccountAuthGate";
 import { AccountShell } from "@/components/account/AccountShell";
+import { FooterCompact } from "@/components/layout/Footer";
+import { Header } from "@/components/layout/Header";
+import { MicroBar } from "@/components/layout/MicroBar";
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,7 +12,9 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
       <MicroBar />
       <Header />
       <main>
-        <AccountShell>{children}</AccountShell>
+        <AccountAuthGate>
+          <AccountShell>{children}</AccountShell>
+        </AccountAuthGate>
       </main>
       <FooterCompact />
     </div>

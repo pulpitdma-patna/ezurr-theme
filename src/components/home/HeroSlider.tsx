@@ -4,49 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CountdownSummaryPanel } from "@/components/ui/Countdown";
-
-const slides = [
-  {
-    id: "gta",
-    title: "Grand Theft Auto VI.",
-    subtitle: "Reserved, price locked.",
-    price: "₹5,999",
-    tags: ["Price locked", "COD available"],
-    primaryCta: { label: "Pre-order now", href: "/checkout" },
-    secondaryCta: { label: "View details", href: "/product" },
-    showCountdown: true,
-    image: "/images/hero-neon-coast.png",
-    imagePosition: "68% 22%",
-    backdrop: "#11151b",
-  },
-  {
-    id: "wolverine",
-    title: "Marvel's Wolverine.",
-    subtitle: "The claws come out.",
-    price: "₹5,499",
-    tags: ["Price locked", "COD available"],
-    primaryCta: { label: "Pre-order now", href: "/checkout" },
-    secondaryCta: { label: "View details", href: "/product" },
-    showCountdown: false,
-    image: "/images/hero-wild-crimson.png",
-    imagePosition: "78% 30%",
-    backdrop: "#120e12",
-  },
-  {
-    id: "switch2",
-    title: "Nintendo Switch 2.",
-    subtitle: "Play has no home.",
-    price: "₹65,000",
-    strike: "₹74,490",
-    saveTag: "Save ₹9,490",
-    primaryCta: { label: "Add to bag", href: "/checkout" },
-    secondaryCta: { label: "View details", href: "/product" },
-    showCountdown: false,
-    image: "/images/hero-handheld-cyan.png",
-    imagePosition: "72% 35%",
-    backdrop: "#07161b",
-  },
-];
+import type { HeroSlide } from "@/lib/cms/types";
+import { DEFAULT_HERO_SLIDES } from "@/lib/cms/defaultHomePage";
 
 function ArrowIcon({ direction }: { direction: "left" | "right" }) {
   return (
@@ -67,10 +26,11 @@ function ArrowIcon({ direction }: { direction: "left" | "right" }) {
   );
 }
 
-export function HeroSlider() {
+export function HeroSlider({ slides = DEFAULT_HERO_SLIDES }: { slides?: HeroSlide[] }) {
+  const resolvedSlides = slides.length > 0 ? slides : DEFAULT_HERO_SLIDES;
   const [slide, setSlide] = useState(0);
   const [paused, setPaused] = useState(false);
-  const total = slides.length;
+  const total = resolvedSlides.length;
 
   const go = useCallback(
     (i: number) => setSlide(((i % total) + total) % total),
@@ -96,13 +56,13 @@ export function HeroSlider() {
       }}
     >
       <p className="sr-only" aria-live="polite">
-        Slide {slide + 1} of {total}: {slides[slide].title}
+        Slide {slide + 1} of {total}: {resolvedSlides[slide].title}
       </p>
       <div
         className="flex transition-transform duration-700 ease-[cubic-bezier(0.3,0.8,0.3,1)] motion-reduce:transition-none"
         style={{ transform: `translateX(-${slide * 100}%)` }}
       >
-        {slides.map((s, index) => (
+        {resolvedSlides.map((s, index) => (
           <article
             key={s.id}
             className="relative h-[580px] min-w-0 shrink-0 grow-0 basis-full overflow-hidden sm:h-[620px] lg:h-[680px] xl:h-[720px] 2xl:h-[760px]"
@@ -192,7 +152,7 @@ export function HeroSlider() {
       <div className="absolute inset-x-0 bottom-6 z-20 sm:bottom-8">
         <div className="ez-page flex w-full items-center justify-between">
           <div className="flex items-center gap-2" role="tablist" aria-label="Choose featured product">
-          {slides.map((s, i) => (
+          {resolvedSlides.map((s, i) => (
             <button
               key={s.id}
               type="button"

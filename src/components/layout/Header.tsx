@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { navItems, type NavKey } from "@/lib/theme";
+import { clearSession } from "@/lib/auth";
 import { useAuthSession } from "@/hooks/useAuthSession";
 
 function BagIcon() {
@@ -71,7 +73,10 @@ type HeaderProps = {
 };
 
 export function Header({ active, showSearch = false, compact = false }: HeaderProps) {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
   const { session, ready } = useAuthSession();
   const accountHref = session ? "/account" : "/auth";
   const accountLabel = session ? "Account" : "Sign in";
@@ -82,6 +87,22 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
       document.body.style.overflow = "";
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    function onPointer(event: MouseEvent) {
+      if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setAccountOpen(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [accountOpen]);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -137,14 +158,69 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
             </Link>
           )}
           {!compact && (
-            <Link
-              href={accountHref}
-              className={`hidden text-sm font-medium text-[#424245] hover:text-[#1D1D1F] sm:inline ${
-                ready ? "opacity-100" : "opacity-0"
-              }`}
+            <div
+              ref={accountRef}
+              className={`relative hidden sm:block ${ready ? "opacity-100" : "opacity-0"}`}
             >
-              {accountLabel}
-            </Link>
+              {session ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setAccountOpen((v) => !v)}
+                    className="inline-flex items-center gap-2 text-sm font-medium text-[#424245] hover:text-[#1D1D1F]"
+                    aria-expanded={accountOpen}
+                    aria-haspopup="menu"
+                  >
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1D1D1F] text-[10px] font-semibold text-white">
+                      {session.initials}
+                    </span>
+                    <span className="max-w-[7rem] truncate">{session.name.split(" ")[0]}</span>
+                  </button>
+                  {accountOpen ? (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-xl border border-black/[0.08] bg-white py-1 shadow-[0_12px_40px_rgba(17,17,19,0.12)]"
+                    >
+                      {[
+                        ["/account", "Overview"],
+                        ["/account/orders", "Orders"],
+                        ["/account/wishlist", "Wishlist"],
+                        ["/account/profile", "Profile"],
+                      ].map(([href, label]) => (
+                        <Link
+                          key={href}
+                          href={href}
+                          role="menuitem"
+                          onClick={() => setAccountOpen(false)}
+                          className="block px-3.5 py-2 text-sm text-[#424245] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
+                        >
+                          {label}
+                        </Link>
+                      ))}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          clearSession();
+                          setAccountOpen(false);
+                          router.push("/auth");
+                        }}
+                        className="block w-full px-3.5 py-2 text-left text-sm text-[#B42318] hover:bg-[#FFF5F5]"
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <Link
+                  href={accountHref}
+                  className="text-sm font-medium text-[#424245] hover:text-[#1D1D1F]"
+                >
+                  {accountLabel}
+                </Link>
+              )}
+            </div>
           )}
           <Link
             href="/checkout"
