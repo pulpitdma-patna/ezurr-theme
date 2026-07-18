@@ -35,9 +35,32 @@ import {
   seedAdminBrands,
   seedAdminCategories,
 } from "@/data/admin";
+import {
+  createBlankLandingPage,
+  createDefaultHomePage,
+  normalizePageBlocks,
+} from "@/lib/cms/defaultHomePage";
+import { createBlockId, getSectionEntry } from "@/lib/cms/sectionRegistry";
+import { createWidgetCatalogSeed } from "@/lib/cms/widgetCatalog";
+import type {
+  CmsBlock,
+  CmsGlobalCode,
+  CmsPageDocument,
+  CmsWidgetDefinition,
+  PageRevision,
+  PageRevisionSnapshot,
+  PageVariantId,
+  SectionType,
+} from "@/lib/cms/types";
+import { snapshotsEqual } from "@/lib/cms/types";
+import {
+  migrateCheckoutRules,
+  seedCheckoutRules,
+  type AdminCheckoutRule,
+} from "@/lib/checkoutRules";
 
 export const STORAGE_KEY = "ezurr_admin_store";
-export const STORE_VERSION = 6;
+export const STORE_VERSION = 10;
 
 export type AdminStoreState = {
   version: number;
@@ -54,6 +77,10 @@ export type AdminStoreState = {
   automations: AdminAutomationRule[];
   automationRuns: AdminAutomationRun[];
   activityLog: AdminActivityEntry[];
+  cmsPages: CmsPageDocument[];
+  cmsWidgets: CmsWidgetDefinition[];
+  cmsGlobalCode: CmsGlobalCode;
+  checkoutRules: AdminCheckoutRule[];
 };
 
 type Listener = () => void;
@@ -80,6 +107,10 @@ function createSeedState(): AdminStoreState {
     automations: seedAutomations(),
     automationRuns: [],
     activityLog: seedActivity(),
+    cmsPages: [createDefaultHomePage()],
+    cmsWidgets: createWidgetCatalogSeed(),
+    cmsGlobalCode: { headCss: "", footerJs: "" },
+    checkoutRules: seedCheckoutRules(),
   };
 }
 
@@ -218,10 +249,106 @@ function hydrate() {
       activityLog: Array.isArray(parsed.activityLog)
         ? (parsed.activityLog as AdminActivityEntry[]).slice(0, 300)
         : seed.activityLog,
+      cmsPages: migrateCmsPages(parsed.cmsPages, seed.cmsPages),
+      cmsWidgets: migrateCmsWidgets(parsed.cmsWidgets, seed.cmsWidgets),
+      cmsGlobalCode: {
+        headCss:
+          typeof (parsed as { cmsGlobalCode?: CmsGlobalCode }).cmsGlobalCode?.headCss ===
+          "string"
+            ? (parsed as { cmsGlobalCode: CmsGlobalCode }).cmsGlobalCode.headCss
+            : seed.cmsGlobalCode.headCss,
+        footerJs:
+          typeof (parsed as { cmsGlobalCode?: CmsGlobalCode }).cmsGlobalCode?.footerJs ===
+          "string"
+            ? (parsed as { cmsGlobalCode: CmsGlobalCode }).cmsGlobalCode.footerJs
+            : seed.cmsGlobalCode.footerJs,
+      },
+      checkoutRules: migrateCheckoutRules(
+        (parsed as { checkoutRules?: AdminCheckoutRule[] }).checkoutRules,
+        seed.checkoutRules,
+      ),
     };
   } catch {
     state = createSeedState();
   }
+}
+
+function migrateCmsPages(
+  saved: unknown,
+  seed: CmsPageDocument[],
+): CmsPageDocument[] {
+  if (!Array.isArray(saved) || saved.length === 0) return seed;
+
+  const pages = (saved as Array<CmsPageDocument & {
+    variants?: PageRevisionSnapshot["variants"];
+    activeVariantId?: PageVariantId;
+    customCss?: string;
+    customJs?: string;
+  }>).map((page) => {
+    const fallback =
+      page.id === "home"
+        ? seed[0]
+        : createBlankLandingPage(page.id, page.title || "Page", page.id);
+
+    let draft: PageRevisionSnapshot;
+    let published: PageRevisionSnapshot | null;
+
+    if (page.draft?.variants?.length) {
+      draft = page.draft;
+      published = page.published ?? (page.status === "published" ? structuredClone(page.draft) : null);
+    } else if (Array.isArray(page.variants) && page.variants.length > 0) {
+      // Legacy flat shape → draft + published
+      draft = {
+        variants: page.variants,
+        activeVariantId: page.activeVariantId === "B" ? "B" : "A",
+        customCss: typeof page.customCss === "string" ? page.customCss : "",
+        customJs: typeof page.customJs === "string" ? page.customJs : "",
+      };
+      published =
+        page.status === "published" ? structuredClone(draft) : null;
+    } else {
+      draft = structuredClone(fallback.draft);
+      published = fallback.published ? structuredClone(fallback.published) : null;
+    }
+
+    const normalized = normalizePageBlocks({
+      id: page.id || fallback.id,
+      title: page.title || fallback.title,
+      path: page.path || fallback.path,
+      status: published ? "published" : "draft",
+      updatedAt: page.updatedAt || fallback.updatedAt,
+      draft,
+      published,
+      revisions: Array.isArray(page.revisions) ? page.revisions.slice(0, 20) : [],
+    });
+    return normalized;
+  });
+
+  const hasHome = pages.some((p) => p.id === "home");
+  return hasHome ? pages : [seed[0], ...pages];
+}
+
+function migrateCmsWidgets(
+  saved: unknown,
+  seed: CmsWidgetDefinition[],
+): CmsWidgetDefinition[] {
+  if (!Array.isArray(saved) || saved.length === 0) return seed;
+  const byId = new Map((saved as CmsWidgetDefinition[]).map((w) => [w.id, w]));
+  const merged = seed.map((w) => {
+    const existing = byId.get(w.id);
+    if (!existing) return w;
+    return {
+      ...w,
+      ...existing,
+      id: w.id,
+      fields: w.fields,
+      templateHtml: existing.templateHtml || w.templateHtml,
+    };
+  });
+  for (const w of saved as CmsWidgetDefinition[]) {
+    if (!merged.some((m) => m.id === w.id)) merged.push(w);
+  }
+  return merged;
 }
 
 function commit(next: AdminStoreState) {
@@ -1174,4 +1301,729 @@ export function getLiveThemeSettings(): AdminSettings {
   if (typeof window === "undefined") return { ...defaultAdminSettings };
   hydrate();
   return state.settings;
+}
+
+/* ─── CMS helpers ─── */
+
+function touchPage(page: CmsPageDocument): CmsPageDocument {
+  return { ...page, updatedAt: nowIso() };
+}
+
+function mapPage(
+  pageId: string,
+  mapper: (page: CmsPageDocument) => CmsPageDocument,
+) {
+  setAdminState((prev) => ({
+    ...prev,
+    cmsPages: prev.cmsPages.map((page) =>
+      page.id === pageId ? touchPage(mapper(page)) : page,
+    ),
+  }));
+}
+
+function draftActiveVariant(page: CmsPageDocument) {
+  return (
+    page.draft.variants.find((v) => v.id === page.draft.activeVariantId) ??
+    page.draft.variants[0]
+  );
+}
+
+function withDraftSections(
+  page: CmsPageDocument,
+  sections: CmsBlock[],
+): CmsPageDocument {
+  const draft: PageRevisionSnapshot = {
+    ...page.draft,
+    variants: page.draft.variants.map((v) =>
+      v.id === page.draft.activeVariantId ? { ...v, sections } : v,
+    ),
+  };
+  const inSync = snapshotsEqual(draft, page.published);
+  return {
+    ...page,
+    draft,
+    status: page.published ? (inSync ? "published" : "draft") : "draft",
+  };
+}
+
+function findBlock(blocks: CmsBlock[], id: string): CmsBlock | undefined {
+  for (const block of blocks) {
+    if (block.id === id) return block;
+    if (block.children) {
+      const nested = findBlock(block.children, id);
+      if (nested) return nested;
+    }
+  }
+  return undefined;
+}
+
+function mapBlocks(
+  blocks: CmsBlock[],
+  id: string,
+  mapper: (block: CmsBlock) => CmsBlock,
+): CmsBlock[] {
+  return blocks.map((block) => {
+    if (block.id === id) return mapper(block);
+    if (block.children) {
+      return { ...block, children: mapBlocks(block.children, id, mapper) };
+    }
+    return block;
+  });
+}
+
+function removeBlockDeep(blocks: CmsBlock[], id: string): CmsBlock[] {
+  return blocks
+    .filter((block) => block.id !== id)
+    .map((block) =>
+      block.children
+        ? { ...block, children: removeBlockDeep(block.children, id) }
+        : block,
+    );
+}
+
+function insertChild(
+  blocks: CmsBlock[],
+  parentId: string,
+  child: CmsBlock,
+): CmsBlock[] {
+  return blocks.map((block) => {
+    if (block.id === parentId) {
+      return { ...block, children: [...(block.children ?? []), child] };
+    }
+    if (block.children) {
+      return { ...block, children: insertChild(block.children, parentId, child) };
+    }
+    return block;
+  });
+}
+
+function cloneBlockTree(block: CmsBlock): CmsBlock {
+  const copy = structuredClone(block);
+  copy.id = createBlockId("sec");
+  if (copy.children) {
+    copy.children = copy.children.map(cloneBlockTree);
+  }
+  return copy;
+}
+
+function createRowWithColumns(columns: number): CmsBlock {
+  const rowId = createBlockId("sec");
+  const cols = columns === 3 ? 3 : 2;
+  return {
+    id: rowId,
+    type: "row",
+    enabled: true,
+    props: { columns: cols, gap: "md" },
+    children: Array.from({ length: cols }, (_, i) => ({
+      id: createBlockId("col"),
+      type: "column" as const,
+      enabled: true,
+      props: { index: i },
+      children: [],
+    })),
+  };
+}
+
+export function getCmsPages(): CmsPageDocument[] {
+  return getAdminState().cmsPages;
+}
+
+export function getCmsPage(pageId: string): CmsPageDocument | undefined {
+  return getAdminState().cmsPages.find((p) => p.id === pageId);
+}
+
+export function getCmsPageByPath(path: string): CmsPageDocument | undefined {
+  return getAdminState().cmsPages.find((p) => p.path === path);
+}
+
+export function getCmsWidgets(): CmsWidgetDefinition[] {
+  return getAdminState().cmsWidgets;
+}
+
+export function getCmsGlobalCode(): CmsGlobalCode {
+  return getAdminState().cmsGlobalCode;
+}
+
+export function isCmsDraftDirty(page: CmsPageDocument): boolean {
+  if (!page.published) return true;
+  return !snapshotsEqual(page.draft, page.published);
+}
+
+export function createCmsPage(title: string, slug: string) {
+  const id = slug
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || createBlockId("page");
+  const existing = getAdminState().cmsPages.some((p) => p.id === id);
+  const pageId = existing ? `${id}-${createBlockId("x")}` : id;
+  const page = createBlankLandingPage(pageId, title, pageId);
+  setAdminState((prev) => ({ ...prev, cmsPages: [...prev.cmsPages, page] }));
+  logActivity({
+    actor: "Admin",
+    action: "cms.page_created",
+    entityType: "system",
+    entityId: pageId,
+    detail: title,
+  });
+  return pageId;
+}
+
+export function updateCmsPageMeta(
+  pageId: string,
+  patch: Partial<Pick<CmsPageDocument, "title" | "path" | "status">>,
+) {
+  mapPage(pageId, (page) => ({ ...page, ...patch }));
+}
+
+export function deleteCmsPage(pageId: string) {
+  if (pageId === "home") return;
+  setAdminState((prev) => ({
+    ...prev,
+    cmsPages: prev.cmsPages.filter((p) => p.id !== pageId),
+  }));
+  logActivity({
+    actor: "Admin",
+    action: "cms.page_deleted",
+    entityType: "system",
+    entityId: pageId,
+    detail: "Page removed",
+  });
+}
+
+export function duplicateCmsPage(pageId: string) {
+  const source = getCmsPage(pageId);
+  if (!source) return;
+  const newId = createBlockId("page");
+  const copy: CmsPageDocument = {
+    ...structuredClone(source),
+    id: newId,
+    title: `${source.title} (copy)`,
+    path: `/pages/${newId}`,
+    status: "draft",
+    updatedAt: nowIso(),
+    published: null,
+    revisions: [],
+  };
+  setAdminState((prev) => ({ ...prev, cmsPages: [...prev.cmsPages, copy] }));
+  return newId;
+}
+
+export function resetCmsPage(pageId: string) {
+  if (pageId === "home") {
+    mapPage(pageId, () => createDefaultHomePage());
+    return;
+  }
+  const page = getCmsPage(pageId);
+  if (!page) return;
+  mapPage(pageId, () => createBlankLandingPage(page.id, page.title, page.id));
+}
+
+export function setCmsActiveVariant(pageId: string, variantId: PageVariantId) {
+  mapPage(pageId, (page) => ({
+    ...page,
+    draft: { ...page.draft, activeVariantId: variantId },
+    status: page.published && snapshotsEqual(
+      { ...page.draft, activeVariantId: variantId },
+      page.published,
+    )
+      ? "published"
+      : page.published
+        ? "draft"
+        : "draft",
+  }));
+}
+
+export function updateCmsTrafficSplit(pageId: string, trafficA: number) {
+  const a = Math.min(100, Math.max(0, Math.round(trafficA)));
+  mapPage(pageId, (page) => {
+    const draft: PageRevisionSnapshot = {
+      ...page.draft,
+      variants: page.draft.variants.map((v) =>
+        v.id === "A"
+          ? { ...v, trafficPct: a }
+          : { ...v, trafficPct: 100 - a },
+      ),
+    };
+    return {
+      ...page,
+      draft,
+      status: page.published && snapshotsEqual(draft, page.published)
+        ? "published"
+        : "draft",
+    };
+  });
+}
+
+export function updateCmsPageCode(
+  pageId: string,
+  patch: { customCss?: string; customJs?: string },
+) {
+  mapPage(pageId, (page) => {
+    const draft = { ...page.draft, ...patch };
+    return {
+      ...page,
+      draft,
+      status: page.published && snapshotsEqual(draft, page.published)
+        ? "published"
+        : "draft",
+    };
+  });
+}
+
+export function updateCmsGlobalCode(patch: Partial<CmsGlobalCode>) {
+  setAdminState((prev) => ({
+    ...prev,
+    cmsGlobalCode: { ...prev.cmsGlobalCode, ...patch },
+  }));
+}
+
+export function pushCmsRevision(pageId: string, label: string) {
+  mapPage(pageId, (page) => {
+    const revision: PageRevision = {
+      id: createBlockId("rev"),
+      at: nowIso(),
+      label,
+      snapshot: structuredClone(page.draft),
+    };
+    return {
+      ...page,
+      revisions: [revision, ...page.revisions].slice(0, 20),
+    };
+  });
+}
+
+export function restoreCmsRevision(pageId: string, revisionId: string) {
+  mapPage(pageId, (page) => {
+    const revision = page.revisions.find((r) => r.id === revisionId);
+    if (!revision) return page;
+    const draft = structuredClone(revision.snapshot);
+    return {
+      ...page,
+      draft,
+      status: page.published && snapshotsEqual(draft, page.published)
+        ? "published"
+        : "draft",
+    };
+  });
+}
+
+export function publishCmsPage(pageId: string) {
+  mapPage(pageId, (page) => {
+    const revision: PageRevision = {
+      id: createBlockId("rev"),
+      at: nowIso(),
+      label: "Published",
+      snapshot: structuredClone(page.draft),
+    };
+    return {
+      ...page,
+      published: structuredClone(page.draft),
+      status: "published",
+      revisions: [revision, ...page.revisions].slice(0, 20),
+    };
+  });
+  logActivity({
+    actor: "Admin",
+    action: "cms.page_published",
+    entityType: "system",
+    entityId: pageId,
+    detail: "Published",
+  });
+}
+
+export function unpublishCmsPage(pageId: string) {
+  if (pageId === "home") return;
+  mapPage(pageId, (page) => ({
+    ...page,
+    published: null,
+    status: "draft",
+  }));
+}
+
+export function addCmsSection(
+  pageId: string,
+  type: SectionType,
+  parentId?: string,
+  widgetId?: string,
+  insertIndex?: number,
+) {
+  const entry = getSectionEntry(type);
+  if (parentId) {
+    const page = getCmsPage(pageId);
+    if (page) {
+      const parent = findBlock(draftActiveVariant(page).sections, parentId);
+      if (parent) {
+        const parentEntry = getSectionEntry(parent.type);
+        if (!parentEntry?.acceptsChildren && parent.type !== "column") {
+          return "";
+        }
+        if (entry && entry.nestable === false && parent.type !== "overlay_stage") {
+          // allow non-nestable only at root or overlay
+          if (parent.type !== "column") return "";
+        }
+      }
+    }
+  } else if (entry && !entry.nestable && type !== "row" && type !== "overlay_stage" && type !== "hero_slider" && type !== "offer_banner" && type !== "brand_explorer" && type !== "digital_cards" && type !== "category_showcase" && type !== "assurance_strip" && type !== "product_rail" && type !== "editorial_banner" && type !== "custom_html" && type !== "widget" && type !== "rich_text") {
+    // no-op guard
+  }
+
+  if (type === "column") return "";
+
+  let section: CmsBlock;
+  if (type === "row") {
+    section = createRowWithColumns(2);
+  } else {
+    let props: Record<string, unknown> = { ...(entry?.defaults ?? {}) };
+    let wid = widgetId;
+    if (type === "widget" && widgetId) {
+      const widget = getAdminState().cmsWidgets.find((w) => w.id === widgetId);
+      props = { ...(widget?.defaults ?? {}) };
+      wid = widgetId;
+    }
+    const parentIsOverlay = (() => {
+      if (!parentId) return false;
+      const page = getCmsPage(pageId);
+      if (!page) return false;
+      const parent = findBlock(draftActiveVariant(page).sections, parentId);
+      return parent?.type === "overlay_stage";
+    })();
+
+    section = {
+      id: createBlockId("sec"),
+      type,
+      widgetId: wid,
+      enabled: true,
+      props,
+      children: type === "overlay_stage" ? [] : undefined,
+      layout: parentIsOverlay
+        ? { xPct: 10, yPct: 20, wPct: 40, zIndex: 2 }
+        : undefined,
+    };
+  }
+
+  // Enforce nestable: non-nestable types cannot go into column/row except overlay accepts most
+  if (parentId && entry && entry.nestable === false) {
+    const page = getCmsPage(pageId);
+    const parent = page
+      ? findBlock(draftActiveVariant(page).sections, parentId)
+      : undefined;
+    if (parent && parent.type !== "overlay_stage") {
+      return "";
+    }
+  }
+
+  mapPage(pageId, (page) => {
+    const variant = draftActiveVariant(page);
+    let sections: CmsBlock[];
+    if (parentId) {
+      sections = insertChild(variant.sections, parentId, section);
+    } else if (typeof insertIndex === "number") {
+      const next = [...variant.sections];
+      next.splice(Math.max(0, Math.min(insertIndex, next.length)), 0, section);
+      sections = next;
+    } else {
+      sections = [...variant.sections, section];
+    }
+    return withDraftSections(page, sections);
+  });
+  return section.id;
+}
+
+export function updateCmsBlock(
+  pageId: string,
+  blockId: string,
+  patch: Partial<Pick<CmsBlock, "enabled" | "props" | "layout" | "customCss">>,
+) {
+  mapPage(pageId, (page) => {
+    const variant = draftActiveVariant(page);
+    const sections = mapBlocks(variant.sections, blockId, (block) => ({
+      ...block,
+      ...patch,
+      props: patch.props ? { ...block.props, ...patch.props } : block.props,
+      layout: patch.layout ? { ...block.layout, ...patch.layout } : block.layout,
+    }));
+    return withDraftSections(page, sections);
+  });
+}
+
+export function setCmsBlockProps(
+  pageId: string,
+  blockId: string,
+  props: Record<string, unknown>,
+) {
+  updateCmsBlock(pageId, blockId, { props });
+}
+
+export function removeCmsBlock(pageId: string, blockId: string) {
+  mapPage(pageId, (page) => {
+    const variant = draftActiveVariant(page);
+    return withDraftSections(page, removeBlockDeep(variant.sections, blockId));
+  });
+}
+
+export function duplicateCmsBlock(pageId: string, blockId: string) {
+  mapPage(pageId, (page) => {
+    const variant = draftActiveVariant(page);
+    const target = findBlock(variant.sections, blockId);
+    if (!target || target.type === "column") return page;
+
+    const duplicateInto = (blocks: CmsBlock[]): CmsBlock[] => {
+      const next: CmsBlock[] = [];
+      for (const block of blocks) {
+        next.push(
+          block.children
+            ? { ...block, children: duplicateInto(block.children) }
+            : block,
+        );
+        if (block.id === blockId) next.push(cloneBlockTree(block));
+      }
+      return next;
+    };
+
+    return withDraftSections(page, duplicateInto(variant.sections));
+  });
+}
+
+export function reorderCmsSections(
+  pageId: string,
+  orderedIds: string[],
+  parentId?: string,
+) {
+  mapPage(pageId, (page) => {
+    const variant = draftActiveVariant(page);
+
+    const reorderList = (list: CmsBlock[]) => {
+      const byId = new Map(list.map((b) => [b.id, b]));
+      const ordered = orderedIds
+        .map((id) => byId.get(id))
+        .filter(Boolean) as CmsBlock[];
+      const rest = list.filter((b) => !orderedIds.includes(b.id));
+      return [...ordered, ...rest];
+    };
+
+    if (!parentId) {
+      return withDraftSections(page, reorderList(variant.sections));
+    }
+
+    const sections = mapBlocks(variant.sections, parentId, (block) => ({
+      ...block,
+      children: reorderList(block.children ?? []),
+    }));
+    return withDraftSections(page, sections);
+  });
+}
+
+export function moveCmsBlock(
+  pageId: string,
+  blockId: string,
+  direction: "up" | "down",
+  parentId?: string,
+) {
+  mapPage(pageId, (page) => {
+    const variant = draftActiveVariant(page);
+
+    const moveIn = (list: CmsBlock[]) => {
+      const index = list.findIndex((b) => b.id === blockId);
+      if (index < 0) return list;
+      const next = [...list];
+      const swap = direction === "up" ? index - 1 : index + 1;
+      if (swap < 0 || swap >= next.length) return list;
+      [next[index], next[swap]] = [next[swap], next[index]];
+      return next;
+    };
+
+    if (!parentId) {
+      return withDraftSections(page, moveIn(variant.sections));
+    }
+    return withDraftSections(
+      page,
+      mapBlocks(variant.sections, parentId, (block) => ({
+        ...block,
+        children: moveIn(block.children ?? []),
+      })),
+    );
+  });
+}
+
+export function installCmsWidget(widgetId: string) {
+  setAdminState((prev) => ({
+    ...prev,
+    cmsWidgets: prev.cmsWidgets.map((w) =>
+      w.id === widgetId ? { ...w, installed: true, enabled: true } : w,
+    ),
+  }));
+}
+
+export function uninstallCmsWidget(widgetId: string) {
+  setAdminState((prev) => ({
+    ...prev,
+    cmsWidgets: prev.cmsWidgets
+      .map((w) =>
+        w.id === widgetId && !w.custom
+          ? { ...w, installed: false, enabled: false }
+          : w,
+      )
+      .filter((w) => !(w.id === widgetId && w.custom)),
+  }));
+}
+
+export function setCmsWidgetEnabled(widgetId: string, enabled: boolean) {
+  setAdminState((prev) => ({
+    ...prev,
+    cmsWidgets: prev.cmsWidgets.map((w) =>
+      w.id === widgetId
+        ? { ...w, enabled, installed: enabled ? true : w.installed }
+        : w,
+    ),
+  }));
+}
+
+export function createCustomCmsWidget(input: {
+  name: string;
+  description: string;
+  category: string;
+  templateHtml: string;
+  templateCss?: string;
+  templateJs?: string;
+}) {
+  const id = createBlockId("wgt");
+  const widget: CmsWidgetDefinition = {
+    id,
+    name: input.name,
+    description: input.description,
+    category: input.category || "Custom",
+    author: "You",
+    version: "1.0.0",
+    installed: true,
+    enabled: true,
+    icon: "◆",
+    defaults: {},
+    fields: [],
+    templateHtml: input.templateHtml,
+    templateCss: input.templateCss,
+    templateJs: input.templateJs,
+    custom: true,
+  };
+  setAdminState((prev) => ({
+    ...prev,
+    cmsWidgets: [...prev.cmsWidgets, widget],
+  }));
+  return id;
+}
+
+const AB_STORAGE_KEY = "ezurr_cms_ab";
+
+/** Read sticky A/B assignment without writing. Safe during SSR (returns "A"). */
+export function readCmsVariantAssignment(pageId: string): PageVariantId | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(AB_STORAGE_KEY);
+    const map = raw ? (JSON.parse(raw) as Record<string, PageVariantId>) : {};
+    if (map[pageId] === "A" || map[pageId] === "B") return map[pageId];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Assign and persist A/B once. Call from useEffect only. */
+export function assignCmsVariant(
+  pageId: string,
+  trafficA: number,
+): PageVariantId {
+  if (typeof window === "undefined") return "A";
+  try {
+    const existing = readCmsVariantAssignment(pageId);
+    if (existing) return existing;
+    const pick: PageVariantId =
+      Math.random() * 100 < Math.min(100, Math.max(0, trafficA)) ? "A" : "B";
+    const raw = window.localStorage.getItem(AB_STORAGE_KEY);
+    const map = raw ? (JSON.parse(raw) as Record<string, PageVariantId>) : {};
+    map[pageId] = pick;
+    window.localStorage.setItem(AB_STORAGE_KEY, JSON.stringify(map));
+    return pick;
+  } catch {
+    return "A";
+  }
+}
+
+/** Sections from published snapshot (or empty). No side effects. */
+export function getPublishedCmsSections(
+  page: CmsPageDocument,
+  variantId: PageVariantId = "A",
+): CmsBlock[] {
+  const snap = page.published;
+  if (!snap) return [];
+  const variant =
+    snap.variants.find((v) => v.id === variantId) ?? snap.variants[0];
+  return (variant?.sections ?? []).filter((s) => s.enabled);
+}
+
+export function getDraftCmsSections(page: CmsPageDocument): CmsBlock[] {
+  const variant = draftActiveVariant(page);
+  return variant?.sections ?? [];
+}
+
+export function getPublishedPageCode(page: CmsPageDocument): {
+  customCss: string;
+  customJs: string;
+} {
+  if (!page.published) return { customCss: "", customJs: "" };
+  return {
+    customCss: page.published.customCss,
+    customJs: page.published.customJs,
+  };
+}
+
+/* ─── Checkout rules ─── */
+
+export function getCheckoutRules(): AdminCheckoutRule[] {
+  return getAdminState().checkoutRules;
+}
+
+export function upsertCheckoutRule(rule: AdminCheckoutRule) {
+  hydrate();
+  const exists = state.checkoutRules.some((r) => r.id === rule.id);
+  setAdminState((prev) => {
+    const checkoutRules = exists
+      ? prev.checkoutRules.map((r) =>
+          r.id === rule.id ? { ...rule, updatedAt: nowIso() } : r,
+        )
+      : [...prev.checkoutRules, { ...rule, createdAt: rule.createdAt || nowIso(), updatedAt: nowIso() }];
+    return { ...prev, checkoutRules };
+  });
+  logActivity({
+    actor: "Admin",
+    action: exists ? "checkout_rule.updated" : "checkout_rule.created",
+    entityType: "settings",
+    entityId: rule.id,
+    detail: rule.name,
+  });
+}
+
+export function deleteCheckoutRule(id: string) {
+  setAdminState((prev) => ({
+    ...prev,
+    checkoutRules: prev.checkoutRules.filter((r) => r.id !== id),
+  }));
+}
+
+export function toggleCheckoutRule(id: string, enabled: boolean) {
+  setAdminState((prev) => ({
+    ...prev,
+    checkoutRules: prev.checkoutRules.map((r) =>
+      r.id === id ? { ...r, enabled, updatedAt: nowIso() } : r,
+    ),
+  }));
+}
+
+export function setCheckoutRulePriority(id: string, priority: number) {
+  setAdminState((prev) => ({
+    ...prev,
+    checkoutRules: prev.checkoutRules.map((r) =>
+      r.id === id
+        ? { ...r, priority: Math.max(0, Math.round(priority)), updatedAt: nowIso() }
+        : r,
+    ),
+  }));
 }

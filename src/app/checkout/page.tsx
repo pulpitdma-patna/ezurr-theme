@@ -2,11 +2,19 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckoutHeader } from "@/components/layout/Header";
 import { CountdownBoxes, CountdownSummaryPanel } from "@/components/ui/Countdown";
+import { formatInr } from "@/data/admin";
 import { formatReleaseLabel, useLiveThemeSettings } from "@/hooks/useLiveThemeSettings";
+import { useAdminStore } from "@/hooks/useAdminStore";
 import { createDemoCheckoutOrder } from "@/lib/adminStore";
+import {
+  resolveCheckoutPolicy,
+  type CheckoutCarrierId,
+  type CheckoutFieldKey,
+  type CheckoutGateway,
+} from "@/lib/checkoutRules";
 import {
   formatMobileDisplay,
   getSession,
@@ -17,6 +25,29 @@ import {
 const PRICE = 5999;
 const PRODUCT_IMG =
   "https://ezurr.com/cdn/shop/files/GAMPLAY540.jpg?v=1782735956&width=533";
+
+const GATEWAY_LABELS: Record<CheckoutGateway, string> = {
+  upi: "UPI",
+  card: "Card",
+  wallet: "Wallet",
+  cod: "Cash on delivery",
+};
+
+const CHECKOUT_SESSION_KEY = "ezurr-checkout-session";
+
+function getCheckoutSessionKey(): string {
+  if (typeof window === "undefined") return "demo-session";
+  try {
+    let key = window.localStorage.getItem(CHECKOUT_SESSION_KEY);
+    if (!key) {
+      key = `cs-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      window.localStorage.setItem(CHECKOUT_SESSION_KEY, key);
+    }
+    return key;
+  } catch {
+    return "demo-session";
+  }
+}
 
 function fmt(n: number) {
   return "₹" + Math.round(n).toLocaleString("en-IN");
@@ -142,12 +173,22 @@ function OrderSummaryRail({
   discount,
   lockedTotal,
   releaseLabel,
+  shippingLabel,
+  taxAmount,
+  taxMessage,
+  taxRatePct,
+  dueToday,
 }: {
   isPrepaid: boolean;
   pct: number;
   discount: number;
   lockedTotal: string;
   releaseLabel: string;
+  shippingLabel: string;
+  taxAmount: number;
+  taxMessage: string | null;
+  taxRatePct: number;
+  dueToday: string;
 }) {
   return (
     <aside className="ez-checkout-summary ez-checkout-rail-in relative hidden flex-col overflow-hidden rounded-[20px] p-6 text-[#F5F5F7] lg:sticky lg:top-8 lg:flex lg:p-7">
@@ -158,7 +199,7 @@ function OrderSummaryRail({
           </div>
           <div className="mt-2 flex items-end justify-between gap-3">
             <span className="ez-mono text-[44px] font-bold leading-none tracking-tight text-white">
-              ₹0
+              {dueToday}
             </span>
             <span className="pb-1 text-right text-[12px] leading-snug text-[#A1A1A6]">
               {isPrepaid
@@ -194,9 +235,25 @@ function OrderSummaryRail({
               <span className="ez-mono shrink-0 text-[#8FD9A8]">−{fmt(discount)}</span>
             </div>
           ) : null}
+          {taxAmount > 0 || taxMessage ? (
+            <div className="flex justify-between gap-3">
+              <span className="text-[#86868B]">
+                {taxMessage ? "Tax" : `GST (${taxRatePct}%)`}
+              </span>
+              <span className="ez-mono shrink-0 text-[#E8E8ED]">
+                {taxMessage ?? fmt(taxAmount)}
+              </span>
+            </div>
+          ) : null}
           <div className="flex justify-between gap-3">
             <span className="text-[#86868B]">Shipping</span>
-            <span className="ez-mono shrink-0 text-[#8FD9A8]">FREE</span>
+            <span
+              className={`ez-mono shrink-0 ${
+                shippingLabel === "FREE" ? "text-[#8FD9A8]" : "text-[#E8E8ED]"
+              }`}
+            >
+              {shippingLabel}
+            </span>
           </div>
           <div className="mt-1 flex justify-between gap-3 border-t border-white/[0.1] pt-3">
             <span className="text-[#A1A1A6]">
@@ -282,6 +339,10 @@ function MobileSummarySheet({
   discount,
   lockedTotal,
   releaseLabel,
+  shippingLabel,
+  taxAmount,
+  taxMessage,
+  dueToday,
 }: {
   open: boolean;
   onClose: () => void;
@@ -290,6 +351,10 @@ function MobileSummarySheet({
   discount: number;
   lockedTotal: string;
   releaseLabel: string;
+  shippingLabel: string;
+  taxAmount: number;
+  taxMessage: string | null;
+  dueToday: string;
 }) {
   if (!open) return null;
 
@@ -318,7 +383,7 @@ function MobileSummarySheet({
             Due today
           </div>
           <div className="mt-1.5 flex items-end justify-between gap-3">
-            <span className="ez-mono text-[40px] font-bold leading-none tracking-tight">₹0</span>
+            <span className="ez-mono text-[40px] font-bold leading-none tracking-tight">{dueToday}</span>
             <span className="pb-1 text-right text-[12px] text-[#A1A1A6]">
               {isPrepaid ? `Charged ${lockedTotal} on ship` : `Pay ${lockedTotal} at door`}
             </span>
@@ -348,9 +413,23 @@ function MobileSummarySheet({
               <span className="ez-mono text-[#8FD9A8]">−{fmt(discount)}</span>
             </div>
           ) : null}
+          {taxAmount > 0 || taxMessage ? (
+            <div className="flex justify-between">
+              <span className="text-[#86868B]">Tax</span>
+              <span className="ez-mono text-[#E8E8ED]">
+                {taxMessage ?? fmt(taxAmount)}
+              </span>
+            </div>
+          ) : null}
           <div className="flex justify-between">
             <span className="text-[#86868B]">Shipping</span>
-            <span className="ez-mono text-[#8FD9A8]">FREE</span>
+            <span
+              className={`ez-mono ${
+                shippingLabel === "FREE" ? "text-[#8FD9A8]" : "text-[#E8E8ED]"
+              }`}
+            >
+              {shippingLabel}
+            </span>
           </div>
           <div className="flex justify-between border-t border-white/[0.1] pt-2">
             <span className="text-[#A1A1A6]">{isPrepaid ? "On release" : "On delivery"}</span>
@@ -379,15 +458,103 @@ export default function CheckoutPage() {
   const [session, setSessionState] = useState<AuthSession | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [stepKey, setStepKey] = useState(0);
+  const [sessionKey, setSessionKey] = useState("demo-session");
+  const [gateway, setGateway] = useState<CheckoutGateway>("upi");
+  const [carrierId, setCarrierId] = useState<CheckoutCarrierId | "">("");
+  const [splitId, setSplitId] = useState<string>("");
 
   const liveTheme = useLiveThemeSettings();
-  const pct = liveTheme.prepaidDiscount;
+  const { checkoutRules } = useAdminStore();
   const releaseLabel = formatReleaseLabel(liveTheme.releaseDate);
+
+  useEffect(() => {
+    setSessionKey(getCheckoutSessionKey());
+  }, []);
+
+  const policy = useMemo(
+    () =>
+      resolveCheckoutPolicy(liveTheme, checkoutRules, {
+        subtotal: PRICE,
+        pincode: form.pincode || undefined,
+        city: form.city || undefined,
+        paymentMethod: method,
+        fulfillmentType: "preorder",
+        productCategory: "preorders",
+        sessionKey,
+      }),
+    [liveTheme, checkoutRules, form.pincode, form.city, method, sessionKey],
+  );
+
+  const selectedCarrier = useMemo(() => {
+    const carriers = policy.carriers;
+    if (!carriers.length) return null;
+    return (
+      carriers.find((c) => c.id === carrierId) ??
+      carriers.find((c) => c.id === policy.defaultCarrierId) ??
+      carriers[0]
+    );
+  }, [policy.carriers, policy.defaultCarrierId, carrierId]);
+
+  const shippingAmount = selectedCarrier?.amount ?? policy.shippingAmount;
+  const shippingLabel =
+    selectedCarrier != null
+      ? selectedCarrier.amount === 0
+        ? "FREE"
+        : fmt(selectedCarrier.amount)
+      : policy.shippingLabel;
+
+  const pct = policy.prepaidDiscountPct;
   const isPrepaid = method === "prepaid";
   const discount = PRICE * (pct / 100);
-  const prepaidTotal = fmt(PRICE - discount);
-  const lockedTotal = isPrepaid ? prepaidTotal : fmt(PRICE);
-  const codAvailable = liveTheme.codEnabled !== false;
+  const taxAmount = policy.taxExempt
+    ? 0
+    : Math.round(PRICE * (policy.taxRatePct / 100));
+  const taxAdd =
+    policy.taxExempt || policy.taxInclusiveMessage ? 0 : taxAmount;
+  const prepaidTotalNum = PRICE - discount + shippingAmount + taxAdd;
+  const codTotalNum = PRICE + shippingAmount + taxAdd;
+  const prepaidTotal = fmt(prepaidTotalNum);
+  const lockedTotal = isPrepaid ? prepaidTotal : fmt(codTotalNum);
+  const codAvailable = policy.methods.includes("cod");
+  const showField = (key: CheckoutFieldKey) => !policy.hiddenFields.includes(key);
+  const fieldRequired = (key: CheckoutFieldKey) => policy.requiredFields.includes(key);
+
+  const activeSplit = useMemo(
+    () =>
+      policy.splitPayments.find((s) => s.id === splitId) ??
+      policy.splitPayments[0] ??
+      null,
+    [policy.splitPayments, splitId],
+  );
+  const depositPct = activeSplit?.depositPct ?? policy.depositPct ?? 0;
+  const dueTodayNum =
+    depositPct > 0
+      ? Math.round((isPrepaid ? prepaidTotalNum : codTotalNum) * (depositPct / 100))
+      : 0;
+  const dueToday = fmt(dueTodayNum);
+
+  const prepaidGateways = policy.gateways.filter((g) => g !== "cod");
+
+  useEffect(() => {
+    if (!policy.methods.includes(method)) {
+      const next = policy.methods[0];
+      if (next) setMethod(next);
+    }
+  }, [policy.methods, method]);
+
+  useEffect(() => {
+    if (policy.preferredGateway && policy.gateways.includes(policy.preferredGateway)) {
+      setGateway(policy.preferredGateway);
+    }
+  }, [policy.preferredGateway, policy.gateways]);
+
+  useEffect(() => {
+    const carriers = policy.carriers;
+    if (!carriers.length) return;
+    if (!carriers.some((c) => c.id === carrierId)) {
+      setCarrierId(policy.defaultCarrierId ?? carriers[0].id);
+    }
+  }, [policy.carriers, policy.defaultCarrierId, carrierId]);
 
   useEffect(() => {
     const s = getSession();
@@ -429,11 +596,14 @@ export default function CheckoutPage() {
   };
 
   const canContinueDetails =
-    normalizeMobile(form.mobile).length === 10 &&
-    form.address.trim().length > 3 &&
-    form.firstName.trim() &&
-    form.city.trim() &&
-    form.pincode.trim().length >= 6;
+    !policy.blocked &&
+    (!fieldRequired("mobile") || normalizeMobile(form.mobile).length === 10) &&
+    (!fieldRequired("address") || form.address.trim().length > 3) &&
+    (!fieldRequired("firstName") || form.firstName.trim()) &&
+    (!fieldRequired("lastName") || form.lastName.trim()) &&
+    (!fieldRequired("city") || form.city.trim()) &&
+    (!fieldRequired("pincode") || form.pincode.trim().length >= 6) &&
+    (!fieldRequired("upi") || form.upiId.trim().length > 0);
 
   if (placed) {
     return (
@@ -481,9 +651,16 @@ export default function CheckoutPage() {
   }
 
   const primaryLabel =
-    step === 1 ? "Continue" : step === 2 ? "Review" : "Place pre-order · ₹0";
+    step === 1
+      ? "Continue"
+      : step === 2
+        ? "Review"
+        : dueTodayNum > 0
+          ? `Place pre-order · ${dueToday}`
+          : "Place pre-order · ₹0";
 
   const primaryAction = () => {
+    if (policy.blocked) return;
     if (step === 1 && canContinueDetails) goto(2);
     else if (step === 2) goto(3);
     else if (step === 3) placeOrder();
@@ -548,6 +725,15 @@ export default function CheckoutPage() {
               )}
 
               <div key={stepKey} className="ez-checkout-step mt-7 sm:mt-8">
+                {policy.blocked ? (
+                  <div
+                    role="alert"
+                    className="rounded-[14px] border border-[#F5C2C0] bg-[#FEF3F2] px-4 py-3.5 text-[13px] leading-relaxed text-[#B42318]"
+                  >
+                    {policy.blockMessage ?? "Checkout is unavailable for this cart."}
+                  </div>
+                ) : null}
+
                 {step === 1 && (
                   <form
                     className="flex flex-col gap-5"
@@ -565,6 +751,7 @@ export default function CheckoutPage() {
                       </p>
                     </div>
 
+                    {showField("mobile") ? (
                     <div className="flex flex-col gap-2">
                       <FieldLabel htmlFor="mobile">Mobile</FieldLabel>
                       <div className="ez-checkout-input flex overflow-hidden rounded-[12px]">
@@ -576,7 +763,7 @@ export default function CheckoutPage() {
                           type="tel"
                           inputMode="numeric"
                           autoComplete="tel-national"
-                          required
+                          required={fieldRequired("mobile")}
                           value={form.mobile}
                           onChange={(e) => patch({ mobile: normalizeMobile(e.target.value) })}
                           placeholder="98765 43210"
@@ -584,61 +771,75 @@ export default function CheckoutPage() {
                         />
                       </div>
                     </div>
+                    ) : null}
 
+                    {showField("address") ? (
                     <div className="flex flex-col gap-2">
                       <FieldLabel htmlFor="address">Address</FieldLabel>
                       <CheckoutInput
                         id="address"
-                        required
+                        required={fieldRequired("address")}
                         value={form.address}
                         onChange={(v) => patch({ address: v })}
                         placeholder="Flat, street and area"
                         autoComplete="street-address"
                       />
                     </div>
+                    ) : null}
 
+                    {showField("firstName") || showField("lastName") ? (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                      {showField("firstName") ? (
                       <div className="flex flex-col gap-2">
                         <FieldLabel htmlFor="first">First name</FieldLabel>
                         <CheckoutInput
                           id="first"
-                          required
+                          required={fieldRequired("firstName")}
                           value={form.firstName}
                           onChange={(v) => patch({ firstName: v })}
                           placeholder="Arjun"
                           autoComplete="given-name"
                         />
                       </div>
+                      ) : null}
+                      {showField("lastName") ? (
                       <div className="flex flex-col gap-2">
                         <FieldLabel htmlFor="last">Last name</FieldLabel>
                         <CheckoutInput
                           id="last"
+                          required={fieldRequired("lastName")}
                           value={form.lastName}
                           onChange={(v) => patch({ lastName: v })}
                           placeholder="Mehta"
                           autoComplete="family-name"
                         />
                       </div>
+                      ) : null}
                     </div>
+                    ) : null}
 
+                    {showField("city") || showField("pincode") ? (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1.4fr_1fr] sm:gap-5">
+                      {showField("city") ? (
                       <div className="flex flex-col gap-2">
                         <FieldLabel htmlFor="city">City</FieldLabel>
                         <CheckoutInput
                           id="city"
-                          required
+                          required={fieldRequired("city")}
                           value={form.city}
                           onChange={(v) => patch({ city: v })}
                           placeholder="Mumbai"
                           autoComplete="address-level2"
                         />
                       </div>
+                      ) : null}
+                      {showField("pincode") ? (
                       <div className="flex flex-col gap-2">
                         <FieldLabel htmlFor="pin">PIN code</FieldLabel>
                         <CheckoutInput
                           id="pin"
                           type="tel"
-                          required
+                          required={fieldRequired("pincode")}
                           value={form.pincode}
                           onChange={(v) => patch({ pincode: v.replace(/\D/g, "").slice(0, 6) })}
                           placeholder="400001"
@@ -646,11 +847,41 @@ export default function CheckoutPage() {
                           autoComplete="postal-code"
                         />
                       </div>
+                      ) : null}
                     </div>
+                    ) : null}
+
+                    {policy.carriers.length > 1 ? (
+                      <div className="flex flex-col gap-2">
+                        <FieldLabel>Shipping carrier</FieldLabel>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {policy.carriers.map((carrier) => {
+                            const selected = carrierId === carrier.id;
+                            return (
+                              <button
+                                key={carrier.id}
+                                type="button"
+                                onClick={() => setCarrierId(carrier.id)}
+                                className={`rounded-[12px] border px-3 py-3 text-left ${
+                                  selected
+                                    ? "border-[var(--ez-ink)] bg-[#F7F7F8]"
+                                    : "border-[#E0E0E5] bg-white"
+                                }`}
+                              >
+                                <span className="block text-sm font-semibold">{carrier.label}</span>
+                                <span className="ez-mono mt-1 block text-[10px] text-[#86868B]">
+                                  {carrier.amount === 0 ? "FREE" : fmt(carrier.amount)} · {carrier.eta}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
 
                     <button
                       type="submit"
-                      disabled={!canContinueDetails}
+                      disabled={!canContinueDetails || policy.blocked}
                       className="ez-checkout-btn-dark mt-1 hidden w-full rounded-full border-none py-4 text-[15px] font-semibold disabled:opacity-40 lg:block"
                     >
                       Continue to payment
@@ -665,24 +896,42 @@ export default function CheckoutPage() {
                         How will you pay?
                       </h2>
                       <p className="mt-1.5 text-[13px] text-[#6E6E73] sm:text-[14px]">
-                        Prepaid saves {pct}%. Charged on release — not today.
+                        {policy.methods.includes("prepaid")
+                          ? `Prepaid saves ${pct}%. Charged on release — not today.`
+                          : "Choose how you'd like to pay on delivery."}
                       </p>
                     </div>
 
+                    {policy.banner ? (
+                      <p className="m-0 rounded-[14px] border border-black/[0.06] bg-[#F7F7F8] px-4 py-3.5 text-[13px] leading-relaxed text-[#424245]">
+                        {policy.banner}
+                      </p>
+                    ) : null}
+
+                    {policy.methods.length === 0 ? (
+                      <p className="m-0 text-sm text-[#B42318]">
+                        No payment methods are available for this cart. Adjust checkout rules or
+                        contact support.
+                      </p>
+                    ) : (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {(
                         [
-                          {
-                            id: "prepaid" as const,
-                            title: "Prepaid · UPI",
-                            sub: `Save ${pct}% · ${prepaidTotal}`,
-                          },
+                          ...(policy.methods.includes("prepaid")
+                            ? [
+                                {
+                                  id: "prepaid" as const,
+                                  title: "Prepaid · UPI",
+                                  sub: `Save ${pct}% · ${prepaidTotal}`,
+                                },
+                              ]
+                            : []),
                           ...(codAvailable
                             ? [
                                 {
                                   id: "cod" as const,
                                   title: "Cash on delivery",
-                                  sub: `Pay ${fmt(PRICE)} at door`,
+                                  sub: `Pay ${fmt(codTotalNum)} at door · under ${formatInr(policy.codMax)}`,
                                 },
                               ]
                             : []),
@@ -710,12 +959,91 @@ export default function CheckoutPage() {
                         );
                       })}
                     </div>
+                    )}
 
-                    {isPrepaid ? (
+                    {isPrepaid && prepaidGateways.length > 0 ? (
+                      <div className="flex flex-col gap-2">
+                        <FieldLabel>Payment gateway</FieldLabel>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          {prepaidGateways.map((g) => {
+                            const selected = gateway === g;
+                            return (
+                              <button
+                                key={g}
+                                type="button"
+                                onClick={() => setGateway(g)}
+                                className={`rounded-[12px] border px-3 py-3 text-left text-sm font-semibold ${
+                                  selected
+                                    ? "border-[var(--ez-ink)] bg-[#F7F7F8]"
+                                    : "border-[#E0E0E5] bg-white"
+                                } ${g === policy.preferredGateway ? "ring-1 ring-[#8FD9A8]/40" : ""}`}
+                              >
+                                {GATEWAY_LABELS[g]}
+                                {g === policy.preferredGateway ? (
+                                  <span className="ez-mono mt-1 block text-[9px] font-normal uppercase tracking-[0.12em] text-[#86868B]">
+                                    Recommended
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {(policy.splitPayments.length > 0 || policy.payLaterEnabled) && isPrepaid ? (
+                      <div className="flex flex-col gap-2">
+                        <FieldLabel>Pay today</FieldLabel>
+                        <div className="grid grid-cols-1 gap-2">
+                          {(policy.splitPayments.length
+                            ? policy.splitPayments
+                            : [
+                                {
+                                  id: "deposit-default",
+                                  label: `${policy.depositPct ?? 0}% deposit today`,
+                                  depositPct: policy.depositPct ?? 0,
+                                  balanceLabel: "Balance on release",
+                                },
+                              ]
+                          ).map((split) => {
+                            const selected = (splitId || policy.splitPayments[0]?.id) === split.id;
+                            const splitDue = fmt(
+                              Math.round(
+                                prepaidTotalNum * (split.depositPct / 100),
+                              ),
+                            );
+                            return (
+                              <button
+                                key={split.id}
+                                type="button"
+                                onClick={() => setSplitId(split.id)}
+                                className={`rounded-[12px] border px-4 py-3 text-left ${
+                                  selected
+                                    ? "border-[var(--ez-ink)] bg-[#F7F7F8]"
+                                    : "border-[#E0E0E5] bg-white"
+                                }`}
+                              >
+                                <span className="block text-sm font-semibold">{split.label}</span>
+                                <span className="ez-mono mt-1 block text-[11px] text-[#6E6E73]">
+                                  {splitDue} today · {split.balanceLabel}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {policy.taxInclusiveMessage ? (
+                      <p className="m-0 text-[12px] text-[#86868B]">{policy.taxInclusiveMessage}</p>
+                    ) : null}
+
+                    {isPrepaid && showField("upi") && gateway === "upi" ? (
                       <div className="flex flex-col gap-2">
                         <FieldLabel htmlFor="upi">UPI ID</FieldLabel>
                         <CheckoutInput
                           id="upi"
+                          required={fieldRequired("upi")}
                           value={form.upiId}
                           onChange={(v) => patch({ upiId: v })}
                           placeholder="name@upi"
@@ -726,16 +1054,21 @@ export default function CheckoutPage() {
                           We authorize now and charge {prepaidTotal} when it ships on {releaseLabel}.
                         </p>
                       </div>
-                    ) : (
-                      <p className="m-0 rounded-[14px] border border-black/[0.06] bg-[#F7F7F8] px-4 py-3.5 text-[13px] leading-relaxed text-[#6E6E73]">
-                        Pay {fmt(PRICE)} in cash or UPI when the courier arrives. Available under
-                        ₹10,000.
+                    ) : isPrepaid ? (
+                      <p className="m-0 text-[12px] leading-relaxed text-[#86868B]">
+                        We authorize now and charge {prepaidTotal} when it ships on {releaseLabel}.
                       </p>
-                    )}
+                    ) : codAvailable ? (
+                      <p className="m-0 rounded-[14px] border border-black/[0.06] bg-[#F7F7F8] px-4 py-3.5 text-[13px] leading-relaxed text-[#6E6E73]">
+                        Pay {fmt(codTotalNum)} in cash or UPI when the courier arrives. Available
+                        under {formatInr(policy.codMax)}.
+                      </p>
+                    ) : null}
 
                     <div className="hidden gap-3 lg:flex lg:items-center">
                       <button
                         type="button"
+                        disabled={policy.blocked || policy.methods.length === 0}
                         onClick={() => goto(3)}
                         className="ez-checkout-btn-dark flex-1 rounded-full border-none py-4 text-[15px] font-semibold"
                       >
@@ -779,10 +1112,14 @@ export default function CheckoutPage() {
                         [
                           "Payment",
                           isPrepaid
-                            ? `UPI prepaid · ${form.upiId || "authorize later"}`
+                            ? `${GATEWAY_LABELS[gateway]} prepaid · ${form.upiId || "authorize later"}`
                             : "Cash on delivery",
                         ],
+                        ...(selectedCarrier
+                          ? [["Carrier", `${selectedCarrier.label} · ${shippingLabel}`] as const]
+                          : []),
                         ["Locked", lockedTotal],
+                        ...(dueTodayNum > 0 ? [["Due today", dueToday] as const] : []),
                       ].map(([label, value], idx) => (
                         <div
                           key={label}
@@ -802,9 +1139,10 @@ export default function CheckoutPage() {
                       <button
                         type="button"
                         onClick={placeOrder}
-                        className="ez-checkout-btn-dark flex-1 rounded-full border-none py-4 text-[15px] font-semibold"
+                        disabled={policy.blocked}
+                        className="ez-checkout-btn-dark flex-1 rounded-full border-none py-4 text-[15px] font-semibold disabled:opacity-40"
                       >
-                        Place pre-order — ₹0 today
+                        Place pre-order — {dueTodayNum > 0 ? dueToday : "₹0 today"}
                       </button>
                       <button
                         type="button"
@@ -835,6 +1173,11 @@ export default function CheckoutPage() {
               discount={discount}
               lockedTotal={lockedTotal}
               releaseLabel={releaseLabel}
+              shippingLabel={shippingLabel}
+              taxAmount={taxAmount}
+              taxMessage={policy.taxInclusiveMessage}
+              taxRatePct={policy.taxRatePct}
+              dueToday={dueToday}
             />
           </div>
         </main>
@@ -842,7 +1185,7 @@ export default function CheckoutPage() {
         <StickyFooterCta
           label={primaryLabel}
           onClick={primaryAction}
-          disabled={step === 1 && !canContinueDetails}
+          disabled={(step === 1 && !canContinueDetails) || policy.blocked}
         />
 
         <MobileSummarySheet
@@ -853,6 +1196,10 @@ export default function CheckoutPage() {
           discount={discount}
           lockedTotal={lockedTotal}
           releaseLabel={releaseLabel}
+          shippingLabel={shippingLabel}
+          taxAmount={taxAmount}
+          taxMessage={policy.taxInclusiveMessage}
+          dueToday={dueToday}
         />
       </div>
     </div>

@@ -33,6 +33,12 @@ const NAV_ITEMS: PaletteItem[] = [
   { id: "nav-activity", label: "Activity", group: "Pages", href: "/admin/activity" },
   { id: "nav-import", label: "Import tools", group: "Pages", href: "/admin/tools/import" },
   { id: "nav-settings", label: "Settings", group: "Pages", href: "/admin/settings" },
+  { id: "nav-cms", label: "CMS Pages", group: "Online store", href: "/admin/cms" },
+  { id: "nav-cms-home", label: "Homepage builder", group: "Online store", href: "/admin/cms/home" },
+  { id: "nav-cms-widgets", label: "Widget marketplace", group: "Online store", href: "/admin/cms/widgets" },
+  { id: "nav-cms-code", label: "Custom code", group: "Online store", href: "/admin/cms/code" },
+  { id: "nav-checkout-rules", label: "Checkout rules", group: "Online store", href: "/admin/checkout-rules" },
+  { id: "nav-appearance", label: "Appearance", group: "Online store", href: "/admin/settings#appearance" },
 ];
 
 export function CommandPalette({

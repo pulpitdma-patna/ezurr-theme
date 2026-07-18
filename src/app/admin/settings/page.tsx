@@ -241,6 +241,13 @@ export default function AdminSettingsPage() {
             title="Appearance"
             description="Accent and merchandising blocks that apply live on the storefront."
           >
+            <div className="mb-4 rounded-xl border border-black/[0.07] bg-[#F8F8FA] px-4 py-3 text-sm text-[#3A3A3C]">
+              Edit homepage sections, widgets, and custom code in the{" "}
+              <a href="/admin/cms/home" className="font-semibold text-[#1D1D1F] underline">
+                homepage builder
+              </a>
+              .
+            </div>
             <div className="grid gap-5 lg:grid-cols-[1fr_200px]">
               <div className="space-y-4">
                 <Field label={`Accent hue · ${settings.accentHue}`}>
@@ -416,6 +423,19 @@ export default function AdminSettingsPage() {
                 </div>
                 <p className="mt-1.5 text-[11px] text-[#86868B]">Cart subtotal threshold.</p>
               </Field>
+            </div>
+
+            <div className="mt-2 rounded-xl border border-black/[0.06] bg-[#FAFAFB] px-4 py-3.5">
+              <p className="text-sm text-[#6E6E73]">
+                Runtime rules layer on top of these defaults — payment method gates, shipping
+                labels, field requirements, and checkout blocks.
+              </p>
+              <Link
+                href="/admin/checkout-rules"
+                className="mt-2 inline-flex text-sm font-semibold text-[#1D1D1F] underline-offset-2 hover:underline"
+              >
+                Manage rules →
+              </Link>
             </div>
           </SettingsSection>
 

@@ -305,6 +305,12 @@ const pageTitles: { match: (path: string) => boolean; title: string; crumb?: str
   { match: (p) => p.startsWith("/admin/digital-codes"), title: "Digital codes", crumb: "Fulfillment", crumbHref: "/admin/orders" },
   { match: (p) => p.startsWith("/admin/customers"), title: "Customers", crumb: "Grow", crumbHref: "/admin/customers" },
   { match: (p) => p.startsWith("/admin/coupons"), title: "Coupons", crumb: "Grow", crumbHref: "/admin/coupons" },
+  { match: (p) => p === "/admin/cms", title: "Pages", crumb: "Online store", crumbHref: "/admin/cms" },
+  { match: (p) => p === "/admin/cms/widgets", title: "Widgets", crumb: "Online store", crumbHref: "/admin/cms" },
+  { match: (p) => p === "/admin/cms/code", title: "Custom code", crumb: "Online store", crumbHref: "/admin/cms" },
+  { match: (p) => p.startsWith("/admin/cms/"), title: "Page builder", crumb: "Online store", crumbHref: "/admin/cms" },
+  { match: (p) => p === "/admin/checkout-rules/templates", title: "Templates", crumb: "Online store", crumbHref: "/admin/checkout-rules" },
+  { match: (p) => p.startsWith("/admin/checkout-rules"), title: "Checkout rules", crumb: "Online store", crumbHref: "/admin/checkout-rules" },
   { match: (p) => p.startsWith("/admin/platform"), title: "Platform", crumb: "System", crumbHref: "/admin/settings" },
   { match: (p) => p.startsWith("/admin/team"), title: "Team", crumb: "System", crumbHref: "/admin/settings" },
   { match: (p) => p.startsWith("/admin/integrations"), title: "Integrations", crumb: "System", crumbHref: "/admin/settings" },
@@ -411,6 +417,17 @@ const navSubmenus: NavGroup[] = [
     items: [
       { href: "/admin/customers", label: "Customers", icon: <IconUsers /> },
       { href: "/admin/coupons", label: "Coupons", icon: <IconTag /> },
+    ],
+  },
+  {
+    label: "Online store",
+    icon: <IconMedia />,
+    items: [
+      { href: "/admin/cms", label: "Pages", icon: <IconReports /> },
+      { href: "/admin/cms/widgets", label: "Widgets", icon: <IconBox /> },
+      { href: "/admin/cms/code", label: "Custom code", icon: <IconBolt /> },
+      { href: "/admin/checkout-rules", label: "Checkout rules", icon: <IconStore /> },
+      { href: "/admin/settings#appearance", label: "Appearance", icon: <IconGear /> },
     ],
   },
   {
