@@ -24,6 +24,12 @@ export default function ProfilePage() {
     setLastName(parts.slice(1).join(" "));
   }, [session]);
 
+  useEffect(() => {
+    setDob(account.dob);
+    setGender(account.gender);
+    setNotify(account.notify);
+  }, [account.dob, account.gender, account.notify]);
+
   return (
     <div>
       <SectionHeading

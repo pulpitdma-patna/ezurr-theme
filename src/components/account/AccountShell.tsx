@@ -143,6 +143,13 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
             </Link>
           );
         })}
+        <button
+          type="button"
+          onClick={signOut}
+          className="shrink-0 rounded-full bg-[#FFF5F5] px-4 py-2.5 text-sm font-semibold text-[#B42318] transition hover:bg-[#FEE4E2]"
+        >
+          Sign out
+        </button>
       </div>
 
       <div className="grid gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-14">

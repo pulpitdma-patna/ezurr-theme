@@ -86,8 +86,8 @@ export function HeroSlider({ slides = DEFAULT_HERO_SLIDES }: { slides?: HeroSlid
             <div className="absolute inset-x-0 top-0 h-px bg-white/15" />
 
             <div className="ez-page relative z-10 flex h-full w-full items-start pb-24 pt-10 sm:items-center sm:pb-20 sm:pt-6">
-              <div className="flex w-full max-w-[720px] flex-col gap-3.5 text-white sm:gap-4">
-                <h1 className="m-0 max-w-[720px] text-[clamp(2.4rem,6vw,4.8rem)] font-semibold leading-[0.98] tracking-[-0.055em] text-white">
+              <div className="flex w-full max-w-[720px] flex-col gap-2.5 text-white sm:gap-4">
+                <h1 className="m-0 max-w-[720px] text-[clamp(1.9rem,6vw,4.8rem)] font-semibold leading-[0.98] tracking-[-0.055em] text-white">
                   {s.title}
                   <br />
                   <span className="text-[0.72em] font-medium leading-[1.05] tracking-[-0.045em] text-white/58">
@@ -126,14 +126,14 @@ export function HeroSlider({ slides = DEFAULT_HERO_SLIDES }: { slides?: HeroSlid
                   <Link
                     href={s.primaryCta.href}
                     tabIndex={slide === index ? 0 : -1}
-                    className="inline-flex min-h-12 items-center justify-center rounded-full bg-white px-7 py-3 text-[14px] font-semibold text-[#0b0c0f] shadow-[0_12px_32px_rgba(0,0,0,0.25)] transition hover:-translate-y-0.5 hover:bg-white hover:!text-[#0b0c0f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-white px-5 py-2 text-[13px] font-semibold text-[#0b0c0f] shadow-[0_12px_32px_rgba(0,0,0,0.25)] transition hover:-translate-y-0.5 hover:bg-white hover:!text-[#0b0c0f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:min-h-12 sm:px-7 sm:py-3 sm:text-[14px]"
                   >
                     {s.primaryCta.label}
                   </Link>
                   <Link
                     href={s.secondaryCta.href}
                     tabIndex={slide === index ? 0 : -1}
-                    className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/25 bg-white/10 px-7 py-3 text-[14px] font-semibold text-white backdrop-blur-md transition hover:-translate-y-0.5 hover:border-white/45 hover:bg-white/15 hover:!text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/25 bg-white/10 px-5 py-2 text-[13px] font-semibold text-white backdrop-blur-md transition hover:-translate-y-0.5 hover:border-white/45 hover:bg-white/15 hover:!text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:min-h-12 sm:px-7 sm:py-3 sm:text-[14px]"
                   >
                     {s.secondaryCta.label}
                   </Link>

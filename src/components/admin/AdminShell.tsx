@@ -897,10 +897,12 @@ function SidebarNav({
   const prevPathRef = useRef(pathname);
 
   // Clear manual collapses/expands on navigation so active groups auto-open again.
-  if (pathname !== prevPathRef.current) {
-    prevPathRef.current = pathname;
-    setManual({});
-  }
+  useEffect(() => {
+    if (pathname !== prevPathRef.current) {
+      prevPathRef.current = pathname;
+      setManual({});
+    }
+  }, [pathname]);
 
   function isGroupOpen(group: NavGroup) {
     // Manual toggle wins (allows collapse while a child route is active).

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SectionHeading } from "@/components/home/SectionHeading";
 import { useAccountStore } from "@/hooks/useAccountStore";
 import { useAuthSession } from "@/hooks/useAuthSession";
@@ -23,6 +23,13 @@ export default function AddressesPage() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
+
+  useEffect(() => {
+    if (session) {
+      setFullName(session.name);
+      setMobile(session.mobile);
+    }
+  }, [session]);
 
   return (
     <div>

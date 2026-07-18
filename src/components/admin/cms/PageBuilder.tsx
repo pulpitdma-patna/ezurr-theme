@@ -13,10 +13,8 @@ import {
 import {
   SortableContext,
   arrayMove,
-  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import {
   addCmsSection,
   getDraftCmsSections,
@@ -74,30 +72,6 @@ function findParentId(
     }
   }
   return undefined;
-}
-
-function SortableRoot({
-  id,
-  children,
-}: {
-  id: string;
-  children: React.ReactNode;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
-      {...attributes}
-      {...listeners}
-    >
-      {children}
-    </div>
-  );
 }
 
 type PageBuilderProps = {
@@ -529,32 +503,25 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
                 items={sections.map((s) => s.id)}
                 strategy={verticalListSortingStrategy}
               >
-                <div>
-                  {sections.map((block) => (
-                    <SortableRoot key={block.id} id={block.id}>
-                      <div />
-                    </SortableRoot>
-                  ))}
-                </div>
+                <PageRenderer
+                  sections={sections}
+                  widgets={widgets}
+                  pageCss={draft.customCss}
+                  pageJs={draft.customJs}
+                  allowJs={false}
+                  interactive
+                  selectedId={selectedId}
+                  onSelect={(id) => setSelectedId(id || null)}
+                  pageId={pageId}
+                  showDisabled
+                  onAddBetween={(index) => {
+                    setPendingInsert(index);
+                    setLeftTab("modules");
+                    toast.push("Pick a module to insert", "neutral");
+                  }}
+                />
               </SortableContext>
             </DndContext>
-            <PageRenderer
-              sections={sections}
-              widgets={widgets}
-              pageCss={draft.customCss}
-              pageJs={draft.customJs}
-              allowJs={false}
-              interactive
-              selectedId={selectedId}
-              onSelect={(id) => setSelectedId(id || null)}
-              pageId={pageId}
-              showDisabled
-              onAddBetween={(index) => {
-                setPendingInsert(index);
-                setLeftTab("modules");
-                toast.push("Pick a module to insert", "neutral");
-              }}
-            />
             {showChrome ? <FooterFull /> : null}
           </div>
         </div>

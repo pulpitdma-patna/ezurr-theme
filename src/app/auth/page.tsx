@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   createSession,
   formatMobileDisplay,
@@ -154,7 +154,7 @@ function safeNextPath(raw: string | null) {
   return raw;
 }
 
-export default function AuthPage() {
+function AuthPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = safeNextPath(searchParams.get("next"));
@@ -361,5 +361,21 @@ export default function AuthPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-[100dvh] bg-[#f5f6fa] flex items-center justify-center">
+          <div className="ez-mono text-xs uppercase tracking-[0.16em] text-[#86868B] animate-pulse">
+            Loading Auth Gate…
+          </div>
+        </main>
+      }
+    >
+      <AuthPageContent />
+    </Suspense>
   );
 }

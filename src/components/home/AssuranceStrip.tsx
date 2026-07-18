@@ -13,7 +13,7 @@ export function AssuranceStrip({ items = DEFAULT_ASSURANCES }: AssuranceStripPro
           {items.map((assurance, index) => (
             <div
               key={`${assurance.title}-${index}`}
-              className={`group flex min-h-[126px] items-start gap-3.5 p-4 transition hover:bg-[#F8F8FA] sm:min-h-[138px] sm:gap-4 sm:p-6 ${
+              className={`group flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left min-h-[126px] gap-3.5 p-4 transition hover:bg-[#F8F8FA] sm:min-h-[138px] sm:gap-4 sm:p-6 ${
                 index % 2 === 0 ? "border-r border-black/[0.06]" : ""
               } ${index < 2 ? "border-b border-black/[0.06] lg:border-b-0" : ""} ${
                 index < items.length - 1 ? "lg:border-r lg:border-black/[0.06]" : ""
@@ -25,7 +25,7 @@ export function AssuranceStrip({ items = DEFAULT_ASSURANCES }: AssuranceStripPro
               >
                 {assurance.mark}
               </span>
-              <div className="pt-0.5">
+              <div className="pt-0.5 sm:pt-0.5">
                 <h2 className="text-[13px] font-semibold tracking-[-0.02em] text-[#1D1D1F] sm:text-sm">
                   {assurance.title}
                 </h2>

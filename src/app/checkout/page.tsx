@@ -19,6 +19,7 @@ import {
   formatMobileDisplay,
   getSession,
   normalizeMobile,
+  isValidMobile,
   type AuthSession,
 } from "@/lib/auth";
 
@@ -100,8 +101,9 @@ function CheckoutInput({
   required,
   inputMode,
   autoComplete,
+  hasError,
 }: {
-  id?: string;
+  id: string;
   type?: string;
   placeholder?: string;
   value: string;
@@ -110,6 +112,7 @@ function CheckoutInput({
   required?: boolean;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   autoComplete?: string;
+  hasError?: boolean;
 }) {
   return (
     <input
@@ -121,7 +124,9 @@ function CheckoutInput({
       inputMode={inputMode}
       autoComplete={autoComplete}
       onChange={(e) => onChange(e.target.value)}
-      className={`ez-checkout-input w-full rounded-[12px] px-4 py-3.5 text-[15px] text-[var(--ez-fg)] outline-none ${className}`}
+      className={`ez-checkout-input w-full rounded-[12px] px-4 py-3.5 text-[15px] text-[var(--ez-fg)] outline-none ${
+        hasError ? "!border-[#B42318] !bg-[#FFF5F5]" : ""
+      } ${className}`}
     />
   );
 }
@@ -462,6 +467,7 @@ export default function CheckoutPage() {
   const [gateway, setGateway] = useState<CheckoutGateway>("upi");
   const [carrierId, setCarrierId] = useState<CheckoutCarrierId | "">("");
   const [splitId, setSplitId] = useState<string>("");
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
 
   const liveTheme = useLiveThemeSettings();
   const { checkoutRules } = useAdminStore();
@@ -596,13 +602,12 @@ export default function CheckoutPage() {
   };
 
   const canContinueDetails =
-    !policy.blocked &&
-    (!fieldRequired("mobile") || normalizeMobile(form.mobile).length === 10) &&
-    (!fieldRequired("address") || form.address.trim().length > 3) &&
-    (!fieldRequired("firstName") || form.firstName.trim()) &&
-    (!fieldRequired("lastName") || form.lastName.trim()) &&
-    (!fieldRequired("city") || form.city.trim()) &&
-    (!fieldRequired("pincode") || form.pincode.trim().length >= 6) &&
+    (!fieldRequired("mobile") || isValidMobile(form.mobile)) &&
+    (!fieldRequired("address") || form.address.trim().length > 0) &&
+    (!fieldRequired("firstName") || form.firstName.trim().length > 0) &&
+    (!fieldRequired("lastName") || form.lastName.trim().length > 0) &&
+    (!fieldRequired("city") || form.city.trim().length > 0) &&
+    (!fieldRequired("pincode") || form.pincode.trim().length === 6) &&
     (!fieldRequired("upi") || form.upiId.trim().length > 0);
 
   if (placed) {
@@ -661,9 +666,18 @@ export default function CheckoutPage() {
 
   const primaryAction = () => {
     if (policy.blocked) return;
-    if (step === 1 && canContinueDetails) goto(2);
-    else if (step === 2) goto(3);
-    else if (step === 3) placeOrder();
+    if (step === 1) {
+      if (canContinueDetails) {
+        setShowValidationErrors(false);
+        goto(2);
+      } else {
+        setShowValidationErrors(true);
+      }
+    } else if (step === 2) {
+      goto(3);
+    } else if (step === 3) {
+      placeOrder();
+    }
   };
 
   return (
@@ -754,7 +768,11 @@ export default function CheckoutPage() {
                     {showField("mobile") ? (
                     <div className="flex flex-col gap-2">
                       <FieldLabel htmlFor="mobile">Mobile</FieldLabel>
-                      <div className="ez-checkout-input flex overflow-hidden rounded-[12px]">
+                      <div className={`ez-checkout-input flex overflow-hidden rounded-[12px] ${
+                        showValidationErrors && !isValidMobile(form.mobile)
+                          ? "!border-[#B42318] !bg-[#FFF5F5]"
+                          : ""
+                      }`}>
                         <span className="ez-mono flex shrink-0 items-center border-r border-[#D2D2D7] bg-[#F5F5F7] px-3.5 text-[13px] font-medium text-[#424245]">
                           +91
                         </span>
@@ -770,6 +788,11 @@ export default function CheckoutPage() {
                           className="min-w-0 flex-1 border-none bg-transparent px-4 py-3.5 text-[15px] outline-none"
                         />
                       </div>
+                      {showValidationErrors && !isValidMobile(form.mobile) && (
+                        <span className="text-[11px] font-medium text-[#B42318]">
+                          Please enter a valid 10-digit mobile number starting with 6-9.
+                        </span>
+                      )}
                     </div>
                     ) : null}
 
@@ -845,7 +868,13 @@ export default function CheckoutPage() {
                           placeholder="400001"
                           inputMode="numeric"
                           autoComplete="postal-code"
+                          hasError={showValidationErrors && form.pincode.trim().length !== 6}
                         />
+                        {showValidationErrors && form.pincode.trim().length !== 6 && (
+                          <span className="text-[11px] font-medium text-[#B42318]">
+                            Please enter a valid 6-digit PIN code (e.g. 400001).
+                          </span>
+                        )}
                       </div>
                       ) : null}
                     </div>

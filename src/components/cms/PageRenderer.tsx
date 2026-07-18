@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { CmsBlock, CmsWidgetDefinition } from "@/lib/cms/types";
 import {
   interpolateTemplate,
@@ -549,6 +551,34 @@ function RenderBlock({
   }
 }
 
+function SortableSectionWrapper({
+  id,
+  children,
+  interactive,
+}: {
+  id: string;
+  children: React.ReactNode;
+  interactive?: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id, disabled: !interactive });
+  if (!interactive) return <>{children}</>;
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : undefined,
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function PageRenderer({
   sections,
   widgets = [],
@@ -580,7 +610,7 @@ export function PageRenderer({
         onClick={interactive ? () => onSelect?.("") : undefined}
       >
         {sections.map((block, index) => (
-          <div key={block.id}>
+          <SortableSectionWrapper key={block.id} id={block.id} interactive={interactive}>
             {interactive && onAddBetween ? (
               <button
                 type="button"
@@ -606,7 +636,7 @@ export function PageRenderer({
               allowJs={allowJs && !interactive}
               showDisabled={showDisabled}
             />
-          </div>
+          </SortableSectionWrapper>
         ))}
         {interactive && onAddBetween ? (
           <button

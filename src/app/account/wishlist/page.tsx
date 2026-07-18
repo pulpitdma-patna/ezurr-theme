@@ -41,7 +41,7 @@ export default function WishlistPage() {
             const key = catalogKeyForProduct(product, index);
             return (
               <div key={key} className="relative">
-                <ProductCard {...product} productKey={key} />
+                <ProductCard {...product} productKey={key} showWishlist={false} />
                 <button
                   type="button"
                   aria-label={`Remove ${product.name} from wishlist`}
