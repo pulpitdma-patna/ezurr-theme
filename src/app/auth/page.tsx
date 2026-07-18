@@ -1,13 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { CheckoutHeader } from "@/components/layout/Header";
 import {
   createSession,
   formatMobileDisplay,
   getSession,
+  isAdminSession,
   isValidMobile,
   isValidOtp,
   maskMobile,
@@ -70,7 +71,7 @@ function OtpBoxes({
   }
 
   return (
-    <div className="flex justify-between gap-2 sm:gap-3" role="group" aria-label="One-time password">
+    <div className="auth-otp-grid flex justify-between gap-2.5 sm:gap-3" role="group" aria-label="One-time password">
       {digits.map((digit, index) => (
         <input
           key={index}
@@ -87,10 +88,64 @@ function OtpBoxes({
           onChange={(event) => handleChange(index, event.target.value)}
           onKeyDown={(event) => handleKeyDown(index, event)}
           onPaste={handlePaste}
-          className="ez-checkout-input h-14 w-full max-w-[56px] rounded-xl text-center ez-mono text-xl font-bold text-[#1D1D1F] outline-none sm:h-16 sm:max-w-[64px] sm:text-2xl"
+          className="h-[3.8rem] w-full max-w-[57px] rounded-[1rem] border border-[#dde0e8] bg-[#f8f9fb] text-center ez-mono text-xl font-bold text-[#17191f] outline-none transition-[border-color,box-shadow,transform,background-color] duration-200 placeholder:text-[#c5c8d1] hover:border-[#babfca] focus:border-[var(--ez-accent)] focus:bg-white focus:shadow-[0_0_0_4px_oklch(0.55_0.17_var(--ez-h)_/_0.12)] sm:h-[4.15rem] sm:max-w-[65px] sm:text-2xl"
         />
       ))}
     </div>
+  );
+}
+
+function BrandPanel() {
+  return (
+    <aside className="auth-brand-panel relative isolate overflow-hidden bg-[#070b13] text-white">
+      <Image
+        src="/images/hero-handheld-cyan.png"
+        alt=""
+        fill
+        priority
+        sizes="(min-width: 1024px) 55vw, 100vw"
+        className="auth-brand-image object-cover object-[67%_center]"
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,7,13,.94)_0%,rgba(3,7,13,.76)_38%,rgba(3,7,13,.18)_100%),linear-gradient(0deg,rgba(3,7,13,.88)_0%,transparent_54%,rgba(3,7,13,.18)_100%)]" />
+      <div aria-hidden="true" className="auth-grain absolute inset-0" />
+      <div aria-hidden="true" className="auth-orb absolute -left-20 top-[18%] h-64 w-64 rounded-full bg-[var(--ez-accent)] blur-3xl" />
+
+      <div className="relative flex min-h-[23rem] flex-col justify-between p-6 sm:min-h-[27rem] sm:p-9 lg:min-h-screen lg:p-10 xl:p-14">
+        <Link href="/" className="group relative z-10 flex w-fit items-baseline gap-2.5">
+          <span className="text-[1.7rem] font-semibold tracking-[-0.06em]">Ezurr</span>
+          <span className="ez-mono text-[9px] font-bold uppercase tracking-[0.2em] text-white/55 transition-colors group-hover:text-white">
+            Play HQ
+          </span>
+        </Link>
+
+        <div className="auth-console-scene pointer-events-none absolute bottom-7 right-6 hidden w-[42%] min-w-48 sm:right-10 sm:block lg:bottom-12 lg:right-14">
+          <div className="aspect-[1.15] rotate-[-8deg] rounded-[2rem] border border-white/25 bg-[linear-gradient(145deg,rgba(255,255,255,.24),rgba(255,255,255,.03)_45%,rgba(0,0,0,.5))] p-2 shadow-[0_25px_70px_rgba(0,0,0,.44)] backdrop-blur-sm">
+            <div className="relative h-full overflow-hidden rounded-[1.55rem] border border-white/15 bg-[#060a10]">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_28%,var(--ez-accent),transparent_22%),linear-gradient(135deg,#16233a,#06080d_62%)]" />
+              <div className="absolute inset-x-[12%] top-[16%] flex items-center justify-between ez-mono text-[7px] font-bold uppercase tracking-[.24em] text-white/65">
+                <span>Live</span><span>00:01</span>
+              </div>
+              <div className="absolute bottom-[14%] left-[12%] text-[clamp(1.1rem,2.5vw,2.25rem)] font-semibold leading-[.87] tracking-[-.07em]">PLAY<br />BEYOND.</div>
+              <div className="absolute bottom-[15%] right-[12%] h-7 w-7 rounded-full border border-white/25 bg-white/10" />
+            </div>
+          </div>
+        </div>
+
+        <div className="relative z-10 mt-auto max-w-[35rem] pt-16 lg:pb-8">
+          <p className="auth-kicker ez-mono text-[10px] font-bold uppercase tracking-[0.22em] text-white/58">The home of play</p>
+          <h1 className="mt-4 max-w-md text-[clamp(3.25rem,6vw,6.35rem)] font-semibold leading-[0.84] tracking-[-0.08em]">
+            Ezurr<br />
+            <span className="text-white/92">Play HQ.</span>
+          </h1>
+          <div className="mt-7 flex items-center gap-3">
+            <span className="h-px w-10 bg-[var(--ez-accent)]" />
+            <p className="max-w-[20rem] text-sm leading-relaxed text-white/66 sm:text-[15px]">
+              Games, gear and the next drop—ready when you are.
+            </p>
+          </div>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -104,7 +159,9 @@ export default function AuthPage() {
   const [resendIn, setResendIn] = useState(0);
 
   useEffect(() => {
-    if (getSession()) router.replace("/account");
+    const session = getSession();
+    if (!session) return;
+    router.replace(isAdminSession(session) ? "/admin" : "/account");
   }, [router]);
 
   useEffect(() => {
@@ -139,74 +196,57 @@ export default function AuthPage() {
     setError("");
     setLoading(true);
     await new Promise((resolve) => setTimeout(resolve, 700));
-    setSession(createSession(mobile));
-    router.push("/account");
+    const session = createSession(mobile);
+    setSession(session);
+    router.push(isAdminSession(session) ? "/admin" : "/account");
   }
 
   return (
-    <div className="ez-checkout-bg min-h-screen">
-      <CheckoutHeader label="Secure login · OTP" shortLabel="Secure · OTP" />
+    <main className="auth-page min-h-[100dvh] bg-[#f5f6fa] lg:grid lg:grid-cols-[minmax(0,1.12fr)_minmax(440px,.88fr)]">
+      <BrandPanel />
 
-      <main className="ez-page py-8 sm:py-10 lg:py-14">
-        <div className="mx-auto grid max-w-[980px] gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch lg:gap-8">
-          <aside className="ez-checkout-summary hidden overflow-hidden rounded-[28px] p-8 text-white lg:flex lg:flex-col lg:justify-between lg:p-10">
-            <div>
-              <span className="ez-section-kicker !text-white/45">Ezurr Play HQ</span>
-              <h1 className="mt-4 text-[clamp(2.4rem,4vw,3.6rem)] font-semibold leading-[0.98] tracking-[-0.05em]">
-                Sign in with your mobile.
-              </h1>
-              <p className="mt-5 max-w-[360px] text-[15px] leading-relaxed text-white/55">
-                No passwords. We send a one-time code so you can track pre-orders, wishlist, and delivery updates securely.
-              </p>
-            </div>
-            <ul className="mt-12 space-y-4">
-              {[
-                "OTP delivered instantly to your phone",
-                "Secure session for account & checkout",
-                "No email required to get started",
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-3 text-sm text-white/70">
-                  <span
-                    aria-hidden="true"
-                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px]"
-                  >
-                    ✓
-                  </span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </aside>
-
-          <section className="ez-checkout-panel rounded-[28px] p-6 sm:p-8 lg:p-10">
-            <div className="mb-8">
-              <span className="ez-section-kicker">
-                {step === "mobile" ? "Step 1 of 2" : "Step 2 of 2"}
-              </span>
-              <h2 className="mt-3 text-[clamp(1.8rem,3vw,2.4rem)] font-semibold tracking-[-0.04em] text-[#1D1D1F]">
+      <section className="relative flex min-h-[calc(100dvh-23rem)] items-center overflow-hidden bg-[#fbfbfc] px-5 py-10 sm:px-8 sm:py-14 lg:min-h-screen lg:px-[clamp(3rem,7vw,8rem)]">
+        <div aria-hidden="true" className="auth-form-wash absolute right-[-10rem] top-[-11rem] h-[27rem] w-[27rem] rounded-full bg-[var(--ez-accent)] opacity-[.07] blur-3xl" />
+        <div aria-hidden="true" className="absolute right-8 top-8 hidden h-12 w-12 border-r border-t border-[#e1e3e9] lg:block" />
+        <div className="relative mx-auto w-full max-w-[28rem]">
+          <Link href="/" className="mb-12 inline-flex items-center gap-2 ez-mono text-[10px] font-bold uppercase tracking-[.15em] text-[#777c89] transition-colors hover:!text-[#17191f]">
+            <span aria-hidden="true">←</span> Storefront
+          </Link>
+            <div className="mb-9">
+              <div className="flex items-center gap-3">
+                <span className="ez-mono text-[10px] font-bold uppercase tracking-[.18em] text-[var(--ez-accent-text)]">
+                  {step === "mobile" ? "Sign in · 01" : "Verify · 02"}
+                </span>
+                <span className="h-px flex-1 bg-[#e0e2e8]" />
+                <span className="ez-mono text-[9px] font-bold tracking-[.12em] text-[#9b9faa]">02</span>
+              </div>
+              <div className="auth-progress-track mt-4" aria-hidden="true">
+                <span className={step === "otp" ? "auth-progress-fill is-complete" : "auth-progress-fill"} />
+              </div>
+              <h2 className="mt-7 text-[clamp(2.3rem,3.4vw,3.25rem)] font-semibold leading-[.92] tracking-[-0.07em] text-[#17191f]">
                 {step === "mobile" ? "Enter your mobile number" : "Enter the OTP"}
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-[#6E6E73] sm:text-[15px]">
+              <p className="mt-3.5 text-sm leading-relaxed text-[#666b78] sm:text-[15px]">
                 {step === "mobile"
-                  ? "We’ll text you a 6-digit verification code."
-                  : `Sent to ${maskMobile(mobile)}. Demo accepts any 6-digit code.`}
+                  ? "No password needed. We’ll send a six-digit code to get you in."
+                  : `We sent a six-digit code to ${maskMobile(mobile)}.`}
               </p>
             </div>
 
             {step === "mobile" ? (
               <form
-                className="flex flex-col gap-6"
+                className="flex flex-col gap-7"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void sendOtp();
                 }}
               >
-                <div className="flex flex-col gap-2">
-                  <label className="ez-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[#86868B]">
+                <div className="flex flex-col gap-2.5">
+                  <label className="ez-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#686d7c]">
                     Mobile no.
                   </label>
-                  <div className="ez-checkout-input flex overflow-hidden rounded-xl">
-                    <span className="ez-mono flex shrink-0 items-center border-r border-[#E3E3E8] bg-[#F0F0F4] px-3.5 text-[13px] font-medium text-[#424245]">
+                  <div className="flex overflow-hidden rounded-[1rem] border border-[#d9dce4] bg-white shadow-[0_1px_2px_rgba(17,24,39,.02)] transition-[border-color,box-shadow,background-color] focus-within:border-[var(--ez-accent)] focus-within:shadow-[0_0_0_4px_oklch(0.55_0.17_var(--ez-h)_/_0.12)]">
+                    <span className="ez-mono flex shrink-0 items-center border-r border-[#e5e7ec] bg-[#f5f6f8] px-4 text-[13px] font-bold text-[#4e5462]">
                       +91
                     </span>
                     <input
@@ -219,16 +259,19 @@ export default function AuthPage() {
                         setMobile(normalizeMobile(event.target.value));
                         setError("");
                       }}
-                      className="min-w-0 flex-1 border-none bg-transparent px-4 py-3.5 text-[15px] outline-none"
+                      className="min-w-0 flex-1 border-none bg-transparent px-4 py-4 text-[15px] font-medium tracking-[.01em] text-[#17191f] outline-none"
                     />
                   </div>
-                  <p className="m-0 text-[12px] text-[#86868B]">
-                    OTP and account alerts will be sent to this number.
+                  <p className="m-0 pl-1 text-[12px] text-[#7d8290]">
+                    We’ll only use this for your sign-in code.
+                  </p>
+                  <p className="m-0 mt-1 border-l-2 border-[var(--ez-accent)] px-3 py-1 text-[11px] leading-relaxed text-[#777c89]">
+                    <span className="font-semibold text-[#4a505d]">Demo access:</span> numbers ending in <span className="ez-mono font-bold text-[#323744]">0000</span> open Admin.
                   </p>
                 </div>
 
                 {error && (
-                  <p className="m-0 rounded-xl border border-[#F5C2C0] bg-[#FFF5F5] px-4 py-3 text-sm text-[#B42318]">
+                  <p className="m-0 rounded-xl border border-[#f5c2c0] bg-[#fff5f5] px-4 py-3 text-sm text-[#b42318]">
                     {error}
                   </p>
                 )}
@@ -236,14 +279,14 @@ export default function AuthPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="ez-checkout-btn-dark inline-flex min-h-12 items-center justify-center rounded-full px-6 text-sm font-semibold disabled:opacity-60"
+                  className="auth-submit inline-flex min-h-14 items-center justify-center gap-3 rounded-full bg-[#171920] px-6 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,22,30,.16)] transition hover:-translate-y-0.5 hover:bg-[var(--ez-accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loading ? "Sending OTP…" : "Continue"}
+                  {loading ? "Sending OTP…" : <>Continue <span aria-hidden="true">→</span></>}
                 </button>
               </form>
             ) : (
               <form
-                className="flex flex-col gap-6"
+                className="flex flex-col gap-7"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void verifyOtp();
@@ -259,7 +302,7 @@ export default function AuthPage() {
                 />
 
                 {error && (
-                  <p className="m-0 rounded-xl border border-[#F5C2C0] bg-[#FFF5F5] px-4 py-3 text-sm text-[#B42318]">
+                  <p className="m-0 rounded-xl border border-[#f5c2c0] bg-[#fff5f5] px-4 py-3 text-sm text-[#b42318]">
                     {error}
                   </p>
                 )}
@@ -267,15 +310,15 @@ export default function AuthPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="ez-checkout-btn-dark inline-flex min-h-12 items-center justify-center rounded-full px-6 text-sm font-semibold disabled:opacity-60"
+                  className="auth-submit inline-flex min-h-14 items-center justify-center gap-3 rounded-full bg-[#171920] px-6 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,22,30,.16)] transition hover:-translate-y-0.5 hover:bg-[var(--ez-accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loading ? "Verifying…" : "Verify & continue"}
+                  {loading ? "Verifying…" : <>Verify & continue <span aria-hidden="true">→</span></>}
                 </button>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e4e6eb] pt-5 text-sm">
                   <button
                     type="button"
-                    className="font-medium text-[#424245] hover:text-[#1D1D1F]"
+                    className="font-medium text-[#555b68] transition hover:text-[#17191f]"
                     onClick={() => {
                       setStep("mobile");
                       setOtp("");
@@ -287,28 +330,24 @@ export default function AuthPage() {
                   <button
                     type="button"
                     disabled={loading || resendIn > 0}
-                    className="font-semibold text-[var(--ez-accent-text)] disabled:text-[#AEAEB2]"
+                    className="font-semibold text-[var(--ez-accent-text)] transition hover:text-[#17191f] disabled:text-[#aeb1bc]"
                     onClick={() => void sendOtp(mobile)}
                   >
                     {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend OTP"}
                   </button>
                 </div>
 
-                <p className="m-0 text-center text-[12px] text-[#86868B]">
+                <p className="m-0 text-center text-[12px] text-[#7c818e]">
                   Signing in as {formatMobileDisplay(mobile)}
                 </p>
               </form>
             )}
 
-            <p className="mt-8 border-t border-black/[0.06] pt-6 text-center text-[12px] leading-relaxed text-[#86868B]">
-              By continuing, you agree to receive a one-time SMS from Ezurr.{" "}
-              <Link href="/" className="font-semibold text-[#1D1D1F] hover:!text-[#1D1D1F]">
-                Back to store
-              </Link>
+            <p className="mt-10 text-center text-[11px] leading-relaxed text-[#858a96]">
+              By continuing, you agree to receive a one-time sign-in SMS from Ezurr.
             </p>
-          </section>
         </div>
-      </main>
-    </div>
+      </section>
+    </main>
   );
 }

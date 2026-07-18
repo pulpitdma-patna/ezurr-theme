@@ -4,9 +4,9 @@ import { FooterFull } from "@/components/layout/Footer";
 import { HeroSlider } from "@/components/home/HeroSlider";
 import { ProductRail } from "@/components/home/ProductRail";
 import { EditorialBanner } from "@/components/home/EditorialBanner";
+import { OfferBannerGate } from "@/components/home/OfferBannerGate";
 import { BrandExplorer } from "@/components/home/BrandExplorer";
 import { DigitalCardFeature } from "@/components/home/DigitalCardFeature";
-import { theme } from "@/lib/theme";
 import {
   featuredAccessories,
   featuredConsoles,
@@ -91,21 +91,7 @@ export default function HomePage() {
           variant="preorder"
         />
 
-        {theme.showOffer && (
-          <EditorialBanner
-            eyebrow="Prepaid advantage"
-            badge="Automatically applied"
-            title="Save 10% before the story begins."
-            description="Pay by UPI or card and the discount is applied at checkout, on top of your locked minimum pre-order price."
-            href="/preorders"
-            cta="Browse pre-orders"
-            image="/images/banner-prepaid-violet.png"
-            imageAlt="Abstract violet glass and futuristic coastal city"
-            theme="violet"
-            fullWidth
-            imagePosition="70% center"
-          />
-        )}
+        <OfferBannerGate />
 
         <BrandExplorer />
         <ProductRail

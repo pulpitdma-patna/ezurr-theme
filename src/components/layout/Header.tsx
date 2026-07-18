@@ -126,6 +126,16 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
               Search
             </div>
           )}
+          {!compact && session?.role === "admin" && (
+            <Link
+              href="/admin"
+              className={`hidden text-sm font-semibold text-[#1D1D1F] hover:text-[#1D1D1F] sm:inline ${
+                ready ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              Admin
+            </Link>
+          )}
           {!compact && (
             <Link
               href={accountHref}
@@ -185,6 +195,15 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
                   {item.label}
                 </Link>
               ))}
+              {session?.role === "admin" && (
+                <Link
+                  href="/admin"
+                  onClick={closeMenu}
+                  className="rounded-xl px-4 py-3.5 text-[15px] font-semibold text-[#1D1D1F]"
+                >
+                  Admin
+                </Link>
+              )}
               <Link
                 href={accountHref}
                 onClick={closeMenu}

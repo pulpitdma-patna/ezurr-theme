@@ -8,6 +8,7 @@ import { Header } from "@/components/layout/Header";
 import { FooterFull } from "@/components/layout/Footer";
 import { CountdownInline } from "@/components/ui/Countdown";
 import { RelatedProductsSection } from "@/components/product/RelatedProductsSection";
+import { formatReleaseLabel, useLiveThemeSettings } from "@/hooks/useLiveThemeSettings";
 
 const productImages = [
   {
@@ -27,6 +28,9 @@ const productImages = [
 export default function ProductPage() {
   const [selectedDisc, setSelectedDisc] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const settings = useLiveThemeSettings();
+  const releaseLabel = formatReleaseLabel(settings.releaseDate);
+  const pct = settings.prepaidDiscount;
 
   return (
     <div className="min-h-screen bg-white">
@@ -123,7 +127,7 @@ export default function ProductPage() {
               </span>
               Pre-order open
               <span className="text-[#AEAEB2]">·</span>
-              <span className="text-[#6E6E73]">Releases Nov 19, 2026</span>
+              <span className="text-[#6E6E73]">Releases {releaseLabel}</span>
             </div>
 
             <div>
@@ -229,7 +233,7 @@ export default function ProductPage() {
             <div className="mt-4 grid gap-2 text-[11.5px] text-[#C7C7CC]">
               {[
                 "Charged only when your order ships",
-                "10% off prepaid orders · Cancel before dispatch",
+                `${pct}% off prepaid orders · Cancel before dispatch`,
               ].map((line) => (
                 <div key={line} className="flex items-start gap-2">
                   <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-[var(--ez-accent)]" />

@@ -13,6 +13,8 @@ type EditorialBannerProps = {
   badge?: string;
   fullWidth?: boolean;
   imagePosition?: string;
+  /** Shown in the prepaid overlay chip when theme is violet + fullWidth */
+  prepaidPercent?: number;
 };
 
 export function EditorialBanner({
@@ -27,6 +29,7 @@ export function EditorialBanner({
   badge,
   fullWidth = false,
   imagePosition,
+  prepaidPercent = 10,
 }: EditorialBannerProps) {
   const light = theme === "light";
   const freshOffer = fullWidth && theme === "violet";
@@ -151,7 +154,9 @@ export function EditorialBanner({
                   <span className="ez-mono text-[9px] uppercase tracking-[0.16em] text-white/50">
                     Prepaid exclusive
                   </span>
-                  <div className="mt-2 text-5xl font-semibold leading-none tracking-[-0.06em]">10%</div>
+                  <div className="mt-2 text-5xl font-semibold leading-none tracking-[-0.06em]">
+                    {prepaidPercent}%
+                  </div>
                   <div className="mt-2 text-sm text-white/60">off at checkout</div>
                 </div>
               </>

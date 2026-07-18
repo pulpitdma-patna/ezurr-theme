@@ -323,3 +323,154 @@ input:focus {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   color: #fff;
 }
+
+/* Auth: a cinematic entry point with deliberately restrained motion. */
+.auth-brand-panel {
+  animation: auth-panel-in 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.auth-brand-image {
+  animation: auth-image-settle 1.4s 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.auth-grain {
+  opacity: 0.16;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+
+.auth-console-scene {
+  animation: auth-scene-in 920ms 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.auth-orb {
+  animation: auth-orb-drift 10s ease-in-out infinite alternate;
+}
+
+.auth-kicker {
+  animation: auth-copy-in 600ms 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.auth-form-wash {
+  animation: auth-wash-drift 12s ease-in-out infinite alternate;
+}
+
+.auth-progress-track {
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e1e3e8;
+}
+
+.auth-progress-fill {
+  display: block;
+  width: 50%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ez-accent);
+  transition: width 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-progress-fill.is-complete {
+  width: 100%;
+}
+
+.auth-submit {
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-submit::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  opacity: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.15) 48%, transparent 64%);
+  transform: translateX(-80%);
+  transition: opacity 180ms ease, transform 520ms ease;
+}
+
+.auth-submit:hover::after {
+  opacity: 1;
+  transform: translateX(80%);
+}
+
+.auth-otp-grid input:focus {
+  animation: auth-otp-focus 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes auth-panel-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+
+@keyframes auth-scene-in {
+  from {
+    opacity: 0;
+    transform: translate3d(1rem, 1.5rem, 0) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes auth-image-settle {
+  from {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes auth-orb-drift {
+  to {
+    transform: translate3d(5rem, 2rem, 0) scale(1.15);
+  }
+}
+
+@keyframes auth-copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-wash-drift {
+  to {
+    transform: translate3d(-2rem, 1.5rem, 0) scale(1.08);
+  }
+}
+
+@keyframes auth-otp-focus {
+  50% {
+    transform: translateY(-2px) scale(1.025);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-brand-panel,
+  .auth-brand-image,
+  .auth-console-scene,
+  .auth-orb,
+  .auth-kicker,
+  .auth-form-wash,
+  .auth-otp-grid input:focus {
+    animation: none;
+  }
+
+  .auth-submit::after {
+    transition: none;
+  }
+}

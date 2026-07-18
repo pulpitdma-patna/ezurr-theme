@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { formatReleaseLabel, useLiveThemeSettings } from "@/hooks/useLiveThemeSettings";
 import { theme } from "@/lib/theme";
 
 const PLACEHOLDER = { dd: "--", hh: "--", mm: "--", ss: "--" };
@@ -32,9 +33,14 @@ function subscribeToClock(listener: () => void) {
 
 function useCountdown() {
   const now = useSyncExternalStore(subscribeToClock, () => clockNow, () => 0);
+  const settings = useLiveThemeSettings();
   if (!now) return PLACEHOLDER;
 
-  const target = new Date(theme.releaseDate).getTime();
+  const release =
+    settings.releaseDate?.length === 10
+      ? `${settings.releaseDate}T00:00:00`
+      : settings.releaseDate || theme.releaseDate;
+  const target = new Date(release).getTime();
   let s = Math.max(0, Math.floor((target - now) / 1000));
   const dd = Math.floor(s / 86400);
   s -= dd * 86400;
@@ -136,6 +142,8 @@ function SummaryUnit({
 /** Premium segmented countdown for dark checkout summary */
 export function CountdownSummaryPanel() {
   const { dd, hh, mm, ss } = useCountdown();
+  const settings = useLiveThemeSettings();
+  const releaseLabel = formatReleaseLabel(settings.releaseDate);
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-white/[0.03] p-3.5 backdrop-blur-md sm:p-4">
@@ -144,7 +152,7 @@ export function CountdownSummaryPanel() {
           Releases in
         </span>
         <span className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#6E6E73]">
-          Nov 19, 2026
+          {releaseLabel}
         </span>
       </div>
       <div className="grid grid-cols-4 gap-1.5 sm:gap-2">

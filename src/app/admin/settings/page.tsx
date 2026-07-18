@@ -1,0 +1,707 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
+import {
+  SettingsNav,
+  SETTINGS_TABS,
+  type SettingsTabId,
+} from "@/components/admin/settings/SettingsNav";
+import { SettingsSection } from "@/components/admin/settings/SettingsSection";
+import { SettingsToggle } from "@/components/admin/settings/SettingsToggle";
+import { defaultAdminSettings, formatInr, type AdminSettings } from "@/data/admin";
+import { useAdminStore } from "@/hooks/useAdminStore";
+import { useAutoBanner } from "@/hooks/useAutoBanner";
+import { formatReleaseLabel } from "@/hooks/useLiveThemeSettings";
+import { useStaffRole } from "@/hooks/useStaffRole";
+import { STAFF_ROLE_OPTIONS } from "@/lib/adminPermissions";
+import { resetAdminStore, updateSettings } from "@/lib/adminStore";
+
+const fieldClass =
+  "w-full rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 py-2.5 text-sm outline-none transition hover:border-black/[0.12] focus:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
+
+const labelClass =
+  "ez-mono text-[9px] font-medium uppercase tracking-[0.14em] text-[#86868B]";
+
+const HUE_PRESETS = [
+  { label: "Violet", value: 255 },
+  { label: "Blue", value: 230 },
+  { label: "Teal", value: 180 },
+  { label: "Green", value: 145 },
+  { label: "Amber", value: 75 },
+  { label: "Rose", value: 15 },
+];
+
+function isValidTab(value: string | null): value is SettingsTabId {
+  return SETTINGS_TABS.some((tab) => tab.id === value);
+}
+
+export default function AdminSettingsPage() {
+  const { settings } = useAdminStore();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const initialTab: SettingsTabId = isValidTab(urlTab) ? urlTab : "store";
+  const [tab, setTab] = useState<SettingsTabId>(initialTab);
+  const [seenUrlTab, setSeenUrlTab] = useState(urlTab);
+  if (urlTab !== seenUrlTab) {
+    setSeenUrlTab(urlTab);
+    if (isValidTab(urlTab)) setTab(urlTab);
+  }
+
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [msg, setMsg] = useAutoBanner(2500);
+  const [emailError, setEmailError] = useState("");
+
+  const selectTab = useCallback(
+    (id: SettingsTabId) => {
+      setTab(id);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", id);
+      router.replace(`/admin/settings?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (!event.altKey) return;
+      const index = SETTINGS_TABS.findIndex((t) => t.id === tab);
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const next = SETTINGS_TABS[(index + 1) % SETTINGS_TABS.length];
+        selectTab(next.id);
+      }
+      if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        const prev =
+          SETTINGS_TABS[(index - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length];
+        selectTab(prev.id);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [tab, selectTab]);
+
+  function patch(partial: Partial<AdminSettings>, toast = "Saved just now") {
+    updateSettings(partial);
+    setMsg(toast);
+  }
+
+  function resetKnobs() {
+    updateSettings({
+      accentHue: defaultAdminSettings.accentHue,
+      showOffer: defaultAdminSettings.showOffer,
+      releaseDate: defaultAdminSettings.releaseDate,
+      prepaidDiscount: defaultAdminSettings.prepaidDiscount,
+      codEnabled: defaultAdminSettings.codEnabled,
+      codLimit: defaultAdminSettings.codLimit,
+      freeShippingMin: defaultAdminSettings.freeShippingMin,
+      orderIdPrefix: defaultAdminSettings.orderIdPrefix,
+      lowStockThreshold: defaultAdminSettings.lowStockThreshold,
+      timezone: defaultAdminSettings.timezone,
+      currencyLabel: defaultAdminSettings.currencyLabel,
+      notifyNewOrder: defaultAdminSettings.notifyNewOrder,
+      notifyLowStock: defaultAdminSettings.notifyLowStock,
+      notifyPreorderRelease: defaultAdminSettings.notifyPreorderRelease,
+    });
+    setMsg("Theme & commerce knobs reset");
+  }
+
+  function resetDemo() {
+    resetAdminStore();
+    setConfirmReset(false);
+    setMsg("Demo data restored");
+    selectTab("store");
+  }
+
+  const prefixPreview = `${(settings.orderIdPrefix || "EZX").toUpperCase().slice(0, 6)}24081203`;
+  const releaseLabel = formatReleaseLabel(settings.releaseDate);
+
+  return (
+    <div>
+      <AdminPageHeader
+        title="Settings"
+        description="Workspace preferences for your storefront, checkout, and ops alerts."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {msg ? (
+              <span
+                role="status"
+                aria-live="polite"
+                className="inline-flex h-8 items-center rounded-full border border-[#A6D5B0] bg-[#EAF6ED] px-3 text-[11px] font-semibold text-[#2D6B3C]"
+              >
+                {msg}
+              </span>
+            ) : null}
+            <Link
+              href="/"
+              className="inline-flex h-8 items-center rounded-lg border border-black/10 bg-white px-3 text-xs font-semibold transition hover:bg-[#F5F5F7]"
+            >
+              Open storefront
+            </Link>
+          </div>
+        }
+      />
+
+      <div className="lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
+        <SettingsNav activeId={tab} onChange={selectTab} />
+
+        <div className="min-w-0">
+          <SettingsSection
+            id="store"
+            active={tab === "store"}
+            title="Store profile"
+            description="Identity customers and support channels see across the shop."
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.06] bg-gradient-to-r from-[#F7F7F8] to-white px-4 py-3.5">
+              <div>
+                <div className="ez-mono text-[8px] uppercase tracking-[0.14em] text-[#AEAEB2]">
+                  Live preview
+                </div>
+                <div className="mt-1 text-sm text-[#424245]">
+                  Customer sees ·{" "}
+                  <span className="font-semibold text-[#1D1D1F]">
+                    {settings.storeName || "Ezurr Play HQ"}
+                  </span>
+                  {settings.city ? (
+                    <>
+                      {" "}
+                      · <span className="text-[#6E6E73]">{settings.city}</span>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-xl text-xs font-semibold text-white shadow-sm"
+                style={{ background: `oklch(0.45 0.12 ${settings.accentHue})` }}
+                aria-hidden
+              >
+                {(settings.storeName || "EZ").slice(0, 2).toUpperCase()}
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Store name">
+                <input
+                  value={settings.storeName}
+                  onChange={(e) => patch({ storeName: e.target.value })}
+                  className={fieldClass}
+                  placeholder="Ezurr Play HQ"
+                />
+              </Field>
+              <Field label="City">
+                <input
+                  value={settings.city}
+                  onChange={(e) => patch({ city: e.target.value })}
+                  className={fieldClass}
+                  placeholder="Bengaluru"
+                />
+              </Field>
+              <Field label="Support email">
+                <input
+                  type="email"
+                  value={settings.supportEmail}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    patch({ supportEmail: value });
+                    setEmailError(
+                      value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+                        ? "Enter a valid email"
+                        : "",
+                    );
+                  }}
+                  className={fieldClass}
+                  placeholder="hello@ezurr.com"
+                />
+                {emailError ? (
+                  <span className="mt-1 text-[11px] text-[#B42318]">{emailError}</span>
+                ) : null}
+              </Field>
+              <Field label="Support phone">
+                <input
+                  value={settings.supportPhone}
+                  onChange={(e) =>
+                    patch({ supportPhone: e.target.value.replace(/\D/g, "").slice(0, 10) })
+                  }
+                  className={fieldClass}
+                  placeholder="9876500000"
+                  inputMode="numeric"
+                />
+              </Field>
+              <Field label="GSTIN" className="sm:col-span-2">
+                <input
+                  value={settings.gstin}
+                  onChange={(e) => patch({ gstin: e.target.value.toUpperCase() })}
+                  className={`${fieldClass} ez-mono`}
+                  placeholder="Optional · 15-character GSTIN"
+                  maxLength={15}
+                />
+              </Field>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="appearance"
+            active={tab === "appearance"}
+            title="Appearance"
+            description="Accent and merchandising blocks that apply live on the storefront."
+          >
+            <div className="grid gap-5 lg:grid-cols-[1fr_200px]">
+              <div className="space-y-4">
+                <Field label={`Accent hue · ${settings.accentHue}`}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={360}
+                    value={settings.accentHue}
+                    onChange={(e) => patch({ accentHue: Number(e.target.value) })}
+                    className="w-full accent-[#1D1D1F]"
+                  />
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {HUE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => patch({ accentHue: preset.value })}
+                        className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                          settings.accentHue === preset.value
+                            ? "border-[#1D1D1F] bg-[#1D1D1F] text-white"
+                            : "border-black/[0.08] bg-white text-[#6E6E73] hover:text-[#1D1D1F]"
+                        }`}
+                      >
+                        <span
+                          className="h-3 w-3 rounded-full ring-1 ring-black/10"
+                          style={{ background: `oklch(0.55 0.17 ${preset.value})` }}
+                        />
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                <SettingsToggle
+                  label="Show offer banner"
+                  description="Prepaid advantage strip on the home page"
+                  checked={settings.showOffer}
+                  onChange={(checked) => patch({ showOffer: checked })}
+                />
+
+                <Field label="Featured release date">
+                  <input
+                    type="date"
+                    value={settings.releaseDate}
+                    onChange={(e) => patch({ releaseDate: e.target.value })}
+                    className={`${fieldClass} max-w-xs`}
+                  />
+                  <p className="mt-1.5 text-[11px] text-[#86868B]">
+                    Countdown & labels show · {releaseLabel}
+                  </p>
+                </Field>
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-[#0C0C0E] p-4 text-white">
+                <div className="ez-mono text-[8px] uppercase tracking-[0.16em] text-white/40">
+                  Theme chip
+                </div>
+                <div
+                  className="mt-3 h-16 rounded-xl"
+                  style={{
+                    background: `linear-gradient(135deg, oklch(0.55 0.17 ${settings.accentHue}), oklch(0.35 0.08 ${settings.accentHue}))`,
+                  }}
+                />
+                <div className="mt-3 text-sm font-semibold tracking-[-0.02em]">
+                  {settings.storeName || "Ezurr Play HQ"}
+                </div>
+                <div className="mt-1 text-[11px] text-white/50">
+                  Offer {settings.showOffer ? "on" : "off"} · Ships {releaseLabel}
+                </div>
+                <Link
+                  href="/"
+                  className="mt-4 inline-flex h-8 w-full items-center justify-center rounded-lg bg-white text-xs font-semibold text-[#1D1D1F]"
+                >
+                  Preview storefront
+                </Link>
+              </div>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="checkout"
+            active={tab === "checkout"}
+            title="Checkout"
+            description="Payment preferences and cart thresholds."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Prepaid discount">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    value={settings.prepaidDiscount}
+                    onChange={(e) =>
+                      patch({
+                        prepaidDiscount: Math.min(50, Math.max(0, Number(e.target.value) || 0)),
+                      })
+                    }
+                    className={fieldClass}
+                  />
+                  <span className="shrink-0 text-sm font-semibold text-[#6E6E73]">%</span>
+                </div>
+                <p className="mt-1.5 text-[11px] text-[#86868B]">
+                  Banner + checkout use this live.
+                </p>
+              </Field>
+              <Field label="Order ID prefix">
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    value={settings.orderIdPrefix}
+                    maxLength={6}
+                    onChange={(e) =>
+                      patch({
+                        orderIdPrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                      })
+                    }
+                    className={`${fieldClass} max-w-[140px] ez-mono`}
+                    placeholder="EZX"
+                  />
+                  <span className="ez-mono text-[10px] text-[#86868B]">
+                    {prefixPreview}
+                  </span>
+                </div>
+              </Field>
+            </div>
+
+            <SettingsToggle
+              label="COD enabled"
+              description={
+                settings.codEnabled
+                  ? `Available under ${formatInr(settings.codLimit)}`
+                  : "COD unavailable at checkout"
+              }
+              checked={settings.codEnabled}
+              onChange={(checked) => patch({ codEnabled: checked })}
+            />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="COD limit">
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#86868B]">
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    disabled={!settings.codEnabled}
+                    value={settings.codLimit}
+                    onChange={(e) =>
+                      patch({ codLimit: Math.max(0, Number(e.target.value) || 0) })
+                    }
+                    className={`${fieldClass} pl-7 disabled:opacity-50`}
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] text-[#86868B]">
+                  Orders above this must be prepaid.
+                </p>
+              </Field>
+              <Field label="Free shipping minimum">
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#86868B]">
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={settings.freeShippingMin}
+                    onChange={(e) =>
+                      patch({ freeShippingMin: Math.max(0, Number(e.target.value) || 0) })
+                    }
+                    className={`${fieldClass} pl-7`}
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] text-[#86868B]">Cart subtotal threshold.</p>
+              </Field>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="operations"
+            active={tab === "operations"}
+            title="Operations"
+            description="Stock alerts and locale defaults for the HQ console."
+          >
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Low-stock threshold">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={settings.lowStockThreshold}
+                  onChange={(e) =>
+                    patch({
+                      lowStockThreshold: Math.max(0, Number(e.target.value) || 0),
+                    })
+                  }
+                  className={fieldClass}
+                />
+                <p className="mt-1.5 text-[11px] text-[#86868B]">
+                  Dashboard alerts at ≤ {settings.lowStockThreshold} units.
+                </p>
+              </Field>
+              <Field label="Timezone">
+                <select
+                  value={settings.timezone}
+                  onChange={(e) => patch({ timezone: e.target.value })}
+                  className={fieldClass}
+                >
+                  <option value="Asia/Kolkata">Asia/Kolkata</option>
+                  <option value="Asia/Dubai">Asia/Dubai</option>
+                  <option value="UTC">UTC</option>
+                </select>
+              </Field>
+              <Field label="Currency">
+                <select
+                  value={settings.currencyLabel}
+                  onChange={(e) => patch({ currencyLabel: e.target.value })}
+                  className={fieldClass}
+                >
+                  <option value="INR">INR · ₹</option>
+                  <option value="USD">USD · $</option>
+                  <option value="AED">AED · د.إ</option>
+                </select>
+              </Field>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="team"
+            active={tab === "team"}
+            title="Team"
+            description="Staff roles for this HQ (UI gate only until Phase 2 authZ)."
+          >
+            <DemoRolePicker />
+            <div className="mt-4 overflow-hidden rounded-xl border border-black/[0.08]">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#F7F7F8] ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
+                  <tr>
+                    <th className="px-3 py-2.5">Member</th>
+                    <th className="px-3 py-2.5">Role</th>
+                    <th className="px-3 py-2.5">Access</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/[0.05]">
+                  {[
+                    { name: "Admin", role: "Owner", access: "Full" },
+                    { name: "Ops desk", role: "Manager", access: "Orders · inventory" },
+                    { name: "Support", role: "Support", access: "Customers · notes" },
+                    { name: "Finance", role: "Viewer", access: "Reports read-only" },
+                  ].map((row) => (
+                    <tr key={row.name}>
+                      <td className="px-3 py-2.5 font-medium">{row.name}</td>
+                      <td className="px-3 py-2.5 text-[#6E6E73]">{row.role}</td>
+                      <td className="px-3 py-2.5 text-[#86868B]">{row.access}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-[#86868B]">
+              Use the demo role switcher above to preview UI gates.{" "}
+              <Link href="/admin/team" className="font-semibold text-[#424245] hover:underline">
+                Open Team invites &amp; matrix →
+              </Link>
+            </p>
+          </SettingsSection>
+
+          <SettingsSection
+            id="tax"
+            active={tab === "tax"}
+            title="Tax"
+            description="GST readiness for exports — rates are not calculated until order tax snapshots exist."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="GSTIN">
+                <input
+                  value={settings.gstin ?? ""}
+                  onChange={(e) => patch({ gstin: e.target.value })}
+                  placeholder="Optional"
+                  className={fieldClass}
+                />
+              </Field>
+              <div className="rounded-xl border border-dashed border-black/[0.1] bg-[#F7F7F8] px-4 py-3 text-xs text-[#6E6E73]">
+                CGST / SGST / IGST splits and HSN codes are not captured on orders yet. Use Reports → Tax / GST for readiness exports.
+              </div>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="shipping"
+            active={tab === "shipping"}
+            title="Shipping"
+            description="Zone stubs for metro / rest of India. Wired to free-shipping minimum from Checkout."
+          >
+            <ul className="space-y-2">
+              {[
+                { zone: "Metro", rate: "₹79 flat · free above checkout minimum" },
+                { zone: "Rest of India", rate: "₹119 flat · free above checkout minimum" },
+                { zone: "COD surcharge", rate: "Included in payment method rules" },
+              ].map((row) => (
+                <li
+                  key={row.zone}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-black/[0.06] bg-[#F7F7F8] px-4 py-3"
+                >
+                  <span className="text-sm font-semibold">{row.zone}</span>
+                  <span className="text-xs text-[#6E6E73]">{row.rate}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-[#86868B]">
+              Free shipping threshold: {formatInr(settings.freeShippingMin)}. Carrier APIs stay under Integrations.
+            </p>
+          </SettingsSection>
+
+          <SettingsSection
+            id="notifications"
+            active={tab === "notifications"}
+            title="Notifications"
+            description="Demo preferences — nothing is sent from this theme."
+          >
+            <div className="space-y-3">
+              <SettingsToggle
+                label="New order alerts"
+                description="Demo · not sent"
+                checked={settings.notifyNewOrder}
+                onChange={(checked) => patch({ notifyNewOrder: checked })}
+              />
+              <SettingsToggle
+                label="Low stock alerts"
+                description="Demo · not sent"
+                checked={settings.notifyLowStock}
+                onChange={(checked) => patch({ notifyLowStock: checked })}
+              />
+              <SettingsToggle
+                label="Pre-order release alerts"
+                description="Demo · not sent"
+                checked={settings.notifyPreorderRelease}
+                onChange={(checked) => patch({ notifyPreorderRelease: checked })}
+              />
+            </div>
+            <div className="rounded-xl border border-dashed border-black/[0.1] bg-[#FAFAFB] px-4 py-3 text-xs text-[#86868B]">
+              Email / SMS / WhatsApp delivery is out of scope for this mock HQ. Toggles persist
+              so you can design ops flows against them.
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="danger"
+            active={tab === "danger"}
+            title="Danger zone"
+            description="Irreversible demo actions for this browser’s localStorage."
+            danger
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-black/[0.08] bg-white p-4">
+                <div className="text-sm font-semibold text-[#1D1D1F]">Reset theme knobs</div>
+                <p className="mt-1 text-xs text-[#86868B]">
+                  Restores accent, offer, checkout, and ops defaults. Keeps catalog & orders.
+                </p>
+                <button
+                  type="button"
+                  onClick={resetKnobs}
+                  className="mt-4 inline-flex h-9 items-center rounded-lg border border-black/10 bg-[#F7F7F8] px-4 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+                >
+                  Reset knobs
+                </button>
+              </div>
+              <div className="rounded-xl border border-[#F5C2C0] bg-[#FFF8F8] p-4">
+                <div className="text-sm font-semibold text-[#B42318]">Reset demo data</div>
+                <p className="mt-1 text-xs text-[#912018]/80">
+                  Wipes localStorage and restores seed catalog, orders, codes, and settings.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(true)}
+                  className="mt-4 inline-flex h-9 items-center rounded-lg bg-[#B42318] px-4 text-xs font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B42318]"
+                >
+                  Reset everything
+                </button>
+              </div>
+            </div>
+            <details className="rounded-xl border border-black/[0.06] bg-[#FAFAFB] px-4 py-3 text-xs text-[#86868B]">
+              <summary className="cursor-pointer font-semibold text-[#6E6E73]">
+                Demo auth note
+              </summary>
+              <p className="mt-2 leading-relaxed">
+                Mobiles ending in <span className="ez-mono">0000</span> sign in as admin
+                (e.g. 9876500000). OTP is any 6 digits. Ops data lives in{" "}
+                <span className="ez-mono">ezurr_admin_store</span>.
+              </p>
+            </details>
+          </SettingsSection>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={confirmReset}
+        title="Reset all demo data?"
+        description="This clears localStorage and restores seed catalog, orders, customers, codes, and settings."
+        confirmLabel="Reset demo data"
+        danger
+        onConfirm={resetDemo}
+        onCancel={() => setConfirmReset(false)}
+      />
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`flex flex-col gap-1.5 ${className}`}>
+      <span className={labelClass}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function DemoRolePicker() {
+  const { role, setRole } = useStaffRole();
+  return (
+    <div className="rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-4 py-3">
+      <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+        Demo role (this browser)
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {STAFF_ROLE_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setRole(option.value)}
+            className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${
+              role === option.value
+                ? "bg-[#1D1D1F] text-white"
+                : "border border-black/10 bg-white text-[#424245] hover:bg-white"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] text-[#86868B]">
+        Active: <span className="font-semibold capitalize text-[#1D1D1F]">{role}</span> — gates
+        coupons, refunds, imports, and releases in the UI.
+      </p>
+    </div>
+  );
+}

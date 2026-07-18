@@ -5,7 +5,9 @@ import Image from "next/image";
 import { useState } from "react";
 import { CheckoutHeader } from "@/components/layout/Header";
 import { CountdownBoxes, CountdownSummaryPanel } from "@/components/ui/Countdown";
-import { theme } from "@/lib/theme";
+import { formatReleaseLabel, useLiveThemeSettings } from "@/hooks/useLiveThemeSettings";
+import { createDemoCheckoutOrder } from "@/lib/adminStore";
+import { getSession } from "@/lib/auth";
 
 const PRICE = 5999;
 
@@ -223,11 +225,14 @@ export default function CheckoutPage() {
   const [placed, setPlaced] = useState(false);
   const [method, setMethod] = useState<"prepaid" | "cod">("prepaid");
 
-  const pct = theme.prepaidDiscount;
+  const liveTheme = useLiveThemeSettings();
+  const pct = liveTheme.prepaidDiscount;
+  const releaseLabel = formatReleaseLabel(liveTheme.releaseDate);
   const isPrepaid = method === "prepaid";
   const discount = PRICE * (pct / 100);
   const prepaidTotal = fmt(PRICE - discount);
   const lockedTotal = isPrepaid ? prepaidTotal : fmt(PRICE);
+  const codAvailable = liveTheme.codEnabled !== false;
 
   const goto = (s: number) => {
     setStep(s);
@@ -352,7 +357,7 @@ export default function CheckoutPage() {
                   <div>
                     <h2 className="ez-h3 m-0 font-bold">How would you like to pay?</h2>
                     <p className="mt-2 text-[14px] text-[#6E6E73]">
-                      Choose prepaid for 10% off, or pay at your door on delivery.
+                      Choose prepaid for {pct}% off, or pay at your door on delivery.
                     </p>
                   </div>
 
@@ -365,12 +370,16 @@ export default function CheckoutPage() {
                           sub: `SAVE ${pct}% — PAY ${prepaidTotal}`,
                           subClass: "text-[var(--ez-accent-soft-text)]",
                         },
-                        {
-                          id: "cod" as const,
-                          title: "Cash on delivery",
-                          sub: `PAY ${fmt(PRICE)} AT YOUR DOOR`,
-                          subClass: "text-[#6E6E73]",
-                        },
+                        ...(codAvailable
+                          ? [
+                              {
+                                id: "cod" as const,
+                                title: "Cash on delivery",
+                                sub: `PAY ${fmt(PRICE)} AT YOUR DOOR`,
+                                subClass: "text-[#6E6E73]",
+                              },
+                            ]
+                          : []),
                       ] as const
                     ).map((opt) => {
                       const selected = method === opt.id;
@@ -399,7 +408,7 @@ export default function CheckoutPage() {
 
                   <div className="rounded-2xl border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] px-5 py-4 text-[13.5px] leading-relaxed text-[#424245]">
                     {isPrepaid
-                      ? `Nothing is charged today. Your payment method is authorized now and charged ${prepaidTotal} (with your ${pct}% prepaid discount) when it ships on Nov 19.`
+                      ? `Nothing is charged today. Your payment method is authorized now and charged ${prepaidTotal} (with your ${pct}% prepaid discount) when it ships on ${releaseLabel}.`
                       : `Pay ${fmt(PRICE)} in cash or UPI when it arrives at your door. Available on orders under ₹10,000.`}
                   </div>
 
@@ -457,7 +466,7 @@ export default function CheckoutPage() {
                   <div className="overflow-hidden rounded-2xl border border-[#E8E8ED] bg-[#FAFAFA]">
                     {[
                       ["Item", "Grand Theft Auto VI · PS5 · Standard"],
-                      ["Releases", "Nov 19, 2026"],
+                      ["Releases", releaseLabel],
                       ["Ships to", "Your entered address"],
                       ["Mobile", "+91 · Your entered number"],
                       [
@@ -490,7 +499,7 @@ export default function CheckoutPage() {
                       Price locked at {lockedTotal}
                     </span>
                     <p className="mt-1.5 mb-0 text-[13.5px] leading-relaxed text-[#424245]">
-                      If our price drops before Nov 19, you pay the lower price —
+                      If our price drops before {releaseLabel}, you pay the lower price —
                       refunded automatically.
                     </p>
                   </div>
@@ -499,6 +508,14 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        const session = getSession();
+                        createDemoCheckoutOrder({
+                          name: session?.name ?? "Guest Player",
+                          mobile: session?.mobile ?? "9876500001",
+                          city: "Bengaluru",
+                          payment: isPrepaid ? "Prepaid" : "COD",
+                          total: lockedTotal,
+                        });
                         setPlaced(true);
                         window.scrollTo(0, 0);
                       }}
