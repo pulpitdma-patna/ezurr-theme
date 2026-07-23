@@ -5,16 +5,20 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import {
+  clearSession,
   createSession,
   formatMobileDisplay,
   getSession,
   isAdminSession,
+  isCredentialedSession,
   isValidMobile,
   isValidOtp,
   maskMobile,
   normalizeMobile,
   setSession,
+  type AuthSession,
 } from "@/lib/auth";
+import { api, isApiEnabled, setApiToken } from "@/lib/apiClient";
 
 const RESEND_SECONDS = 30;
 
@@ -164,23 +168,43 @@ function AuthPageContent() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const [existingSession, setExistingSession] = useState<AuthSession | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
 
-  function destination(session: ReturnType<typeof createSession>) {
+  function destination(session: AuthSession) {
     if (isAdminSession(session)) return "/admin";
     return nextPath && nextPath.startsWith("/account") ? nextPath : "/account";
   }
 
   useEffect(() => {
-    const session = getSession();
-    if (!session) return;
-    router.replace(destination(session));
-  }, [router, nextPath]);
+    function sync() {
+      const session = getSession();
+      setExistingSession(isCredentialedSession(session) ? session : null);
+      setSessionReady(true);
+    }
+    sync();
+    window.addEventListener("storage", sync);
+    window.addEventListener("ezurr-auth-change", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("ezurr-auth-change", sync);
+    };
+  }, []);
 
   useEffect(() => {
     if (resendIn <= 0) return;
     const id = window.setTimeout(() => setResendIn((s) => s - 1), 1000);
     return () => clearTimeout(id);
   }, [resendIn]);
+
+  function signOutExisting() {
+    clearSession();
+    setExistingSession(null);
+    setStep("mobile");
+    setMobile("");
+    setOtp("");
+    setError("");
+  }
 
   async function sendOtp(nextMobile = mobile) {
     const digits = normalizeMobile(nextMobile);
@@ -191,12 +215,25 @@ function AuthPageContent() {
 
     setError("");
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    setMobile(digits);
-    setOtp("");
-    setStep("otp");
-    setResendIn(RESEND_SECONDS);
-    setLoading(false);
+    try {
+      if (isApiEnabled()) {
+        const res = await api.sendOtp(digits);
+        if (res.devCode) {
+          // Local Laravel returns fixed OTP for demos
+          console.info("[ezurr-api] dev OTP", res.devCode);
+        }
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+      }
+      setMobile(digits);
+      setOtp("");
+      setStep("otp");
+      setResendIn(RESEND_SECONDS);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not send OTP.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function verifyOtp() {
@@ -207,11 +244,34 @@ function AuthPageContent() {
 
     setError("");
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    const session = createSession(mobile);
-    setSession(session);
-    router.push(destination(session));
+    try {
+      if (isApiEnabled()) {
+        const res = await api.verifyOtp(mobile, otp);
+        setApiToken(res.token);
+        const session: AuthSession = {
+          mobile: res.user.mobile,
+          name: res.user.name,
+          initials: res.user.role === "admin" ? "AD" : "EZ",
+          signedInAt: new Date().toISOString(),
+          role: res.user.role === "admin" ? "admin" : "customer",
+        };
+        setSession(session);
+        router.push(destination(session));
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        const session = createSession(mobile);
+        setSession(session);
+        router.push(destination(session));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Invalid OTP.");
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const continueHref = existingSession ? destination(existingSession) : "/account";
+  const continueLabel = existingSession && isAdminSession(existingSession) ? "Continue to admin" : "Continue to account";
 
   return (
     <main className="auth-page min-h-[100dvh] bg-[#f5f6fa] lg:grid lg:grid-cols-[minmax(0,1.12fr)_minmax(440px,.88fr)]">
@@ -224,6 +284,47 @@ function AuthPageContent() {
           <Link href="/" className="mb-12 inline-flex items-center gap-2 ez-mono text-[10px] font-bold uppercase tracking-[.15em] text-[#777c89] transition-colors hover:!text-[#17191f]">
             <span aria-hidden="true">←</span> Storefront
           </Link>
+
+          {!sessionReady ? (
+            <div className="ez-mono text-xs uppercase tracking-[0.16em] text-[#86868B] animate-pulse">
+              Checking session…
+            </div>
+          ) : existingSession ? (
+            <>
+              <div className="mb-9">
+                <div className="flex items-center gap-3">
+                  <span className="ez-mono text-[10px] font-bold uppercase tracking-[.18em] text-[var(--ez-accent-text)]">
+                    Signed in
+                  </span>
+                  <span className="h-px flex-1 bg-[#e0e2e8]" />
+                </div>
+                <h2 className="mt-7 text-[clamp(2.3rem,3.4vw,3.25rem)] font-semibold leading-[.92] tracking-[-0.07em] text-[#17191f]">
+                  You&apos;re already signed in
+                </h2>
+                <p className="mt-3.5 text-sm leading-relaxed text-[#666b78] sm:text-[15px]">
+                  Continue as {existingSession.name} ({formatMobileDisplay(existingSession.mobile)})
+                  {isAdminSession(existingSession) ? " · Admin" : ""}, or sign out to use a different number.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <Link
+                  href={continueHref}
+                  className="auth-submit inline-flex min-h-14 items-center justify-center gap-3 rounded-full bg-[#171920] px-6 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,22,30,.16)] transition hover:-translate-y-0.5 hover:bg-[var(--ez-accent)] hover:text-white"
+                >
+                  {continueLabel} <span aria-hidden="true">→</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={signOutExisting}
+                  className="inline-flex min-h-12 items-center justify-center rounded-full border border-[#d9dce4] bg-white px-6 text-sm font-semibold text-[#555b68] transition hover:border-[#babfca] hover:text-[#17191f]"
+                >
+                  Sign out
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
             <div className="mb-9">
               <div className="flex items-center gap-3">
                 <span className="ez-mono text-[10px] font-bold uppercase tracking-[.18em] text-[var(--ez-accent-text)]">
@@ -358,6 +459,8 @@ function AuthPageContent() {
             <p className="mt-10 text-center text-[11px] leading-relaxed text-[#858a96]">
               By continuing, you agree to receive a one-time sign-in SMS from Ezurr.
             </p>
+            </>
+          )}
         </div>
       </section>
     </main>

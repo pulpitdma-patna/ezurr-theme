@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
@@ -15,13 +15,17 @@ import {
   deleteCategory,
   upsertCategory,
 } from "@/lib/adminStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
 
 type DrawerMode = "add" | "edit" | null;
 
 export default function AdminCategoriesPage() {
   const store = useAdminStore();
+  const apiOn = isApiEnabled();
   const [query, setQuery] = useState("");
   const [page, setPage] = usePagedList(query);
+  const [apiCategories, setApiCategories] = useState<AdminCategoryRecord[]>([]);
+  const [listError, setListError] = useState<string | null>(null);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [editing, setEditing] = useState<AdminCategoryRecord | null>(null);
   const [label, setLabel] = useState("");
@@ -29,12 +33,38 @@ export default function AdminCategoriesPage() {
   const [key, setKey] = useState("");
   const [active, setActive] = useState(true);
 
+  useEffect(() => {
+    if (!apiOn) return;
+    void api
+      .adminCategories()
+      .then((res) => {
+        const rows = Array.isArray(res.data) ? res.data : [];
+        setApiCategories(
+          rows.map((c) => ({
+            id: c.id,
+            key: c.key,
+            label: c.label,
+            description: c.description || "",
+            active: c.active,
+          })),
+        );
+        setListError(null);
+      })
+      .catch((err: Error) => {
+        setApiCategories([]);
+        setListError(err.message || "Could not load categories");
+      });
+  }, [apiOn]);
+
+  const categorySource = apiOn ? apiCategories : store.categories;
+  const productSource = apiOn ? [] : store.products;
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return store.categories
+    return categorySource
       .map((cat) => ({
         ...cat,
-        productCount: store.products.filter((p) => p.category === cat.key).length,
+        productCount: productSource.filter((p) => p.category === cat.key).length,
       }))
       .filter((cat) => {
         if (!q) return true;
@@ -45,7 +75,7 @@ export default function AdminCategoriesPage() {
         );
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [store.categories, store.products, query]);
+  }, [categorySource, productSource, query]);
 
   function openAdd() {
     setEditing(null);
@@ -73,6 +103,38 @@ export default function AdminCategoriesPage() {
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
     if (!label.trim()) return;
+    if (apiOn) {
+      const slug = (key || label).toLowerCase().replace(/\s+/g, "-");
+      void api
+        .upsertCategory({
+          key: drawerMode === "edit" ? editing?.key : undefined,
+          slug,
+          name: label.trim(),
+          description,
+          active,
+        })
+        .then((saved) => {
+          const record: AdminCategoryRecord = {
+            id: saved.id,
+            key: saved.key,
+            label: saved.label,
+            description: saved.description || "",
+            active: saved.active,
+          };
+          setApiCategories((prev) => {
+            const idx = prev.findIndex((c) => c.key === record.key);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = record;
+              return next;
+            }
+            return [...prev, record];
+          });
+          closeDrawer();
+        })
+        .catch(() => setListError("Could not save category"));
+      return;
+    }
     if (drawerMode === "add") {
       createCategory({ label, description, key: key || undefined });
     } else if (editing) {

@@ -28,7 +28,42 @@ import { useAutoBanner } from "@/hooks/useAutoBanner";
 import { useListSavedViews } from "@/hooks/useListSavedViews";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 import { adjustStock, publishProducts, unpublishProducts, upsertProduct } from "@/lib/adminStore";
+import { apiCreateProduct, apiUpdateProduct, api, isApiEnabled } from "@/lib/apiClient";
+import { mapApiProductToAdminRow } from "@/lib/apiMappers";
 import { useSearchParams } from "next/navigation";
+
+function priceToNumber(value: string): number {
+  const n = Number(String(value).replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? Math.round(n) : 0;
+}
+
+function productApiPayload(input: {
+  key: string;
+  name: string;
+  category: string;
+  brand: string;
+  price: string;
+  strike: string;
+  stock: number;
+  digital: boolean;
+  status: string;
+  image: string;
+}) {
+  const key = input.key.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80);
+  return {
+    key,
+    slug: key.slice(0, 120),
+    title: input.name,
+    category_slug: input.category,
+    brand_slug: input.brand.toLowerCase().replace(/\s+/g, "-") || "ezurr",
+    price: priceToNumber(input.price),
+    mrp: priceToNumber(input.strike) || null,
+    stock: input.stock,
+    fulfillment_type: input.digital ? "digital" : "physical",
+    image_url: input.image || null,
+    active: input.status === "active" || input.status === "published",
+  };
+}
 
 type DrawerMode = "view" | "edit" | "add" | null;
 
@@ -87,17 +122,47 @@ export default function AdminProductsPage() {
   const [toast, setToast] = useAutoBanner();
   const [openedFromNewParam, setOpenedFromNewParam] = useState(false);
   const [listLoading, setListLoading] = useState(true);
+  const [apiProducts, setApiProducts] = useState<AdminCatalogRow[]>([]);
+  const [listError, setListError] = useState<string | null>(null);
   const [viewName, setViewName] = useState("");
   const { views, saveView, removeView } = useListSavedViews("products");
 
   useEffect(() => {
-    const t = window.setTimeout(() => setListLoading(false), 220);
-    return () => window.clearTimeout(t);
+    if (!isApiEnabled()) {
+      const t = window.setTimeout(() => setListLoading(false), 220);
+      return () => window.clearTimeout(t);
+    }
+    let cancelled = false;
+    setListLoading(true);
+    void api
+      .adminProducts({ page: 1 })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = Array.isArray(res.data) ? res.data : [];
+        setApiProducts(rows.map((p, i) => mapApiProductToAdminRow(p, i)));
+        setListError(null);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setApiProducts([]);
+        setListError(err.message || "Could not load products");
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const activeProduct = useMemo(
-    () => (activeKey ? (store.products.find((p) => p.key === activeKey) ?? null) : null),
-    [store.products, activeKey],
+    () =>
+      activeKey
+        ? (isApiEnabled()
+            ? apiProducts.find((p) => p.key === activeKey)
+            : store.products.find((p) => p.key === activeKey)) ?? null
+        : null,
+    [store.products, apiProducts, activeKey],
   );
 
   const wantsNew = searchParams.get("new") === "1";
@@ -131,9 +196,11 @@ export default function AdminProductsPage() {
 
   const brandFilter = brand !== "all" && brandOptions.includes(brand) ? brand : "all";
 
+  const productSource = isApiEnabled() ? apiProducts : store.products;
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = store.products.filter((row) => {
+    let list = productSource.filter((row) => {
       if (category !== "all" && row.category !== category) return false;
       if (brandFilter !== "all" && row.brand !== brandFilter) return false;
       if (!q) return true;
@@ -153,7 +220,7 @@ export default function AdminProductsPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [store.products, category, brandFilter, query, sortKey, sortDir]);
+  }, [productSource, category, brandFilter, query, sortKey, sortDir]);
 
   function openView(row: AdminCatalogRow) {
     setActiveKey(row.key);
@@ -206,6 +273,22 @@ export default function AdminProductsPage() {
         image: form.image,
         releaseDate: form.releaseDate,
       });
+      if (isApiEnabled()) {
+        void apiCreateProduct(
+          productApiPayload({
+            key,
+            name: form.name,
+            category: form.category,
+            brand: form.brand,
+            price: form.price,
+            strike: form.strike,
+            stock: Number(form.stock) || 0,
+            digital: form.digital,
+            status: form.status,
+            image: form.image,
+          }),
+        ).catch(() => undefined);
+      }
       setToast("Product created");
       window.setTimeout(closeDrawer, 500);
       return;
@@ -232,6 +315,23 @@ export default function AdminProductsPage() {
     });
     if (delta !== 0) {
       adjustStock(activeProduct.key, delta, "Product edit stock");
+    }
+    if (isApiEnabled()) {
+      void apiUpdateProduct(
+        activeProduct.key.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80),
+        productApiPayload({
+          key: activeProduct.key,
+          name: form.name,
+          category: form.category,
+          brand: form.brand,
+          price: form.price,
+          strike: form.strike,
+          stock: nextStock,
+          digital: form.digital,
+          status: form.status,
+          image: form.image,
+        }),
+      ).catch(() => undefined);
     }
     setToast("Product saved");
     window.setTimeout(closeDrawer, 500);

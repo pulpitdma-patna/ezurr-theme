@@ -3,13 +3,49 @@ import consolesData from "@/data/consoles.json";
 import gameCardsData from "@/data/gameCards.json";
 import gamesData from "@/data/games.json";
 import preordersData from "@/data/preorders.json";
+import { resolveProductId, slugifyProductKey } from "@/lib/productKey";
 import type { CatalogProduct, GameCardProduct } from "@/lib/types";
 
-export const games = gamesData as CatalogProduct[];
-export const preorders = preordersData as CatalogProduct[];
-export const consoles = consolesData as CatalogProduct[];
-export const accessories = accessoriesData as CatalogProduct[];
-export const gameCards = gameCardsData as GameCardProduct[];
+function withCatalogIds(products: CatalogProduct[]): CatalogProduct[] {
+  return products.map((product, index) => ({
+    ...product,
+    id: resolveProductId(product, index),
+  }));
+}
+
+function withGameCardIds(cards: GameCardProduct[]): GameCardProduct[] {
+  return cards.map((card, index) => ({
+    ...card,
+    id:
+      card.id?.trim() ||
+      slugifyProductKey(card.name || card.title || "") ||
+      `card-${index}`,
+  }));
+}
+
+export const games = withCatalogIds(gamesData as CatalogProduct[]);
+export const preorders = withCatalogIds(preordersData as CatalogProduct[]);
+export const consoles = withCatalogIds(consolesData as CatalogProduct[]);
+export const accessories = withCatalogIds(accessoriesData as CatalogProduct[]);
+export const gameCards = withGameCardIds(gameCardsData as GameCardProduct[]);
+
+/** Flat static catalog for PDP fallback when API is off or a key is missing. */
+export const staticCatalog: CatalogProduct[] = [
+  ...preorders,
+  ...games,
+  ...consoles,
+  ...accessories,
+];
+
+export function findStaticCatalogProduct(key: string): CatalogProduct | undefined {
+  const needle = key.trim().toLowerCase();
+  if (!needle) return undefined;
+  return staticCatalog.find((product) => {
+    const id = product.id?.toLowerCase();
+    if (id && id === needle) return true;
+    return slugifyProductKey(product.name) === needle;
+  });
+}
 
 export const trendingGames = games.filter((product) => !product.brand.includes("Pre-order")).slice(0, 10);
 export const featuredPreorders = preorders.slice(0, 10);

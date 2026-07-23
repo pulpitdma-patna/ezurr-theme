@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Space_Mono } from "next/font/google";
 import "./globals.css";
+import { ApiAuthBoot } from "@/components/ApiAuthBoot";
 import { ThemeAccent } from "@/components/ThemeAccent";
 
 const geist = Geist({
@@ -37,6 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geist.variable} ${spaceMono.variable} min-h-screen antialiased`}>
+        <ApiAuthBoot />
         <ThemeAccent />
         {children}
       </body>

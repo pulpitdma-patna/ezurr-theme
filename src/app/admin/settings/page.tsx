@@ -19,6 +19,8 @@ import { formatReleaseLabel } from "@/hooks/useLiveThemeSettings";
 import { useStaffRole } from "@/hooks/useStaffRole";
 import { STAFF_ROLE_OPTIONS } from "@/lib/adminPermissions";
 import { resetAdminStore, updateSettings } from "@/lib/adminStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
+import { invalidateApiSettings } from "@/hooks/useApiSettings";
 
 const fieldClass =
   "w-full rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 py-2.5 text-sm outline-none transition hover:border-black/[0.12] focus:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
@@ -86,8 +88,39 @@ export default function AdminSettingsPage() {
     return () => document.removeEventListener("keydown", onKey);
   }, [tab, selectTab]);
 
+  useEffect(() => {
+    if (!isApiEnabled()) return;
+    void api.adminSettings().then((remote) => {
+      updateSettings({
+        codEnabled: remote.codEnabled as boolean | undefined,
+        codLimit: remote.codLimit as number | undefined,
+        prepaidDiscount: remote.prepaidDiscount as number | undefined,
+        freeShippingMin: remote.freeShippingMin as number | undefined,
+        releaseDate: (remote.releaseDate as string | undefined) ?? undefined,
+        accentHue: remote.accentHue as number | undefined,
+        showOffer: remote.showOffer as boolean | undefined,
+      });
+      invalidateApiSettings();
+    }).catch(() => {
+      /* keep local */
+    });
+  }, []);
+
   function patch(partial: Partial<AdminSettings>, toast = "Saved just now") {
     updateSettings(partial);
+    if (isApiEnabled()) {
+      const payload: Record<string, unknown> = {};
+      if ("codEnabled" in partial) payload.codEnabled = partial.codEnabled;
+      if ("codLimit" in partial) payload.codLimit = partial.codLimit;
+      if ("prepaidDiscount" in partial) payload.prepaidDiscount = partial.prepaidDiscount;
+      if ("freeShippingMin" in partial) payload.freeShippingMin = partial.freeShippingMin;
+      if ("releaseDate" in partial) payload.releaseDate = partial.releaseDate;
+      if ("accentHue" in partial) payload.accentHue = partial.accentHue;
+      if ("showOffer" in partial) payload.showOffer = partial.showOffer;
+      if (Object.keys(payload).length) {
+        void api.updateAdminSettings(payload).then(() => invalidateApiSettings()).catch(() => undefined);
+      }
+    }
     setMsg(toast);
   }
 

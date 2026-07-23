@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { CheckoutRuleBuilder } from "@/components/admin/CheckoutRuleBuilder";
@@ -14,6 +14,7 @@ import {
   toggleCheckoutRule,
   upsertCheckoutRule,
 } from "@/lib/adminStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
 import type { AdminCheckoutRule } from "@/lib/checkoutRules";
 import { mockExperimentStats, resolveCheckoutPolicy } from "@/lib/checkoutRules";
 import { formatInr } from "@/data/admin";
@@ -64,6 +65,20 @@ export default function AdminCheckoutRulesPage() {
   const [editing, setEditing] = useState<AdminCheckoutRule | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useAutoBanner(2600);
+  const [apiSync, setApiSync] = useState<"off" | "ok" | "err">("off");
+
+  useEffect(() => {
+    if (!isApiEnabled()) return;
+    void api
+      .checkoutRules()
+      .then((res) => {
+        for (const rule of res.data ?? []) {
+          upsertCheckoutRule(rule as AdminCheckoutRule);
+        }
+        setApiSync("ok");
+      })
+      .catch(() => setApiSync("err"));
+  }, []);
 
   const rules = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -87,9 +102,19 @@ export default function AdminCheckoutRulesPage() {
     fulfillmentType: "preorder",
   });
 
-  function saveRule(rule: AdminCheckoutRule) {
+  async function saveRule(rule: AdminCheckoutRule) {
     const id = rule.id || `cr-${Date.now()}`;
-    upsertCheckoutRule({ ...rule, id });
+    const next = { ...rule, id };
+    upsertCheckoutRule(next);
+    if (isApiEnabled()) {
+      try {
+        const saved = await api.upsertCheckoutRule(next);
+        upsertCheckoutRule(saved as AdminCheckoutRule);
+        setApiSync("ok");
+      } catch {
+        setApiSync("err");
+      }
+    }
     setEditing(null);
     setToast(rule.id ? "Rule updated" : "Rule created");
   }
@@ -107,6 +132,11 @@ export default function AdminCheckoutRulesPage() {
                 className="inline-flex h-8 items-center rounded-full border border-[#A6D5B0] bg-[#EAF6ED] px-3 text-[11px] font-semibold text-[#2D6B3C]"
               >
                 {toast}
+              </span>
+            ) : null}
+            {apiSync === "ok" ? (
+              <span className="inline-flex h-8 items-center rounded-full border border-black/[0.08] bg-white px-3 text-[11px] font-semibold text-[#6E6E73]">
+                Laravel synced
               </span>
             ) : null}
             <Link
@@ -307,6 +337,9 @@ export default function AdminCheckoutRulesPage() {
         onConfirm={() => {
           if (deleteId) {
             deleteCheckoutRule(deleteId);
+            if (isApiEnabled()) {
+              void api.deleteCheckoutRule(deleteId).catch(() => setApiSync("err"));
+            }
             setToast("Rule deleted");
           }
           setDeleteId(null);

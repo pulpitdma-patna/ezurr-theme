@@ -9,6 +9,7 @@ import { ExportIcon, EyeIcon, IconButton } from "@/components/admin/IconButton";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import {
+  formatInr,
   parsePrice,
   type AdminOrder,
 } from "@/data/admin";
@@ -17,6 +18,8 @@ import { useListSavedViews } from "@/hooks/useListSavedViews";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 import { formatMobileDisplay } from "@/lib/auth";
 import { bulkUpdateOrderStatus } from "@/lib/adminStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
+import { mapApiOrderToAdmin } from "@/lib/apiMappers";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 
@@ -128,9 +131,34 @@ export default function AdminOrdersPage() {
   const { views, saveView, removeView } = useListSavedViews("orders");
   const toast = useAdminToast();
   const [listLoading, setListLoading] = useState(true);
+  const [apiOrders, setApiOrders] = useState<AdminOrder[]>([]);
+  const [listError, setListError] = useState<string | null>(null);
   useEffect(() => {
-    const t = window.setTimeout(() => setListLoading(false), 220);
-    return () => window.clearTimeout(t);
+    if (!isApiEnabled()) {
+      const t = window.setTimeout(() => setListLoading(false), 220);
+      return () => window.clearTimeout(t);
+    }
+    let cancelled = false;
+    setListLoading(true);
+    void api
+      .adminOrders({ page: 1 })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = Array.isArray(res.data) ? res.data : [];
+        setApiOrders(rows.map((raw) => mapApiOrderToAdmin(raw)));
+        setListError(null);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setApiOrders([]);
+        setListError(err.message || "Could not load orders");
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
   const [page, setPage] = usePagedList(
     `${status}|${payment}|${dateRange}|${dateFrom}|${dateTo}|${query}|${sortKey}|${sortDir}|${pageSize}`,
@@ -138,7 +166,8 @@ export default function AdminOrdersPage() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = store.orders.filter((order) => {
+    const source = isApiEnabled() ? apiOrders : store.orders;
+    let list = source.filter((order) => {
       if (status !== "all" && order.status !== status) return false;
       if (payment !== "all" && order.payment !== payment) return false;
       if (!inDateRange(order.placedAt, dateRange, dateFrom, dateTo)) return false;
@@ -161,6 +190,7 @@ export default function AdminOrdersPage() {
     });
     return list;
   }, [
+    apiOrders,
     store.orders,
     status,
     payment,
@@ -517,13 +547,29 @@ export default function AdminOrdersPage() {
         onConfirm={() => {
           if (!bulkConfirm) return;
           const count = selectedKeys.length;
-          bulkUpdateOrderStatus(selectedKeys, bulkConfirm);
+          if (isApiEnabled()) {
+            void Promise.all(
+              selectedKeys.map((id) =>
+                api.patchOrderStatus(id, { status: bulkConfirm }),
+              ),
+            )
+              .then(() => {
+                setApiOrders((prev) =>
+                  prev.map((o) =>
+                    selectedKeys.includes(o.id) ? { ...o, status: bulkConfirm } : o,
+                  ),
+                );
+                toast.push(`Marked ${count} order(s) ${bulkConfirm}`, "success");
+              })
+              .catch(() => {
+                toast.push("Could not update orders via API", "danger");
+              });
+          } else {
+            bulkUpdateOrderStatus(selectedKeys, bulkConfirm);
+            toast.push(`Marked ${count} order(s) ${bulkConfirm}`, "success");
+          }
           setSelectedKeys([]);
           setBulkConfirm(null);
-          toast.push(
-            `Marked ${count} order(s) ${bulkConfirm}`,
-            "success",
-          );
         }}
       />
     </div>

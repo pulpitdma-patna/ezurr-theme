@@ -2,12 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { SectionHeading } from "@/components/home/SectionHeading";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuthSession } from "@/hooks/useAuthSession";
-import { maskDigitalCode, orderStatusLabels } from "@/data/admin";
+import { orderStatusLabels, type AdminOrder } from "@/data/admin";
 import { normalizeMobile } from "@/lib/auth";
+import { api, isApiEnabled } from "@/lib/apiClient";
+import { mapApiOrderToAdmin } from "@/lib/apiMappers";
 import { CountdownInline } from "@/components/ui/Countdown";
 
 export default function AccountOrderDetailPage({
@@ -18,9 +20,38 @@ export default function AccountOrderDetailPage({
   const { id } = use(params);
   const { session } = useAuthSession();
   const store = useAdminStore();
-  const [toast, setToast] = useState<string | null>(null);
+  const apiOn = isApiEnabled();
+  const [apiOrder, setApiOrder] = useState<AdminOrder | null>(null);
+  const [loading, setLoading] = useState(apiOn);
+  const [error, setError] = useState<string | null>(null);
 
-  const order = useMemo(() => {
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    setLoading(true);
+    void api
+      .accountOrder(id)
+      .then((raw) => {
+        if (!cancelled) {
+          setApiOrder(mapApiOrderToAdmin(raw));
+          setError(null);
+        }
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setApiOrder(null);
+          setError(err.message || "Order not found");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn, id, session?.mobile]);
+
+  const localOrder = useMemo(() => {
     const digits = normalizeMobile(session?.mobile ?? "");
     const found = store.orders.find((o) => o.id === id);
     if (!found) return null;
@@ -28,10 +59,27 @@ export default function AccountOrderDetailPage({
     return found;
   }, [store.orders, id, session?.mobile]);
 
-  const codes = useMemo(
-    () => store.digitalCodes.filter((c) => c.assignedOrderId === id),
-    [store.digitalCodes, id],
-  );
+  const order = apiOn ? apiOrder : localOrder;
+
+  if (apiOn && loading) {
+    return <p className="text-sm text-[#86868B]">Loading order…</p>;
+  }
+
+  if (apiOn && (error || !order)) {
+    return (
+      <div>
+        <SectionHeading titleAs="h1" eyebrow="Orders" title="Order not found." />
+        {error ? (
+          <p className="mb-4 text-sm text-[#B42318]" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <Link href="/account/orders" className="text-sm font-semibold text-[#424245]">
+          ← Back to orders
+        </Link>
+      </div>
+    );
+  }
 
   if (!order) {
     return (
@@ -57,12 +105,6 @@ export default function AccountOrderDetailPage({
         })} · ${order.payment}`}
       />
 
-      {toast ? (
-        <p className="mb-4 text-sm font-medium text-[#2D6B3C]" role="status">
-          {toast}
-        </p>
-      ) : null}
-
       {order.status === "preorder" ? (
         <div className="mb-5 rounded-2xl border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] px-4 py-3 text-sm">
           Price locked at <span className="font-semibold">{order.total}</span>. Releases in{" "}
@@ -81,84 +123,35 @@ export default function AccountOrderDetailPage({
                     <Image src={item.image} alt="" fill className="object-contain p-1" sizes="64px" />
                   ) : null}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold">{item.name}</div>
-                  <div className="ez-mono mt-0.5 text-[10px] text-[#86868B]">
-                    Qty {item.qty} · {item.fulfillmentType}
+                <div>
+                  <div className="text-sm font-semibold">{item.name}</div>
+                  <div className="text-xs text-[#86868B]">
+                    {item.qty} × {item.price}
                   </div>
                 </div>
-                <div className="ez-mono text-sm font-semibold">{item.price}</div>
               </li>
             ))}
           </ul>
         </section>
 
-        <aside className="space-y-3">
-          <section className="rounded-2xl border border-black/[0.07] p-5">
-            <h2 className="text-sm font-semibold">Shipping</h2>
-            <p className="mt-2 text-sm text-[#6E6E73]">
-              {order.addressLine1 ?? order.customerName}
-              <br />
-              {order.city} {order.pincode ?? ""}
-            </p>
-            {order.tracking ? (
-              <p className="ez-mono mt-3 text-[11px] text-[#424245]">AWB {order.tracking}</p>
-            ) : (
-              <p className="mt-3 text-xs text-[#86868B]">Tracking assigned when the order ships.</p>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-black/[0.07] p-5">
-            <h2 className="text-sm font-semibold">Timeline</h2>
-            <ol className="mt-3 space-y-2">
-              {order.timeline.map((event) => (
-                <li key={event.id} className="text-sm">
-                  <div className="font-semibold">{event.label}</div>
-                  <div className="ez-mono text-[10px] text-[#86868B]">
-                    {new Date(event.at).toLocaleString("en-IN")}
-                  </div>
-                  {event.detail ? (
-                    <div className="mt-0.5 text-xs text-[#6E6E73]">{event.detail}</div>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <button
-            type="button"
-            onClick={() => {
-              setToast("Invoice PDF is a demo stub — no file downloaded");
-              window.setTimeout(() => setToast(null), 2500);
-            }}
-            className="h-10 w-full rounded-full border border-black/10 text-sm font-semibold"
-          >
-            Download invoice
-          </button>
-        </aside>
+        <section className="rounded-2xl border border-black/[0.07] bg-white p-5">
+          <h2 className="text-sm font-semibold">Shipping</h2>
+          <p className="mt-2 text-sm text-[#424245]">
+            {order.addressLine1 ? `${order.addressLine1}, ` : ""}
+            {order.city}
+            {order.pincode ? ` · ${order.pincode}` : ""}
+          </p>
+          <div className="mt-4 border-t border-black/[0.06] pt-4">
+            <div className="flex justify-between text-sm">
+              <span>Total</span>
+              <span className="font-semibold">{order.total}</span>
+            </div>
+          </div>
+        </section>
       </div>
 
-      {codes.length > 0 ? (
-        <section className="mt-5 rounded-2xl border border-black/[0.07] p-5">
-          <h2 className="text-sm font-semibold">Digital codes on this order</h2>
-          <ul className="mt-3 space-y-2">
-            {codes.map((code) => (
-              <li
-                key={code.id}
-                className="flex items-center justify-between gap-3 rounded-xl bg-[#F7F7F8] px-3 py-2"
-              >
-                <span className="ez-mono text-xs">{maskDigitalCode(code.code)}</span>
-                <Link href="/account/digital" className="text-xs font-semibold">
-                  Open vault →
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <Link href="/account/orders" className="mt-6 inline-flex text-sm font-semibold text-[#424245]">
-        ← All orders
+      <Link href="/account/orders" className="mt-6 inline-block text-sm font-semibold text-[#424245]">
+        ← Back to orders
       </Link>
     </div>
   );

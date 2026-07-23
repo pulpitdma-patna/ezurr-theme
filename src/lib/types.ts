@@ -1,4 +1,6 @@
 export type CatalogProduct = {
+  /** Stable id when from API (product key/slug) */
+  id?: string;
   img: string;
   brand: string;
   name: string;
@@ -7,6 +9,8 @@ export type CatalogProduct = {
 };
 
 export type GameCardProduct = {
+  /** Stable id when from API (product key/slug) */
+  id?: string;
   title: string;
   tag: string;
   sub: string;

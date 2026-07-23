@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
@@ -11,31 +11,53 @@ import type { AdminBrandRecord } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { usePagedList } from "@/hooks/useListQuery";
 import { createBrand, deleteBrand, upsertBrand } from "@/lib/adminStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
 
 type DrawerMode = "add" | "edit" | null;
 
 export default function AdminBrandsPage() {
   const store = useAdminStore();
+  const apiOn = isApiEnabled();
   const [query, setQuery] = useState("");
   const [page, setPage] = usePagedList(query);
+  const [apiBrands, setApiBrands] = useState<(AdminBrandRecord & { slug: string })[]>([]);
+  const [listError, setListError] = useState<string | null>(null);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
-  const [editing, setEditing] = useState<AdminBrandRecord | null>(null);
+  const [editing, setEditing] = useState<(AdminBrandRecord & { slug?: string }) | null>(null);
   const [name, setName] = useState("");
   const [active, setActive] = useState(true);
 
+  useEffect(() => {
+    if (!apiOn) return;
+    void api
+      .adminBrands()
+      .then((res) => {
+        const rows = Array.isArray(res.data) ? res.data : [];
+        setApiBrands(rows.map((b) => ({ id: b.id, slug: b.slug, name: b.name, active: b.active })));
+        setListError(null);
+      })
+      .catch((err: Error) => {
+        setApiBrands([]);
+        setListError(err.message || "Could not load brands");
+      });
+  }, [apiOn]);
+
+  const brandSource = apiOn ? apiBrands : store.brands;
+  const productSource = apiOn ? [] : store.products;
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return store.brands
+    return brandSource
       .map((brand) => ({
         ...brand,
-        productCount: store.products.filter((p) => p.brand === brand.name).length,
+        productCount: productSource.filter((p) => p.brand === brand.name).length,
       }))
       .filter((brand) => {
         if (!q) return true;
         return brand.name.toLowerCase().includes(q);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [store.brands, store.products, query]);
+  }, [brandSource, productSource, query]);
 
   function openAdd() {
     setEditing(null);
@@ -44,7 +66,7 @@ export default function AdminBrandsPage() {
     setDrawerMode("add");
   }
 
-  function openEdit(row: AdminBrandRecord) {
+  function openEdit(row: AdminBrandRecord & { slug?: string }) {
     setEditing(row);
     setName(row.name);
     setActive(row.active);
@@ -59,6 +81,35 @@ export default function AdminBrandsPage() {
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
     if (!name.trim()) return;
+    if (apiOn) {
+      const slug = name.trim().toLowerCase().replace(/\s+/g, "-");
+      void api
+        .upsertBrand({
+          key: drawerMode === "edit" ? editing?.slug : undefined,
+          name: name.trim(),
+          active,
+        })
+        .then((saved) => {
+          const record = {
+            id: saved.id,
+            slug: saved.slug,
+            name: saved.name,
+            active: saved.active,
+          };
+          setApiBrands((prev) => {
+            const idx = prev.findIndex((b) => b.id === record.id || b.name === record.name);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = record;
+              return next;
+            }
+            return [...prev, record];
+          });
+          closeDrawer();
+        })
+        .catch(() => setListError("Could not save brand"));
+      return;
+    }
     if (drawerMode === "add") {
       createBrand(name);
     } else if (editing) {

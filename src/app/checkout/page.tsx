@@ -3,17 +3,20 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckoutHeader } from "@/components/layout/Header";
 import { CountdownBoxes, CountdownSummaryPanel } from "@/components/ui/Countdown";
 import { formatInr } from "@/data/admin";
 import { formatReleaseLabel, useLiveThemeSettings } from "@/hooks/useLiveThemeSettings";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { createDemoCheckoutOrder } from "@/lib/adminStore";
+import { api, isApiEnabled, type ApiProduct } from "@/lib/apiClient";
 import {
   resolveCheckoutPolicy,
   type CheckoutCarrierId,
   type CheckoutFieldKey,
   type CheckoutGateway,
+  type CheckoutPolicy,
 } from "@/lib/checkoutRules";
 import {
   formatMobileDisplay,
@@ -455,9 +458,16 @@ function MobileSummarySheet({
 }
 
 export default function CheckoutPage() {
+  const searchParams = useSearchParams();
+  const productKey = searchParams.get("key") || "gta-vi-preorder";
+  const apiOn = isApiEnabled();
+
   const [step, setStep] = useState(1);
   const [placed, setPlaced] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [checkoutProduct, setCheckoutProduct] = useState<ApiProduct | null>(null);
   const [method, setMethod] = useState<"prepaid" | "cod">("prepaid");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [session, setSessionState] = useState<AuthSession | null>(null);
@@ -472,95 +482,177 @@ export default function CheckoutPage() {
   const liveTheme = useLiveThemeSettings();
   const { checkoutRules } = useAdminStore();
   const releaseLabel = formatReleaseLabel(liveTheme.releaseDate);
+  const unitPrice = checkoutProduct?.price ?? PRICE;
+  const productTitle = checkoutProduct?.title ?? "Ezurr Play Console";
+  const fulfillmentType = (checkoutProduct?.fulfillment_type ?? "preorder") as
+    | "digital"
+    | "preorder"
+    | "physical";
+  const productCategory = checkoutProduct?.category_slug ?? "preorders";
+
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    void api
+      .product(productKey)
+      .then((p) => {
+        if (!cancelled) setCheckoutProduct(p);
+      })
+      .catch(() => {
+        if (!cancelled) setCheckoutProduct(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn, productKey]);
 
   useEffect(() => {
     setSessionKey(getCheckoutSessionKey());
   }, []);
 
-  const policy = useMemo(
-    () =>
-      resolveCheckoutPolicy(liveTheme, checkoutRules, {
-        subtotal: PRICE,
+  const localPolicy = useMemo(() => {
+    if (apiOn) return null;
+    return resolveCheckoutPolicy(liveTheme, checkoutRules, {
+      subtotal: unitPrice,
+      pincode: form.pincode || undefined,
+      city: form.city || undefined,
+      paymentMethod: method,
+      fulfillmentType,
+      productCategory,
+      sessionKey,
+    });
+  }, [
+    apiOn,
+    liveTheme,
+    checkoutRules,
+    form.pincode,
+    form.city,
+    method,
+    sessionKey,
+    unitPrice,
+    fulfillmentType,
+    productCategory,
+  ]);
+
+  const [remotePolicy, setRemotePolicy] = useState<CheckoutPolicy | null>(null);
+
+  useEffect(() => {
+    if (!apiOn) {
+      setRemotePolicy(null);
+      setPolicyError(null);
+      return;
+    }
+    let cancelled = false;
+    setPolicyError(null);
+    void api
+      .checkoutPolicy({
+        subtotal: unitPrice,
         pincode: form.pincode || undefined,
         city: form.city || undefined,
         paymentMethod: method,
-        fulfillmentType: "preorder",
-        productCategory: "preorders",
+        fulfillmentType,
+        productCategory,
         sessionKey,
-      }),
-    [liveTheme, checkoutRules, form.pincode, form.city, method, sessionKey],
-  );
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setRemotePolicy(data as unknown as CheckoutPolicy);
+          setPolicyError(null);
+        }
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setRemotePolicy(null);
+          setPolicyError(err.message || "Could not load checkout policy");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    apiOn,
+    form.pincode,
+    form.city,
+    method,
+    sessionKey,
+    unitPrice,
+    fulfillmentType,
+    productCategory,
+  ]);
+
+  const policy = apiOn ? remotePolicy : localPolicy;
 
   const selectedCarrier = useMemo(() => {
-    const carriers = policy.carriers;
+    const carriers = policy?.carriers ?? [];
     if (!carriers.length) return null;
     return (
       carriers.find((c) => c.id === carrierId) ??
-      carriers.find((c) => c.id === policy.defaultCarrierId) ??
+      carriers.find((c) => c.id === policy?.defaultCarrierId) ??
       carriers[0]
     );
-  }, [policy.carriers, policy.defaultCarrierId, carrierId]);
+  }, [policy?.carriers, policy?.defaultCarrierId, carrierId]);
 
-  const shippingAmount = selectedCarrier?.amount ?? policy.shippingAmount;
+  const shippingAmount = selectedCarrier?.amount ?? policy?.shippingAmount ?? 0;
   const shippingLabel =
     selectedCarrier != null
       ? selectedCarrier.amount === 0
         ? "FREE"
         : fmt(selectedCarrier.amount)
-      : policy.shippingLabel;
+      : policy?.shippingLabel ?? "FREE";
 
-  const pct = policy.prepaidDiscountPct;
+  const pct = policy?.prepaidDiscountPct ?? 0;
   const isPrepaid = method === "prepaid";
-  const discount = PRICE * (pct / 100);
-  const taxAmount = policy.taxExempt
+  const discount = unitPrice * (pct / 100);
+  const taxAmount = policy?.taxExempt
     ? 0
-    : Math.round(PRICE * (policy.taxRatePct / 100));
+    : Math.round(unitPrice * ((policy?.taxRatePct ?? 0) / 100));
   const taxAdd =
-    policy.taxExempt || policy.taxInclusiveMessage ? 0 : taxAmount;
-  const prepaidTotalNum = PRICE - discount + shippingAmount + taxAdd;
-  const codTotalNum = PRICE + shippingAmount + taxAdd;
+    policy?.taxExempt || policy?.taxInclusiveMessage ? 0 : taxAmount;
+  const prepaidTotalNum = unitPrice - discount + shippingAmount + taxAdd;
+  const codTotalNum = unitPrice + shippingAmount + taxAdd;
   const prepaidTotal = fmt(prepaidTotalNum);
   const lockedTotal = isPrepaid ? prepaidTotal : fmt(codTotalNum);
-  const codAvailable = policy.methods.includes("cod");
-  const showField = (key: CheckoutFieldKey) => !policy.hiddenFields.includes(key);
-  const fieldRequired = (key: CheckoutFieldKey) => policy.requiredFields.includes(key);
+  const codAvailable = policy?.methods.includes("cod") ?? false;
+  const showField = (key: CheckoutFieldKey) => !policy?.hiddenFields.includes(key);
+  const fieldRequired = (key: CheckoutFieldKey) =>
+    policy?.requiredFields.includes(key) ?? false;
 
   const activeSplit = useMemo(
     () =>
-      policy.splitPayments.find((s) => s.id === splitId) ??
-      policy.splitPayments[0] ??
+      policy?.splitPayments.find((s) => s.id === splitId) ??
+      policy?.splitPayments[0] ??
       null,
-    [policy.splitPayments, splitId],
+    [policy?.splitPayments, splitId],
   );
-  const depositPct = activeSplit?.depositPct ?? policy.depositPct ?? 0;
+  const depositPct = activeSplit?.depositPct ?? policy?.depositPct ?? 0;
   const dueTodayNum =
     depositPct > 0
       ? Math.round((isPrepaid ? prepaidTotalNum : codTotalNum) * (depositPct / 100))
       : 0;
   const dueToday = fmt(dueTodayNum);
 
-  const prepaidGateways = policy.gateways.filter((g) => g !== "cod");
+  const prepaidGateways = (policy?.gateways ?? []).filter((g) => g !== "cod");
 
   useEffect(() => {
-    if (!policy.methods.includes(method)) {
-      const next = policy.methods[0];
+    if (!policy?.methods.includes(method)) {
+      const next = policy?.methods[0];
       if (next) setMethod(next);
     }
-  }, [policy.methods, method]);
+  }, [policy?.methods, method]);
 
   useEffect(() => {
-    if (policy.preferredGateway && policy.gateways.includes(policy.preferredGateway)) {
+    if (policy?.preferredGateway && policy.gateways.includes(policy.preferredGateway)) {
       setGateway(policy.preferredGateway);
     }
-  }, [policy.preferredGateway, policy.gateways]);
+  }, [policy?.preferredGateway, policy?.gateways]);
 
   useEffect(() => {
-    const carriers = policy.carriers;
+    const carriers = policy?.carriers ?? [];
     if (!carriers.length) return;
     if (!carriers.some((c) => c.id === carrierId)) {
-      setCarrierId(policy.defaultCarrierId ?? carriers[0].id);
+      setCarrierId(policy?.defaultCarrierId ?? carriers[0].id);
     }
-  }, [policy.carriers, policy.defaultCarrierId, carrierId]);
+  }, [policy?.carriers, policy?.defaultCarrierId, carrierId]);
 
   useEffect(() => {
     const s = getSession();
@@ -587,18 +679,72 @@ export default function CheckoutPage() {
   };
 
   const placeOrder = () => {
-    const result = createDemoCheckoutOrder({
-      name: fullName || session?.name || "Guest Player",
-      mobile: form.mobile || session?.mobile || "9876500001",
-      city: form.city || "Bengaluru",
-      payment: isPrepaid ? "Prepaid" : "COD",
-      total: lockedTotal,
-      addressLine1: form.address || undefined,
-      pincode: form.pincode || undefined,
-    });
-    setOrderId(result.orderId);
-    setPlaced(true);
-    window.scrollTo(0, 0);
+    void (async () => {
+      setOrderError(null);
+      if (apiOn) {
+        if (policyError) {
+          setOrderError(policyError);
+          return;
+        }
+        try {
+          const order = await api.createOrder({
+            idempotencyKey: `web-${sessionKey}-${Date.now()}`,
+            items: [
+              {
+                productKey: checkoutProduct?.key ?? productKey,
+                title: productTitle,
+                unitPrice,
+                qty: 1,
+              },
+            ],
+            paymentMethod: isPrepaid ? "prepaid" : "cod",
+            gateway: isPrepaid ? gateway : "cod",
+            carrierId: selectedCarrier?.id ?? undefined,
+            depositPct: depositPct > 0 ? depositPct : undefined,
+            fulfillmentType,
+            productCategory,
+            sessionKey,
+            mobile: form.mobile || session?.mobile,
+            pincode: form.pincode,
+            city: form.city,
+            shippingAddress: {
+              mobile: form.mobile || session?.mobile,
+              firstName: form.firstName,
+              lastName: form.lastName,
+              address: form.address,
+              city: form.city,
+              pincode: form.pincode,
+            },
+          });
+          const publicId =
+            typeof order === "object" && order && "public_id" in order
+              ? String((order as { public_id: string }).public_id)
+              : null;
+          setOrderId(publicId);
+          setPlaced(true);
+          window.scrollTo(0, 0);
+          return;
+        } catch (err) {
+          setOrderError(
+            err instanceof Error ? err.message : "Could not place order. Try again.",
+          );
+          return;
+        }
+      }
+
+      const result = createDemoCheckoutOrder({
+        name: fullName || session?.name || "Guest Player",
+        mobile: form.mobile || session?.mobile || "9876500001",
+        city: form.city || "Bengaluru",
+        payment: isPrepaid ? "Prepaid" : "COD",
+        total: lockedTotal,
+        addressLine1: form.address || undefined,
+        pincode: form.pincode || undefined,
+      });
+      setOrderId(result.orderId);
+      setPlaced(true);
+      window.scrollTo(0, 0);
+    })();
   };
 
   const canContinueDetails =
@@ -609,6 +755,38 @@ export default function CheckoutPage() {
     (!fieldRequired("city") || form.city.trim().length > 0) &&
     (!fieldRequired("pincode") || form.pincode.trim().length === 6) &&
     (!fieldRequired("upi") || form.upiId.trim().length > 0);
+
+  if (apiOn && !policy && !policyError) {
+    return (
+      <div className="ez-checkout-bg min-h-screen">
+        <div className="ez-checkout-shell">
+          <CheckoutHeader label="Secure checkout" shortLabel="Checkout" />
+          <main className="ez-page w-full py-20">
+            <p className="text-sm text-[#86868B]">Loading checkout policy…</p>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (apiOn && policyError && !policy) {
+    return (
+      <div className="ez-checkout-bg min-h-screen">
+        <div className="ez-checkout-shell">
+          <CheckoutHeader label="Secure checkout" shortLabel="Checkout" />
+          <main className="ez-page w-full py-20">
+            <p className="text-sm text-[#B42318]" role="alert">
+              {policyError}
+            </p>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (!policy) {
+    return null;
+  }
 
   if (placed) {
     return (
@@ -930,6 +1108,18 @@ export default function CheckoutPage() {
                           : "Choose how you'd like to pay on delivery."}
                       </p>
                     </div>
+
+                    {policyError ? (
+                      <p className="m-0 rounded-[14px] border border-[#FECACA] bg-[#FEF2F2] px-4 py-3.5 text-[13px] text-[#B42318]" role="alert">
+                        {policyError}
+                      </p>
+                    ) : null}
+
+                    {orderError ? (
+                      <p className="m-0 rounded-[14px] border border-[#FECACA] bg-[#FEF2F2] px-4 py-3.5 text-[13px] text-[#B42318]" role="alert">
+                        {orderError}
+                      </p>
+                    ) : null}
 
                     {policy.banner ? (
                       <p className="m-0 rounded-[14px] border border-black/[0.06] bg-[#F7F7F8] px-4 py-3.5 text-[13px] leading-relaxed text-[#424245]">

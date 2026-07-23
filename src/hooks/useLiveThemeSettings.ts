@@ -3,24 +3,47 @@
 import { useSyncExternalStore } from "react";
 import { defaultAdminSettings, type AdminSettings } from "@/data/admin";
 import {
+  getApiSettingsSnapshot,
+  subscribeApiSettings,
+  useApiSettings,
+} from "@/hooks/useApiSettings";
+import {
   getLiveThemeSettings,
   subscribeAdminStore,
 } from "@/lib/adminStore";
+import { isApiEnabled } from "@/lib/apiClient";
 
 const serverSettings: AdminSettings = { ...defaultAdminSettings };
 
-/** Prefer admin store settings on the client; fall back to defaults. */
+function getStorefrontSettings(): AdminSettings {
+  if (isApiEnabled()) {
+    return getApiSettingsSnapshot();
+  }
+  return getLiveThemeSettings();
+}
+
+function subscribeStorefrontSettings(onStoreChange: () => void) {
+  if (isApiEnabled()) {
+    return subscribeApiSettings(onStoreChange);
+  }
+  return subscribeAdminStore(onStoreChange);
+}
+
+/** Prefer Laravel settings in API mode; adminStore/localStorage otherwise. */
 export function useLiveThemeSettings(): AdminSettings {
-  return useSyncExternalStore(
+  const apiState = useApiSettings();
+  const localSettings = useSyncExternalStore(
     subscribeAdminStore,
     getLiveThemeSettings,
     () => serverSettings,
   );
+
+  return isApiEnabled() ? apiState.settings : localSettings;
 }
 
 export function getThemeOrDefault(): AdminSettings {
   if (typeof window === "undefined") return { ...defaultAdminSettings };
-  return getLiveThemeSettings();
+  return getStorefrontSettings();
 }
 
 /** Format settings.releaseDate (YYYY-MM-DD) for storefront labels. */
@@ -33,3 +56,5 @@ export function formatReleaseLabel(isoDate: string) {
     year: "numeric",
   });
 }
+
+export { subscribeStorefrontSettings, getStorefrontSettings };

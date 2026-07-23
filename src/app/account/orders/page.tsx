@@ -2,12 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SectionHeading } from "@/components/home/SectionHeading";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { orderStatusLabels, type AdminOrder, type AdminOrderStatus } from "@/data/admin";
 import { normalizeMobile } from "@/lib/auth";
+import { api, isApiEnabled } from "@/lib/apiClient";
+import { mapApiOrderToAdmin } from "@/lib/apiMappers";
 import { CountdownInline } from "@/components/ui/Countdown";
 
 type Filter = "all" | "progress" | "preorder" | "delivered";
@@ -19,23 +21,56 @@ function inProgress(status: AdminOrderStatus) {
 export default function OrdersPage() {
   const { session } = useAuthSession();
   const store = useAdminStore();
+  const apiOn = isApiEnabled();
   const [filter, setFilter] = useState<Filter>("all");
+  const [apiOrders, setApiOrders] = useState<AdminOrder[]>([]);
+  const [loading, setLoading] = useState(apiOn);
+  const [error, setError] = useState<string | null>(null);
 
-  const mine = useMemo(() => {
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    setLoading(true);
+    void api
+      .accountOrders({ page: 1 })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = Array.isArray(res.data) ? res.data : [];
+        setApiOrders(rows.map((row) => mapApiOrderToAdmin(row)));
+        setError(null);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setApiOrders([]);
+        setError(err.message || "Could not load orders");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn, session?.mobile]);
+
+  const localMine = useMemo(() => {
     const digits = normalizeMobile(session?.mobile ?? "");
     return store.orders
       .filter((order) => normalizeMobile(order.customerMobile) === digits)
       .sort((a, b) => b.placedAt.localeCompare(a.placedAt));
   }, [store.orders, session?.mobile]);
 
+  const orders = apiOn ? apiOrders : localMine;
+
   const rows = useMemo(() => {
-    return mine.filter((order) => {
-      if (filter === "progress") return inProgress(order.status);
-      if (filter === "preorder") return order.status === "preorder";
-      if (filter === "delivered") return order.status === "delivered";
-      return true;
-    });
-  }, [mine, filter]);
+    return orders
+      .filter((order) => {
+        if (filter === "progress") return inProgress(order.status);
+        if (filter === "preorder") return order.status === "preorder";
+        if (filter === "delivered") return order.status === "delivered";
+        return true;
+      })
+      .sort((a, b) => b.placedAt.localeCompare(a.placedAt));
+  }, [orders, filter]);
 
   const filters: { id: Filter; label: string }[] = [
     { id: "all", label: "All orders" },
@@ -52,6 +87,12 @@ export default function OrdersPage() {
         title="Your orders."
         description="Track current deliveries and revisit past purchases."
       />
+
+      {error ? (
+        <p className="mb-4 text-sm text-[#B42318]" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       <div className="mt-2 flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Order filters">
         {filters.map((item) => {
@@ -79,94 +120,56 @@ export default function OrdersPage() {
           <span className="font-semibold">
             Releases in <CountdownInline />
           </span>
-          . Cancel anytime before dispatch.
         </div>
       ) : null}
 
-      {rows.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-dashed border-black/[0.1] bg-[#F7F7F8] px-5 py-12 text-center">
-          <p className="text-sm font-semibold text-[#1D1D1F]">No orders in this view</p>
-          <p className="mt-1 text-sm text-[#6E6E73]">
-            {mine.length === 0
-              ? "Orders placed with this mobile number will show up here."
-              : "Try another filter."}
-          </p>
-          <Link
-            href="/checkout"
-            className="mt-4 inline-flex h-10 items-center rounded-full bg-[#1D1D1F] px-5 text-sm font-semibold text-white"
-          >
-            Start a pre-order
-          </Link>
-        </div>
+      {loading ? (
+        <p className="mt-8 text-sm text-[#86868B]">Loading orders…</p>
+      ) : rows.length === 0 ? (
+        <p className="mt-8 text-sm text-[#86868B]">No orders yet.</p>
       ) : (
-        <ul className="mt-6 space-y-3">
+        <ul className="mt-6 divide-y divide-black/[0.06]">
           {rows.map((order) => (
-            <OrderCard key={order.id} order={order} />
+            <li key={order.id} className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 gap-3">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-[#F7F7F8]">
+                  {order.items[0]?.image ? (
+                    <Image
+                      src={order.items[0].image}
+                      alt=""
+                      fill
+                      className="object-contain p-1"
+                      sizes="64px"
+                    />
+                  ) : null}
+                </div>
+                <div className="min-w-0">
+                  <div className="ez-mono text-[10px] uppercase tracking-[0.1em] text-[#86868B]">
+                    {order.id}
+                  </div>
+                  <div className="text-sm font-semibold">
+                    {order.items[0]?.name ?? "Order"} · {order.total}
+                  </div>
+                  <div className="mt-0.5 text-xs text-[#86868B]">
+                    {orderStatusLabels[order.status]} ·{" "}
+                    {new Date(order.placedAt).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </div>
+                </div>
+              </div>
+              <Link
+                href={`/account/orders/${order.id}`}
+                className="shrink-0 text-sm font-semibold text-[#424245]"
+              >
+                View details →
+              </Link>
+            </li>
           ))}
         </ul>
       )}
     </div>
-  );
-}
-
-function OrderCard({ order }: { order: AdminOrder }) {
-  const item = order.items[0];
-  const action =
-    order.status === "preorder"
-      ? "View pre-order"
-      : order.status === "delivered"
-        ? "Buy again"
-        : "Track order";
-
-  return (
-    <li className="rounded-2xl border border-black/[0.07] p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <span
-            className={`inline-flex rounded-lg px-2 py-0.5 text-[10px] font-semibold ${
-              order.status === "preorder"
-                ? "bg-[var(--ez-accent-soft)] text-[var(--ez-accent-text)]"
-                : order.status === "delivered"
-                  ? "bg-[#F0F0F2] text-[#6E6E73]"
-                  : "bg-[#EAF6ED] text-[#2D6B3C]"
-            }`}
-          >
-            {orderStatusLabels[order.status]}
-          </span>
-          <div className="ez-mono mt-2 text-[10px] uppercase tracking-[0.12em] text-[#86868B]">
-            {order.id} · {new Date(order.placedAt).toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
-          </div>
-        </div>
-        <div className="ez-mono text-sm font-semibold">{order.total}</div>
-      </div>
-      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[#F7F7F8]">
-          {item?.image ? (
-            <Image src={item.image} alt="" fill className="object-contain p-1.5" sizes="80px" />
-          ) : null}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-semibold tracking-[-0.02em]">{item?.name ?? "Order"}</h2>
-          <p className="mt-1 text-sm text-[#86868B]">
-            {order.payment} · {order.city}
-            {order.status === "preorder" ? " · Price locked" : ""}
-          </p>
-        </div>
-        <Link
-          href={
-            order.status === "delivered" && item?.productKey
-              ? `/product`
-              : `/account/orders/${order.id}`
-          }
-          className="inline-flex h-10 items-center justify-center rounded-full bg-[#1D1D1F] px-5 text-sm font-semibold text-white"
-        >
-          {action}
-        </Link>
-      </div>
-    </li>
   );
 }

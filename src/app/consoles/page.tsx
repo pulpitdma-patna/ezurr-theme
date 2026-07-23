@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CategoryPage } from "@/components/catalog/CategoryPage";
+import { ApiCatalogCategoryPage } from "@/components/catalog/ApiCatalogCategoryPage";
 import consoles from "@/data/consoles.json";
 import type { CatalogProduct } from "@/lib/types";
 
@@ -9,13 +9,13 @@ export const metadata: Metadata = {
 
 export default function ConsolesPage() {
   return (
-    <CategoryPage
+    <ApiCatalogCategoryPage
       active="consoles"
       breadcrumb="Consoles"
       title="Consoles"
-      count={(consoles as CatalogProduct[]).length}
       description="PlayStation, Nintendo, Xbox, Meta Quest, Valve Steam Deck and more — in stock and ready to ship."
-      products={consoles as CatalogProduct[]}
+      fallbackProducts={consoles as CatalogProduct[]}
+      categorySlug="consoles"
     />
   );
 }

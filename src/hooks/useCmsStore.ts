@@ -25,6 +25,12 @@ import type {
 const serverHome = createDefaultHomePage("server");
 const serverWidgets: CmsWidgetDefinition[] = [];
 const serverCode: CmsGlobalCode = { headCss: "", footerJs: "" };
+const fallbackHomeSeed = createDefaultHomePage("fallback-home");
+const fallbackHomePublished = {
+  sections: getPublishedCmsSections(fallbackHomeSeed, "A"),
+  customCss: "",
+  customJs: "",
+};
 
 export function useCmsHydrated(): boolean {
   const [hydrated, setHydrated] = useState(false);
@@ -113,11 +119,8 @@ export function usePublishedSections(page: CmsPageDocument | null): {
   if (!page.published) {
     // Home seed always has published; landings may be unpublished
     if (page.id === "home") {
-      const seed = createDefaultHomePage();
       return {
-        sections: getPublishedCmsSections(seed, "A"),
-        customCss: "",
-        customJs: "",
+        ...fallbackHomePublished,
         ready: hydrated,
         missing: false,
       };

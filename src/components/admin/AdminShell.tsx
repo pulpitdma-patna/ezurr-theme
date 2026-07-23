@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { clearSession, formatMobileDisplay, isAdminSession } from "@/lib/auth";
+import {
+  clearSession,
+  formatMobileDisplay,
+  isAdminSession,
+  isCredentialedSession,
+} from "@/lib/auth";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { getDerivedAlerts } from "@/lib/adminStore";
@@ -1067,7 +1072,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!ready) return;
-    if (!isAdminSession(session)) {
+    if (!isCredentialedSession(session) || !isAdminSession(session)) {
+      if (session && !isCredentialedSession(session)) clearSession();
       router.replace("/auth");
     }
   }, [ready, session, router]);
@@ -1194,7 +1200,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     };
   }, [router]);
 
-  if (!ready || !isAdminSession(session)) {
+  if (!ready || !isCredentialedSession(session) || !isAdminSession(session)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F0F0F2]">
         <div className="ez-mono text-[10px] uppercase tracking-[0.16em] text-[#86868B]">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { CatalogProduct } from "@/lib/types";
 import { useAccountStore } from "@/hooks/useAccountStore";
 import { catalogKeyForProduct, toggleWishlistKey } from "@/lib/accountStore";
+import { productDetailHref } from "@/lib/productKey";
 
 type ProductCardProps = CatalogProduct & {
   href?: string;
@@ -65,6 +66,7 @@ function CardMedia({
       className={`relative overflow-hidden ${
         tall ? "aspect-[3/4]" : "aspect-[3/4]"
       } bg-[linear-gradient(165deg,#F4F4F6_0%,#EBEBED_48%,#F8F8FA_100%)]`}
+      style={{ position: "relative" }}
     >
       <div
         aria-hidden
@@ -86,17 +88,21 @@ function CardMedia({
 }
 
 export function ProductCard({
+  id,
   img,
   brand,
   name,
   price,
   strike,
-  href = "/product",
+  href,
   variant = "grid",
   productKey,
   showWishlist = true,
 }: ProductCardProps) {
-  const key = productKey ?? catalogKeyForProduct({ img, brand, name, price, strike });
+  const key =
+    productKey ??
+    catalogKeyForProduct({ id, img, brand, name, price, strike });
+  const resolvedHref = href ?? productDetailHref({ id, name });
   const platform = brand.split(" · ")[0];
 
   if (variant === "preorder") {
@@ -104,7 +110,7 @@ export function ProductCard({
       <div className="relative h-full">
         {showWishlist ? <WishlistButton productKey={key} name={name} /> : null}
         <Link
-          href={href}
+          href={resolvedHref}
           className="ez-product-card group flex h-full flex-col overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_0_rgba(17,17,19,0.04),0_20px_48px_rgba(17,17,19,0.06)] transition-[transform,box-shadow,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-black/[0.1] hover:shadow-[0_1px_0_rgba(17,17,19,0.04),0_32px_64px_rgba(17,17,19,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1D1D1F] sm:rounded-[28px]"
         >
           <CardMedia img={img} name={name} tall />
@@ -153,7 +159,7 @@ export function ProductCard({
     <div className="relative h-full">
       {showWishlist ? <WishlistButton productKey={key} name={name} /> : null}
       <Link
-        href={href}
+        href={resolvedHref}
         className="ez-product-card group flex h-full flex-col overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_0_rgba(17,17,19,0.04),0_20px_48px_rgba(17,17,19,0.06)] transition-[transform,box-shadow,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-black/[0.1] hover:shadow-[0_1px_0_rgba(17,17,19,0.04),0_32px_64px_rgba(17,17,19,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1D1D1F] sm:rounded-[28px]"
       >
         <CardMedia img={img} name={name} />
@@ -196,19 +202,24 @@ export function ProductCard({
 }
 
 export function ConsoleCard({
+  id,
   img,
   brand,
   name,
   price,
   strike,
-  href = "/product",
+  href,
 }: CatalogProduct & { href?: string }) {
+  const resolvedHref = href ?? productDetailHref({ id, name });
   return (
     <Link
-      href={href}
+      href={resolvedHref}
       className="ez-product-card group flex h-full flex-col overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_0_rgba(17,17,19,0.04),0_20px_48px_rgba(17,17,19,0.06)] transition-[transform,box-shadow,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-black/[0.1] hover:shadow-[0_1px_0_rgba(17,17,19,0.04),0_32px_64px_rgba(17,17,19,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1D1D1F] sm:rounded-[28px]"
     >
-      <div className="relative aspect-square overflow-hidden bg-[linear-gradient(165deg,#F4F4F6_0%,#EBEBED_48%,#F8F8FA_100%)]">
+      <div
+        className="relative aspect-square overflow-hidden bg-[linear-gradient(165deg,#F4F4F6_0%,#EBEBED_48%,#F8F8FA_100%)]"
+        style={{ position: "relative" }}
+      >
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-8 bottom-5 h-10 rounded-[100%] bg-black/[0.06] blur-xl transition duration-500 group-hover:bg-black/[0.1]"

@@ -1,10 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { brandCollections, brandNames, type BrandName } from "@/data/home";
 import { getCatalogProductKey } from "@/lib/productKey";
+import { api, isApiEnabled } from "@/lib/apiClient";
+import { mapApiProductToCatalog } from "@/lib/apiMappers";
 import { ConsoleCard, ProductCard } from "@/components/ui/ProductCard";
+import type { CatalogProduct } from "@/lib/types";
 import { SectionHeading } from "./SectionHeading";
 
 const brandMarks: Record<BrandName, string> = {
@@ -14,6 +17,15 @@ const brandMarks: Record<BrandName, string> = {
   Logitech: "G",
   Meta: "∞",
   Valve: "V",
+};
+
+const brandSlugHints: Record<BrandName, string[]> = {
+  PlayStation: ["sony", "playstation", "ps", "ezurr", "rockstar"],
+  Nintendo: ["nintendo"],
+  Xbox: ["xbox", "microsoft"],
+  Logitech: ["logitech"],
+  Meta: ["meta"],
+  Valve: ["valve", "steam"],
 };
 
 const brandNotes: Record<BrandName, string> = {
@@ -79,7 +91,46 @@ function Arrow({ direction }: { direction: "left" | "right" }) {
 export function BrandExplorer() {
   const [activeBrand, setActiveBrand] = useState<BrandName>("PlayStation");
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const products = brandCollections[activeBrand];
+  const apiOn = isApiEnabled();
+  const [apiPool, setApiPool] = useState<CatalogProduct[] | null>(null);
+
+  useEffect(() => {
+    if (!apiOn) {
+      setApiPool(null);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .products({ per_page: 50 })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = Array.isArray(res.data) ? res.data : [];
+        setApiPool(rows.map(mapApiProductToCatalog));
+      })
+      .catch(() => {
+        // Fall back to static brand collections.
+        if (!cancelled) setApiPool(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn]);
+
+  const products = useMemo(() => {
+    if (!apiOn || apiPool === null) {
+      return brandCollections[activeBrand];
+    }
+    const hints = brandSlugHints[activeBrand].map((h) => h.toLowerCase());
+    const filtered = apiPool.filter((p) => {
+      const brand = (p.brand || "").toLowerCase();
+      const name = (p.name || "").toLowerCase();
+      return hints.some((h) => brand.includes(h) || name.includes(h));
+    });
+    if (filtered.length) return filtered.slice(0, 10);
+    if (apiPool.length) return apiPool.slice(0, 10);
+    return brandCollections[activeBrand];
+  }, [apiOn, apiPool, activeBrand]);
+
   const featured = products[0];
   const stage = brandStage[activeBrand];
   const useSquare =
@@ -190,7 +241,10 @@ export function BrandExplorer() {
                       </div>
                     </div>
                     {featured && (
-                      <div className="relative h-28 w-28 shrink-0 sm:h-36 sm:w-36">
+                      <div
+                        className="relative h-28 w-28 shrink-0 sm:h-36 sm:w-36"
+                        style={{ position: "relative" }}
+                      >
                         <Image
                           src={featured.img}
                           alt={featured.name}
@@ -253,7 +307,11 @@ export function BrandExplorer() {
                       {useSquare ? (
                         <ConsoleCard {...product} />
                       ) : (
-                        <ProductCard {...product} variant="grid" />
+                        <ProductCard
+                          {...product}
+                          productKey={getCatalogProductKey(product, index)}
+                          variant="grid"
+                        />
                       )}
                     </div>
                   ))}

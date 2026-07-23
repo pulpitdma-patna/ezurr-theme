@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Grand Theft Auto VI — PS5",
+  title: "Product",
 };
 
 export default function ProductLayout({ children }: { children: React.ReactNode }) {

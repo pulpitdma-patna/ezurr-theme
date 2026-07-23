@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CategoryPage } from "@/components/catalog/CategoryPage";
+import { ApiCatalogCategoryPage } from "@/components/catalog/ApiCatalogCategoryPage";
 import accessories from "@/data/accessories.json";
 import type { CatalogProduct } from "@/lib/types";
 
@@ -9,13 +9,13 @@ export const metadata: Metadata = {
 
 export default function AccessoriesPage() {
   return (
-    <CategoryPage
+    <ApiCatalogCategoryPage
       active="accessories"
       breadcrumb="Accessories"
       title="Accessories"
-      count={(accessories as CatalogProduct[]).length}
       description="Controllers, headsets, racing wheels and more — in stock and ships in 24 hours."
-      products={accessories as CatalogProduct[]}
+      fallbackProducts={accessories as CatalogProduct[]}
+      categorySlug="accessories"
     />
   );
 }

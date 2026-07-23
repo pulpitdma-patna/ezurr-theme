@@ -8,14 +8,13 @@ import {
   interpolateTemplate,
   resolveAssuranceItems,
   resolveHeroSlides,
-  resolveProductRailProducts,
   scopeBlockCss,
 } from "@/lib/cms/resolveSectionProps";
 import { sanitizeHtml } from "@/lib/cms/sanitizeHtml";
 import { getSectionEntry } from "@/lib/cms/sectionRegistry";
 import { HeroSlider } from "@/components/home/HeroSlider";
 import { AssuranceStrip } from "@/components/home/AssuranceStrip";
-import { ProductRail } from "@/components/home/ProductRail";
+import { ApiProductRail } from "@/components/home/ApiProductRail";
 import { EditorialBanner } from "@/components/home/EditorialBanner";
 import { OfferBannerGate } from "@/components/home/OfferBannerGate";
 import { BrandExplorer } from "@/components/home/BrandExplorer";
@@ -341,13 +340,13 @@ function RenderBlock({
       return shell(<AssuranceStrip items={resolveAssuranceItems(block.props)} />);
     case "product_rail":
       return shell(
-        <ProductRail
+        <ApiProductRail
           eyebrow={String(block.props.eyebrow ?? "")}
           title={String(block.props.title ?? "")}
           description={
             block.props.description ? String(block.props.description) : undefined
           }
-          products={resolveProductRailProducts(block.props)}
+          railProps={block.props}
           href={block.props.href ? String(block.props.href) : undefined}
           linkLabel={
             block.props.linkLabel ? String(block.props.linkLabel) : undefined

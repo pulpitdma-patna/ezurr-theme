@@ -37,7 +37,11 @@ export function ProductGrid({ products, pageSize = 12 }: ProductGridProps) {
     <>
       <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
         {visible.map((p, i) => (
-          <ProductCard key={getCatalogProductKey(p, i)} {...p} />
+          <ProductCard
+            key={getCatalogProductKey(p, i)}
+            {...p}
+            productKey={getCatalogProductKey(p, i)}
+          />
         ))}
       </div>
       <div ref={sentinelRef} className="h-px" />

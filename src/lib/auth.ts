@@ -9,6 +9,28 @@ export type AuthSession = {
 };
 
 const STORAGE_KEY = "ezurr_auth_session";
+const API_TOKEN_KEY = "ezurr_api_token";
+
+function isApiMode(): boolean {
+  const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
+  return Boolean(raw);
+}
+
+function getStoredApiToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(API_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** True when a session may grant access (API mode requires a Sanctum token). */
+export function isCredentialedSession(session: AuthSession | null | undefined): session is AuthSession {
+  if (!session) return false;
+  if (isApiMode() && !getStoredApiToken()) return false;
+  return true;
+}
 
 export function normalizeMobile(value: string) {
   return value.replace(/\D/g, "").slice(0, 10);
@@ -74,13 +96,22 @@ export function getSession(): AuthSession | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as AuthSession;
-    if (!parsed?.mobile || !isValidMobile(parsed.mobile)) return null;
+    if (!parsed?.mobile || !isValidMobile(parsed.mobile)) {
+      clearSession();
+      return null;
+    }
     const session = withRole(parsed);
+    // API mode: local role blob without a token must not grant access
+    if (isApiMode() && !getStoredApiToken()) {
+      clearSession();
+      return null;
+    }
     if (session.role !== parsed.role) {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
     }
     return session;
   } catch {
+    clearSession();
     return null;
   }
 }
@@ -94,6 +125,12 @@ export function setSession(session: AuthSession) {
 export function clearSession() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(STORAGE_KEY);
+  try {
+    // Clear Laravel Sanctum token when present
+    window.localStorage.removeItem("ezurr_api_token");
+  } catch {
+    /* ignore */
+  }
   window.dispatchEvent(new Event("ezurr-auth-change"));
 }
 

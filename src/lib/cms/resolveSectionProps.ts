@@ -25,13 +25,24 @@ function catalogFromAdmin(): CatalogProduct[] {
       products?: Array<{ name: string; image: string; price: string; brand?: string }>;
     };
     if (!Array.isArray(parsed.products)) return [];
-    return parsed.products.map((p) => ({
-      name: p.name,
-      img: p.image,
-      price: p.price,
-      brand: p.brand ?? "",
-      strike: "",
-    })) as CatalogProduct[];
+    return parsed.products.map((p) => {
+      const row = p as {
+        name: string;
+        image: string;
+        price: string;
+        brand?: string;
+        key?: string;
+        sku?: string;
+      };
+      return {
+        id: row.key || row.sku || undefined,
+        name: row.name,
+        img: row.image,
+        price: row.price,
+        brand: row.brand ?? "",
+        strike: "",
+      } as CatalogProduct;
+    });
   } catch {
     return [];
   }

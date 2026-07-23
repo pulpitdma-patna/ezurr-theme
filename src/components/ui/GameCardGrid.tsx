@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { getGameCardProductKey } from "@/lib/productKey";
+import { getGameCardProductKey, productDetailHref } from "@/lib/productKey";
 import type { GameCardProduct } from "@/lib/types";
 
 export function GameCardGrid({ cards }: { cards: GameCardProduct[] }) {
@@ -32,7 +32,7 @@ export function GameCardGrid({ cards }: { cards: GameCardProduct[] }) {
         {visible.map((c, i) => (
           <Link
             key={getGameCardProductKey(c, i)}
-            href="/checkout"
+            href={productDetailHref({ id: c.id, name: c.name || c.title }, i)}
             className="flex flex-col gap-3 text-[#1D1D1F] sm:gap-3.5"
           >
             <div

@@ -111,7 +111,11 @@ export function ProductRail({
             {variant === "square" ? (
               <ConsoleCard {...product} />
             ) : (
-              <ProductCard {...product} variant={variant === "preorder" ? "preorder" : "grid"} />
+              <ProductCard
+                {...product}
+                productKey={getCatalogProductKey(product, index)}
+                variant={variant === "preorder" ? "preorder" : "grid"}
+              />
             )}
           </div>
         ))}
