@@ -75,7 +75,7 @@ function OtpBoxes({
   }
 
   return (
-    <div className="auth-otp-grid flex justify-between gap-2.5 sm:gap-3" role="group" aria-label="One-time password">
+    <div className="auth-otp-grid flex justify-between gap-2 sm:gap-2.5" role="group" aria-label="One-time password">
       {digits.map((digit, index) => (
         <input
           key={index}
@@ -92,7 +92,7 @@ function OtpBoxes({
           onChange={(event) => handleChange(index, event.target.value)}
           onKeyDown={(event) => handleKeyDown(index, event)}
           onPaste={handlePaste}
-          className="h-[3.8rem] w-full max-w-[57px] rounded-[1rem] border border-[#dde0e8] bg-[#f8f9fb] text-center ez-mono text-xl font-bold text-[#17191f] outline-none transition-[border-color,box-shadow,transform,background-color] duration-200 placeholder:text-[#c5c8d1] hover:border-[#babfca] focus:border-[var(--ez-accent)] focus:bg-white focus:shadow-[0_0_0_4px_oklch(0.55_0.17_var(--ez-h)_/_0.12)] sm:h-[4.15rem] sm:max-w-[65px] sm:text-2xl"
+          className="auth-otp-cell h-[3.5rem] w-full max-w-[52px] rounded-[10px] border border-[var(--ez-border)] bg-[var(--ez-warm-surface)] text-center ez-mono text-lg font-bold text-[var(--ez-ink)] outline-none transition-[border-color,box-shadow,background-color] duration-200 placeholder:text-[#c5c8d1] hover:border-[#d2d2d7] focus:border-[var(--ez-accent)] focus:bg-white focus:shadow-[0_0_0_3px_oklch(0.55_0.17_var(--ez-h)_/_0.1)] sm:h-[3.75rem] sm:max-w-[58px] sm:text-xl"
         />
       ))}
     </div>
@@ -101,55 +101,106 @@ function OtpBoxes({
 
 function BrandPanel() {
   return (
-    <aside className="auth-brand-panel relative isolate overflow-hidden bg-[#070b13] text-white">
+    <aside className="auth-brand-panel relative isolate overflow-hidden bg-[var(--ez-ink)] text-white">
       <Image
         src="/images/hero-handheld-cyan.png"
         alt=""
         fill
         priority
         sizes="(min-width: 1024px) 55vw, 100vw"
-        className="auth-brand-image object-cover object-[67%_center]"
+        className="auth-brand-image object-cover object-[67%_center] opacity-[0.42]"
       />
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,7,13,.94)_0%,rgba(3,7,13,.76)_38%,rgba(3,7,13,.18)_100%),linear-gradient(0deg,rgba(3,7,13,.88)_0%,transparent_54%,rgba(3,7,13,.18)_100%)]" />
-      <div aria-hidden="true" className="auth-grain absolute inset-0" />
-      <div aria-hidden="true" className="auth-orb absolute -left-20 top-[18%] h-64 w-64 rounded-full bg-[var(--ez-accent)] blur-3xl" />
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(8,10,16,.97)_0%,rgba(8,10,16,.88)_42%,rgba(8,10,16,.72)_100%)]" />
+      <div aria-hidden="true" className="auth-grain absolute inset-0 opacity-[0.12]" />
+      <div aria-hidden="true" className="auth-brand-grid absolute inset-0" />
 
-      <div className="relative flex min-h-[23rem] flex-col justify-between p-6 sm:min-h-[27rem] sm:p-9 lg:min-h-screen lg:p-10 xl:p-14">
-        <Link href="/" className="group relative z-10 flex w-fit items-baseline gap-2.5">
-          <span className="text-[1.7rem] font-semibold tracking-[-0.06em]">Ezurr</span>
-          <span className="ez-mono text-[9px] font-bold uppercase tracking-[0.2em] text-white/55 transition-colors group-hover:text-white">
-            Play HQ
+      <div className="relative flex min-h-[20rem] flex-col justify-between p-6 sm:min-h-[24rem] sm:p-9 lg:min-h-screen lg:p-10 xl:p-14">
+        <Link href="/" className="group relative z-10 flex w-fit items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-white/15 bg-white/[0.06] text-sm font-bold tracking-[-0.04em] transition group-hover:border-white/25 group-hover:bg-white/[0.1]">
+            E
+          </span>
+          <span className="flex flex-col">
+            <span className="text-[1.15rem] font-semibold leading-none tracking-[-0.05em]">Ezurr</span>
+            <span className="ez-mono mt-1 text-[8px] font-bold uppercase tracking-[0.18em] text-white/45 transition-colors group-hover:text-white/70">
+              Commerce platform
+            </span>
           </span>
         </Link>
 
-        <div className="auth-console-scene pointer-events-none absolute bottom-7 right-6 hidden w-[42%] min-w-48 sm:right-10 sm:block lg:bottom-12 lg:right-14">
-          <div className="aspect-[1.15] rotate-[-8deg] rounded-[2rem] border border-white/25 bg-[linear-gradient(145deg,rgba(255,255,255,.24),rgba(255,255,255,.03)_45%,rgba(0,0,0,.5))] p-2 shadow-[0_25px_70px_rgba(0,0,0,.44)] backdrop-blur-sm">
-            <div className="relative h-full overflow-hidden rounded-[1.55rem] border border-white/15 bg-[#060a10]">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_28%,var(--ez-accent),transparent_22%),linear-gradient(135deg,#16233a,#06080d_62%)]" />
-              <div className="absolute inset-x-[12%] top-[16%] flex items-center justify-between ez-mono text-[7px] font-bold uppercase tracking-[.24em] text-white/65">
-                <span>Live</span><span>00:01</span>
-              </div>
-              <div className="absolute bottom-[14%] left-[12%] text-[clamp(1.1rem,2.5vw,2.25rem)] font-semibold leading-[.87] tracking-[-.07em]">PLAY<br />BEYOND.</div>
-              <div className="absolute bottom-[15%] right-[12%] h-7 w-7 rounded-full border border-white/25 bg-white/10" />
-            </div>
+        <div className="auth-trust-panel pointer-events-none absolute bottom-7 right-6 hidden w-[min(42%,16rem)] sm:block lg:bottom-12 lg:right-14">
+          <div className="rounded-[14px] border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm">
+            <p className="ez-mono text-[8px] font-bold uppercase tracking-[0.2em] text-white/45">Session security</p>
+            <ul className="mt-3 space-y-2.5">
+              {["OTP-verified sign-in", "Encrypted at rest", "Role-based access"].map((item) => (
+                <li key={item} className="flex items-center gap-2 text-[12px] text-white/72">
+                  <span className="h-1 w-1 shrink-0 rounded-full bg-[var(--ez-accent)]" aria-hidden="true" />
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
 
-        <div className="relative z-10 mt-auto max-w-[35rem] pt-16 lg:pb-8">
-          <p className="auth-kicker ez-mono text-[10px] font-bold uppercase tracking-[0.22em] text-white/58">The home of play</p>
-          <h1 className="mt-4 max-w-md text-[clamp(3.25rem,6vw,6.35rem)] font-semibold leading-[0.84] tracking-[-0.08em]">
-            Ezurr<br />
-            <span className="text-white/92">Play HQ.</span>
+        <div className="relative z-10 mt-auto max-w-[32rem] pt-12 lg:pb-8">
+          <p className="auth-kicker ez-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--ez-accent)]">
+            Secure access
+          </p>
+          <h1 className="mt-3 max-w-lg text-[clamp(2.4rem,5vw,4.5rem)] font-semibold leading-[0.92] tracking-[-0.06em]">
+            Your operations
+            <br />
+            <span className="text-white/75">command center.</span>
           </h1>
-          <div className="mt-7 flex items-center gap-3">
-            <span className="h-px w-10 bg-[var(--ez-accent)]" />
-            <p className="max-w-[20rem] text-sm leading-relaxed text-white/66 sm:text-[15px]">
-              Games, gear and the next drop—ready when you are.
+          <div className="mt-6 flex items-start gap-3 border-t border-white/10 pt-6">
+            <span className="mt-0.5 h-px w-8 shrink-0 bg-[var(--ez-accent)]" aria-hidden="true" />
+            <p className="max-w-[22rem] text-[13px] leading-relaxed text-white/55 sm:text-sm">
+              Manage orders, inventory, and customer operations from one unified workspace.
             </p>
           </div>
         </div>
       </div>
     </aside>
+  );
+}
+
+function AuthStepIndicator({ step }: { step: "mobile" | "otp" }) {
+  const steps = [
+    { id: "mobile" as const, label: "Mobile", num: "01" },
+    { id: "otp" as const, label: "Verify", num: "02" },
+  ];
+  const activeIndex = step === "mobile" ? 0 : 1;
+
+  return (
+    <div className="auth-stepper">
+      <div className="flex items-center justify-between gap-4">
+        {steps.map((s, index) => {
+          const isActive = index === activeIndex;
+          const isComplete = index < activeIndex;
+          return (
+            <div key={s.id} className="flex min-w-0 items-center gap-2">
+              <span
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ez-mono text-[10px] font-bold transition-colors ${
+                  isActive || isComplete
+                    ? "bg-[var(--ez-accent)] text-white"
+                    : "border border-[var(--ez-border)] bg-white text-[var(--ez-subtle)]"
+                }`}
+              >
+                {s.num}
+              </span>
+              <span
+                className={`truncate ez-mono text-[10px] font-bold uppercase tracking-[0.14em] ${
+                  isActive ? "text-[var(--ez-accent-text)]" : isComplete ? "text-[var(--ez-ink)]" : "text-[var(--ez-subtle)]"
+                }`}
+              >
+                {s.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="auth-progress-track mt-3.5" aria-hidden="true">
+        <span className={step === "otp" ? "auth-progress-fill is-complete" : "auth-progress-fill"} />
+      </div>
+    </div>
   );
 }
 
@@ -274,95 +325,89 @@ function AuthPageContent() {
   const continueLabel = existingSession && isAdminSession(existingSession) ? "Continue to admin" : "Continue to account";
 
   return (
-    <main className="auth-page min-h-[100dvh] bg-[#f5f6fa] lg:grid lg:grid-cols-[minmax(0,1.12fr)_minmax(440px,.88fr)]">
+    <main className="auth-page min-h-[100dvh] bg-[var(--ez-warm-surface)] lg:grid lg:grid-cols-[minmax(0,1.08fr)_minmax(420px,.92fr)]">
       <BrandPanel />
 
-      <section className="relative flex min-h-[calc(100dvh-23rem)] items-center overflow-hidden bg-[#fbfbfc] px-5 py-10 sm:px-8 sm:py-14 lg:min-h-screen lg:px-[clamp(3rem,7vw,8rem)]">
-        <div aria-hidden="true" className="auth-form-wash absolute right-[-10rem] top-[-11rem] h-[27rem] w-[27rem] rounded-full bg-[var(--ez-accent)] opacity-[.07] blur-3xl" />
-        <div aria-hidden="true" className="absolute right-8 top-8 hidden h-12 w-12 border-r border-t border-[#e1e3e9] lg:block" />
-        <div className="relative mx-auto w-full max-w-[28rem]">
-          <Link href="/" className="mb-12 inline-flex items-center gap-2 ez-mono text-[10px] font-bold uppercase tracking-[.15em] text-[#777c89] transition-colors hover:!text-[#17191f]">
+      <section className="auth-form-panel relative flex min-h-[calc(100dvh-20rem)] items-center overflow-hidden border-t border-[var(--ez-border)] bg-white px-5 py-10 sm:px-8 sm:py-14 lg:min-h-screen lg:border-t-0 lg:border-l lg:px-[clamp(2.5rem,6vw,5.5rem)]">
+        <div aria-hidden="true" className="auth-form-grid absolute inset-0" />
+        <div className="relative mx-auto w-full max-w-[26rem]">
+          <Link
+            href="/"
+            className="auth-back-link mb-10 inline-flex items-center gap-2 ez-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ez-subtle)] transition-colors hover:!text-[var(--ez-ink)]"
+          >
             <span aria-hidden="true">←</span> Storefront
           </Link>
 
           {!sessionReady ? (
-            <div className="ez-mono text-xs uppercase tracking-[0.16em] text-[#86868B] animate-pulse">
+            <div className="ez-mono text-xs uppercase tracking-[0.16em] text-[var(--ez-subtle)] animate-pulse">
               Checking session…
             </div>
           ) : existingSession ? (
-            <>
-              <div className="mb-9">
-                <div className="flex items-center gap-3">
-                  <span className="ez-mono text-[10px] font-bold uppercase tracking-[.18em] text-[var(--ez-accent-text)]">
-                    Signed in
+            <div className="auth-form-body">
+              <div className="mb-8">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--ez-accent)]" aria-hidden="true" />
+                  <span className="ez-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ez-accent-text)]">
+                    Active session
                   </span>
-                  <span className="h-px flex-1 bg-[#e0e2e8]" />
                 </div>
-                <h2 className="mt-7 text-[clamp(2.3rem,3.4vw,3.25rem)] font-semibold leading-[.92] tracking-[-0.07em] text-[#17191f]">
+                <h2 className="mt-5 text-[clamp(1.75rem,3vw,2.35rem)] font-semibold leading-[1.02] tracking-[-0.045em] text-[var(--ez-ink)]">
                   You&apos;re already signed in
                 </h2>
-                <p className="mt-3.5 text-sm leading-relaxed text-[#666b78] sm:text-[15px]">
+                <p className="mt-3 text-[13px] leading-relaxed text-[var(--ez-muted)] sm:text-sm">
                   Continue as {existingSession.name} ({formatMobileDisplay(existingSession.mobile)})
                   {isAdminSession(existingSession) ? " · Admin" : ""}, or sign out to use a different number.
                 </p>
               </div>
 
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2.5">
                 <Link
                   href={continueHref}
-                  className="auth-submit inline-flex min-h-14 items-center justify-center gap-3 rounded-full bg-[#171920] px-6 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,22,30,.16)] transition hover:-translate-y-0.5 hover:bg-[var(--ez-accent)] hover:text-white"
+                  className="auth-submit inline-flex min-h-[3.25rem] items-center justify-center gap-2.5 rounded-[10px] bg-[var(--ez-ink)] px-5 text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-[#2a2a2d] hover:text-white"
                 >
-                  {continueLabel} <span aria-hidden="true">→</span>
+                  {continueLabel} <span aria-hidden="true" className="text-white/70">→</span>
                 </Link>
                 <button
                   type="button"
                   onClick={signOutExisting}
-                  className="inline-flex min-h-12 items-center justify-center rounded-full border border-[#d9dce4] bg-white px-6 text-sm font-semibold text-[#555b68] transition hover:border-[#babfca] hover:text-[#17191f]"
+                  className="inline-flex min-h-[3rem] items-center justify-center rounded-[10px] border border-[var(--ez-border)] bg-white px-5 text-sm font-semibold text-[var(--ez-muted)] transition hover:border-[#d2d2d7] hover:text-[var(--ez-ink)]"
                 >
                   Sign out
                 </button>
               </div>
-            </>
+            </div>
           ) : (
-            <>
-            <div className="mb-9">
-              <div className="flex items-center gap-3">
-                <span className="ez-mono text-[10px] font-bold uppercase tracking-[.18em] text-[var(--ez-accent-text)]">
-                  {step === "mobile" ? "Sign in · 01" : "Verify · 02"}
-                </span>
-                <span className="h-px flex-1 bg-[#e0e2e8]" />
-                <span className="ez-mono text-[9px] font-bold tracking-[.12em] text-[#9b9faa]">02</span>
-              </div>
-              <div className="auth-progress-track mt-4" aria-hidden="true">
-                <span className={step === "otp" ? "auth-progress-fill is-complete" : "auth-progress-fill"} />
-              </div>
-              <h2 className="mt-7 text-[clamp(2.3rem,3.4vw,3.25rem)] font-semibold leading-[.92] tracking-[-0.07em] text-[#17191f]">
-                {step === "mobile" ? "Enter your mobile number" : "Enter the OTP"}
+            <div className="auth-form-body">
+            <div className="mb-8">
+              <AuthStepIndicator step={step} />
+              <h2 className="mt-6 text-[clamp(1.75rem,3vw,2.35rem)] font-semibold leading-[1.02] tracking-[-0.045em] text-[var(--ez-ink)]">
+                {step === "mobile" ? "Enter your mobile number" : "Enter verification code"}
               </h2>
-              <p className="mt-3.5 text-sm leading-relaxed text-[#666b78] sm:text-[15px]">
+              <p className="mt-2.5 text-[13px] leading-relaxed text-[var(--ez-muted)] sm:text-sm">
                 {step === "mobile"
-                  ? "No password needed. We’ll send a six-digit code to get you in."
+                  ? "No password needed. We'll send a six-digit code to get you in."
                   : `We sent a six-digit code to ${maskMobile(mobile)}.`}
               </p>
             </div>
 
             {step === "mobile" ? (
               <form
-                className="flex flex-col gap-7"
+                className="flex flex-col gap-6"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void sendOtp();
                 }}
               >
-                <div className="flex flex-col gap-2.5">
-                  <label className="ez-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#686d7c]">
-                    Mobile no.
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="auth-mobile" className="ez-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ez-muted)]">
+                    Mobile number
                   </label>
-                  <div className="flex overflow-hidden rounded-[1rem] border border-[#d9dce4] bg-white shadow-[0_1px_2px_rgba(17,24,39,.02)] transition-[border-color,box-shadow,background-color] focus-within:border-[var(--ez-accent)] focus-within:shadow-[0_0_0_4px_oklch(0.55_0.17_var(--ez-h)_/_0.12)]">
-                    <span className="ez-mono flex shrink-0 items-center border-r border-[#e5e7ec] bg-[#f5f6f8] px-4 text-[13px] font-bold text-[#4e5462]">
+                  <div className="auth-input-group flex overflow-hidden rounded-[10px] border border-[var(--ez-border)] bg-[var(--ez-warm-surface)] transition-[border-color,box-shadow,background-color] focus-within:border-[var(--ez-accent)] focus-within:bg-white focus-within:shadow-[0_0_0_3px_oklch(0.55_0.17_var(--ez-h)_/_0.1)]">
+                    <span className="ez-mono flex shrink-0 items-center border-r border-[var(--ez-border)] bg-white/60 px-3.5 text-[13px] font-bold text-[var(--ez-soft-ink)]">
                       +91
                     </span>
                     <input
+                      id="auth-mobile"
                       type="tel"
                       inputMode="numeric"
                       autoComplete="tel-national"
@@ -372,19 +417,22 @@ function AuthPageContent() {
                         setMobile(normalizeMobile(event.target.value));
                         setError("");
                       }}
-                      className="min-w-0 flex-1 border-none bg-transparent px-4 py-4 text-[15px] font-medium tracking-[.01em] text-[#17191f] outline-none"
+                      className="min-w-0 flex-1 border-none bg-transparent px-3.5 py-3.5 text-[15px] font-medium tracking-[0.01em] text-[var(--ez-ink)] outline-none"
                     />
                   </div>
-                  <p className="m-0 pl-1 text-[12px] text-[#7d8290]">
-                    We’ll only use this for your sign-in code.
+                  <p className="m-0 text-[12px] text-[var(--ez-subtle)]">
+                    We&apos;ll only use this for your sign-in code.
                   </p>
-                  <p className="m-0 mt-1 border-l-2 border-[var(--ez-accent)] px-3 py-1 text-[11px] leading-relaxed text-[#777c89]">
-                    <span className="font-semibold text-[#4a505d]">Demo access:</span> numbers ending in <span className="ez-mono font-bold text-[#323744]">0000</span> open Admin.
-                  </p>
+                  <div className="auth-demo-note mt-1 rounded-[10px] border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] px-3.5 py-2.5">
+                    <p className="m-0 text-[11px] leading-relaxed text-[var(--ez-accent-soft-text)]">
+                      <span className="font-semibold text-[var(--ez-ink)]">Demo access:</span> numbers ending in{" "}
+                      <span className="ez-mono font-bold">0000</span> open Admin.
+                    </p>
+                  </div>
                 </div>
 
                 {error && (
-                  <p className="m-0 rounded-xl border border-[#f5c2c0] bg-[#fff5f5] px-4 py-3 text-sm text-[#b42318]">
+                  <p className="auth-error m-0 rounded-[10px] border border-[#f5c2c0] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] text-[#b42318]">
                     {error}
                   </p>
                 )}
@@ -392,14 +440,14 @@ function AuthPageContent() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="auth-submit inline-flex min-h-14 items-center justify-center gap-3 rounded-full bg-[#171920] px-6 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,22,30,.16)] transition hover:-translate-y-0.5 hover:bg-[var(--ez-accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  className="auth-submit inline-flex min-h-[3.25rem] items-center justify-center gap-2.5 rounded-[10px] bg-[var(--ez-ink)] px-5 text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-[var(--ez-accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loading ? "Sending OTP…" : <>Continue <span aria-hidden="true">→</span></>}
+                  {loading ? "Sending OTP…" : <>Continue <span aria-hidden="true" className="text-white/70">→</span></>}
                 </button>
               </form>
             ) : (
               <form
-                className="flex flex-col gap-7"
+                className="flex flex-col gap-6"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void verifyOtp();
@@ -415,7 +463,7 @@ function AuthPageContent() {
                 />
 
                 {error && (
-                  <p className="m-0 rounded-xl border border-[#f5c2c0] bg-[#fff5f5] px-4 py-3 text-sm text-[#b42318]">
+                  <p className="auth-error m-0 rounded-[10px] border border-[#f5c2c0] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] text-[#b42318]">
                     {error}
                   </p>
                 )}
@@ -423,15 +471,15 @@ function AuthPageContent() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="auth-submit inline-flex min-h-14 items-center justify-center gap-3 rounded-full bg-[#171920] px-6 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,22,30,.16)] transition hover:-translate-y-0.5 hover:bg-[var(--ez-accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  className="auth-submit inline-flex min-h-[3.25rem] items-center justify-center gap-2.5 rounded-[10px] bg-[var(--ez-ink)] px-5 text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-[var(--ez-accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loading ? "Verifying…" : <>Verify & continue <span aria-hidden="true">→</span></>}
+                  {loading ? "Verifying…" : <>Verify & continue <span aria-hidden="true" className="text-white/70">→</span></>}
                 </button>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e4e6eb] pt-5 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--ez-border)] pt-4 text-[13px]">
                   <button
                     type="button"
-                    className="font-medium text-[#555b68] transition hover:text-[#17191f]"
+                    className="font-medium text-[var(--ez-muted)] transition hover:text-[var(--ez-ink)]"
                     onClick={() => {
                       setStep("mobile");
                       setOtp("");
@@ -443,23 +491,23 @@ function AuthPageContent() {
                   <button
                     type="button"
                     disabled={loading || resendIn > 0}
-                    className="font-semibold text-[var(--ez-accent-text)] transition hover:text-[#17191f] disabled:text-[#aeb1bc]"
+                    className="font-semibold text-[var(--ez-accent-text)] transition hover:text-[var(--ez-ink)] disabled:text-[var(--ez-subtle)]"
                     onClick={() => void sendOtp(mobile)}
                   >
                     {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend OTP"}
                   </button>
                 </div>
 
-                <p className="m-0 text-center text-[12px] text-[#7c818e]">
+                <p className="m-0 text-center ez-mono text-[11px] text-[var(--ez-subtle)]">
                   Signing in as {formatMobileDisplay(mobile)}
                 </p>
               </form>
             )}
 
-            <p className="mt-10 text-center text-[11px] leading-relaxed text-[#858a96]">
+            <p className="auth-legal mt-8 text-center ez-mono text-[10px] leading-relaxed tracking-[0.02em] text-[var(--ez-subtle)]">
               By continuing, you agree to receive a one-time sign-in SMS from Ezurr.
             </p>
-            </>
+            </div>
           )}
         </div>
       </section>
@@ -471,8 +519,8 @@ export default function AuthPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-[100dvh] bg-[#f5f6fa] flex items-center justify-center">
-          <div className="ez-mono text-xs uppercase tracking-[0.16em] text-[#86868B] animate-pulse">
+        <main className="min-h-[100dvh] bg-[var(--ez-warm-surface)] flex items-center justify-center">
+          <div className="ez-mono text-xs uppercase tracking-[0.16em] text-[var(--ez-subtle)] animate-pulse">
             Loading Auth Gate…
           </div>
         </main>

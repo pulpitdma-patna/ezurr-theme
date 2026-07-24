@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminNotice } from "@/components/admin/AdminNotice";
 import { api, isApiEnabled, type ApiCustomer } from "@/lib/apiClient";
+import { AdminSelect } from "@/components/admin/AdminSelect";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
-import { FilterBar } from "@/components/admin/FilterBar";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatInr, parsePrice, type AdminCustomer, type AdminCustomerStatus } from "@/data/admin";
@@ -159,7 +159,14 @@ export default function AdminCustomersPage() {
           onChange: setQuery,
           placeholder: "Search name, mobile, city, or ID…",
         }}
-        filters={<FilterBar value={status} onChange={setStatus} options={filters} />}
+        filters={
+          <AdminSelect
+            label="Status"
+            value={status}
+            onChange={setStatus}
+            options={filters}
+          />
+        }
       />
 
       <DataTable

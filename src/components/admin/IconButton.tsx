@@ -86,3 +86,43 @@ export function ExportIcon() {
     </svg>
   );
 }
+
+export function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <path
+        d="M2.5 4h9M5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M5.75 6.5v4M8.25 6.5v4M3.75 4l.5 7.5a1 1 0 001 1h3.5a1 1 0 001-1L10.25 4"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function PauseIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <path
+        d="M5 3.5v7M9 3.5v7"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function PlayIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <path
+        d="M5 3.5l6 3.5-6 3.5V3.5z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

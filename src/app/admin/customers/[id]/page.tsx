@@ -154,16 +154,6 @@ export default function AdminCustomerDetailPage({
         </AdminNotice>
       ) : null}
 
-      {msg ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mb-4 rounded-md border border-[#A6D5B0] bg-[#EAF6ED] px-4 py-2.5 text-sm text-[#2D6B3C]"
-        >
-          {msg}
-        </div>
-      ) : null}
-
       <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
         <section className="rounded-lg border border-black/[0.08] bg-white">
           <div className="border-b border-black/[0.05] bg-[#F7F7F8] px-4 py-2.5">

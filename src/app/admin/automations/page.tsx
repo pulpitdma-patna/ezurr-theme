@@ -269,15 +269,6 @@ export default function AdminAutomationsPage() {
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {toast ? (
-              <span
-                role="status"
-                aria-live="polite"
-                className="inline-flex h-8 items-center rounded-full border border-[#A6D5B0] bg-[#EAF6ED] px-3 text-[11px] font-semibold text-[#2D6B3C]"
-              >
-                {toast}
-              </span>
-            ) : null}
             <Link href="/admin/automations/templates" className={secondaryBtnClass}>
               Browse templates
             </Link>

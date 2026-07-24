@@ -14,7 +14,7 @@ import { SettingsSection } from "@/components/admin/settings/SettingsSection";
 import { SettingsToggle } from "@/components/admin/settings/SettingsToggle";
 import { defaultAdminSettings, formatInr, type AdminSettings } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
-import { useAutoBanner } from "@/hooks/useAutoBanner";
+import { useAdminToast } from "@/components/admin/AdminToast";
 import { formatReleaseLabel } from "@/hooks/useLiveThemeSettings";
 import { useStaffRole } from "@/hooks/useStaffRole";
 import { STAFF_ROLE_OPTIONS } from "@/lib/adminPermissions";
@@ -23,10 +23,19 @@ import { api, isApiEnabled } from "@/lib/apiClient";
 import { invalidateApiSettings } from "@/hooks/useApiSettings";
 
 const fieldClass =
-  "w-full rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 py-2.5 text-sm outline-none transition hover:border-black/[0.12] focus:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
+  "h-9 w-full rounded-lg border border-black/[0.07] bg-[#FAFAFB] px-3 text-sm outline-none transition hover:border-black/[0.10] focus:border-black/[0.14] focus:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] disabled:opacity-50";
 
 const labelClass =
   "ez-mono text-[9px] font-medium uppercase tracking-[0.14em] text-[#86868B]";
+
+const secondaryBtnClass =
+  "inline-flex h-9 items-center rounded-lg border border-black/[0.08] bg-white px-3.5 text-xs font-semibold text-[#1D1D1F] shadow-[0_1px_2px_rgba(17,17,19,0.03)] transition hover:bg-[#FAFAFB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
+
+const insetPanelClass =
+  "rounded-lg border border-black/[0.06] bg-[#FAFAFB] px-3 py-2.5";
+
+const calloutClass =
+  "rounded-lg border border-black/[0.06] bg-[#FAFAFB] px-3 py-2.5 text-[11px] leading-relaxed text-[#6E6E73]";
 
 const HUE_PRESETS = [
   { label: "Violet", value: 255 },
@@ -63,7 +72,7 @@ export default function AdminSettingsPage() {
   }
 
   const [confirmReset, setConfirmReset] = useState(false);
-  const [msg, setMsg] = useAutoBanner(2500);
+  const toast = useAdminToast();
   const [emailError, setEmailError] = useState("");
 
   const selectTab = useCallback(
@@ -117,7 +126,7 @@ export default function AdminSettingsPage() {
   const pendingRef = useRef<Record<string, unknown>>({});
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const flushSettings = useCallback((toast: string) => {
+  const flushSettings = useCallback((successMessage: string) => {
     if (flushTimer.current) {
       clearTimeout(flushTimer.current);
       flushTimer.current = null;
@@ -129,18 +138,23 @@ export default function AdminSettingsPage() {
       .updateAdminSettings(payload)
       .then(() => {
         invalidateApiSettings();
-        setMsg(toast);
+        toast.push(successMessage, "success");
       })
-      .catch((err) => setMsg(err instanceof Error ? `Not saved: ${err.message}` : "Not saved to server"));
-  }, []);
+      .catch((err) =>
+        toast.push(
+          err instanceof Error ? `Not saved: ${err.message}` : "Not saved to server",
+          "danger",
+        ),
+      );
+  }, [toast]);
 
   // Persist any pending change if the page unmounts before the debounce fires.
   useEffect(() => () => flushSettings("Saved just now"), [flushSettings]);
 
-  function patch(partial: Partial<AdminSettings>, toast = "Saved just now") {
+  function patch(partial: Partial<AdminSettings>, successMessage = "Saved just now") {
     updateSettings(partial);
     if (!isApiEnabled()) {
-      setMsg(toast);
+      toast.push(successMessage, "success");
       return;
     }
     let queued = false;
@@ -151,12 +165,12 @@ export default function AdminSettingsPage() {
       }
     }
     if (!queued) {
-      setMsg(toast);
+      toast.push(successMessage, "success");
       return;
     }
-    setMsg("Saving…");
+    toast.push("Saving…", "neutral");
     if (flushTimer.current) clearTimeout(flushTimer.current);
-    flushTimer.current = setTimeout(() => flushSettings(toast), 600);
+    flushTimer.current = setTimeout(() => flushSettings(successMessage), 600);
   }
 
   function resetKnobs() {
@@ -176,13 +190,13 @@ export default function AdminSettingsPage() {
       notifyLowStock: defaultAdminSettings.notifyLowStock,
       notifyPreorderRelease: defaultAdminSettings.notifyPreorderRelease,
     });
-    setMsg("Theme & commerce knobs reset");
+    toast.push("Theme & commerce knobs reset", "success");
   }
 
   function resetDemo() {
     resetAdminStore();
     setConfirmReset(false);
-    setMsg("Demo data restored");
+    toast.push("Demo data restored", "success");
     selectTab("store");
   }
 
@@ -190,38 +204,35 @@ export default function AdminSettingsPage() {
   const releaseLabel = formatReleaseLabel(settings.releaseDate);
 
   return (
-    <div>
+    <div className="space-y-4">
       <AdminPageHeader
         title="Settings"
         description="Workspace preferences for your storefront, checkout, and ops alerts."
+        breadcrumbs={[
+          { label: "System", href: "/admin/settings" },
+          { label: "Settings" },
+        ]}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/"
-              className="inline-flex h-8 items-center rounded-lg border border-black/10 bg-white px-3 text-xs font-semibold transition hover:bg-[#F5F5F7]"
-            >
-              Open storefront
-            </Link>
-          </div>
+          <Link href="/" className={secondaryBtnClass}>
+            Open storefront
+          </Link>
         }
       />
 
-      <div className="lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
-        <SettingsNav activeId={tab} onChange={selectTab} />
-
-        <div className="min-w-0">
+      <section className="overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
+        <SettingsNav activeId={tab} onChange={selectTab}>
           <SettingsSection
             id="store"
             active={tab === "store"}
             title="Store profile"
             description="Identity customers and support channels see across the shop."
           >
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.06] bg-gradient-to-r from-[#F7F7F8] to-white px-4 py-3.5">
-              <div>
+            <div className={`${insetPanelClass} flex flex-wrap items-center justify-between gap-2.5`}>
+              <div className="min-w-0">
                 <div className="ez-mono text-[8px] uppercase tracking-[0.14em] text-[#AEAEB2]">
                   Live preview
                 </div>
-                <div className="mt-1 text-sm text-[#424245]">
+                <div className="mt-0.5 text-xs text-[#424245]">
                   Customer sees ·{" "}
                   <span className="font-semibold text-[#1D1D1F]">
                     {settings.storeName || "Ezurr Play HQ"}
@@ -235,7 +246,7 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <div
-                className="flex h-11 w-11 items-center justify-center rounded-xl text-xs font-semibold text-white shadow-sm"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold text-white ring-1 ring-black/[0.06]"
                 style={{ background: `oklch(0.45 0.12 ${settings.accentHue})` }}
                 aria-hidden
               >
@@ -243,7 +254,7 @@ export default function AdminSettingsPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Store name">
                 <input
                   value={settings.storeName}
@@ -309,15 +320,15 @@ export default function AdminSettingsPage() {
             title="Appearance"
             description="Accent and merchandising blocks that apply live on the storefront."
           >
-            <div className="mb-4 rounded-xl border border-black/[0.07] bg-[#F8F8FA] px-4 py-3 text-sm text-[#3A3A3C]">
+            <div className={`${calloutClass} text-[#3A3A3C]`}>
               Edit homepage sections, widgets, and custom code in the{" "}
               <a href="/admin/cms/home" className="font-semibold text-[#1D1D1F] underline">
                 homepage builder
               </a>
               .
             </div>
-            <div className="grid gap-5 lg:grid-cols-[1fr_200px]">
-              <div className="space-y-4">
+            <div className="grid gap-3.5 lg:grid-cols-[1fr_11.5rem]">
+              <div className="space-y-3">
                 <Field label={`Accent hue · ${settings.accentHue}`}>
                   <input
                     type="range"
@@ -327,20 +338,20 @@ export default function AdminSettingsPage() {
                     onChange={(e) => patch({ accentHue: Number(e.target.value) })}
                     className="w-full accent-[#1D1D1F]"
                   />
-                  <div className="mt-3 flex flex-wrap gap-1.5">
+                  <div className="mt-2 flex flex-wrap gap-1">
                     {HUE_PRESETS.map((preset) => (
                       <button
                         key={preset.value}
                         type="button"
                         onClick={() => patch({ accentHue: preset.value })}
-                        className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-semibold transition ${
                           settings.accentHue === preset.value
                             ? "border-[#1D1D1F] bg-[#1D1D1F] text-white"
                             : "border-black/[0.08] bg-white text-[#6E6E73] hover:text-[#1D1D1F]"
                         }`}
                       >
                         <span
-                          className="h-3 w-3 rounded-full ring-1 ring-black/10"
+                          className="h-2.5 w-2.5 rounded-full ring-1 ring-black/10"
                           style={{ background: `oklch(0.55 0.17 ${preset.value})` }}
                         />
                         {preset.label}
@@ -369,25 +380,25 @@ export default function AdminSettingsPage() {
                 </Field>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-[#0C0C0E] p-4 text-white">
-                <div className="ez-mono text-[8px] uppercase tracking-[0.16em] text-white/40">
+              <div className="overflow-hidden rounded-lg border border-black/[0.08] bg-[#0C0C0E] p-3 text-white">
+                <div className="ez-mono text-[7px] uppercase tracking-[0.16em] text-white/40">
                   Theme chip
                 </div>
                 <div
-                  className="mt-3 h-16 rounded-xl"
+                  className="mt-2 h-12 rounded-md"
                   style={{
                     background: `linear-gradient(135deg, oklch(0.55 0.17 ${settings.accentHue}), oklch(0.35 0.08 ${settings.accentHue}))`,
                   }}
                 />
-                <div className="mt-3 text-sm font-semibold tracking-[-0.02em]">
+                <div className="mt-2 text-xs font-semibold tracking-[-0.02em]">
                   {settings.storeName || "Ezurr Play HQ"}
                 </div>
-                <div className="mt-1 text-[11px] text-white/50">
+                <div className="mt-0.5 text-[10px] text-white/50">
                   Offer {settings.showOffer ? "on" : "off"} · Ships {releaseLabel}
                 </div>
                 <Link
                   href="/"
-                  className="mt-4 inline-flex h-8 w-full items-center justify-center rounded-lg bg-white text-xs font-semibold text-[#1D1D1F]"
+                  className="mt-3 inline-flex h-8 w-full items-center justify-center rounded-md bg-white text-[11px] font-semibold text-[#1D1D1F]"
                 >
                   Preview storefront
                 </Link>
@@ -401,7 +412,7 @@ export default function AdminSettingsPage() {
             title="Checkout"
             description="Payment preferences and cart thresholds."
           >
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Prepaid discount">
                 <div className="flex items-center gap-2">
                   <input
@@ -453,7 +464,7 @@ export default function AdminSettingsPage() {
               onChange={(checked) => patch({ codEnabled: checked })}
             />
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="COD limit">
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#86868B]">
@@ -493,14 +504,14 @@ export default function AdminSettingsPage() {
               </Field>
             </div>
 
-            <div className="mt-2 rounded-xl border border-black/[0.06] bg-[#FAFAFB] px-4 py-3.5">
-              <p className="text-sm text-[#6E6E73]">
+            <div className={calloutClass}>
+              <p>
                 Runtime rules layer on top of these defaults — payment method gates, shipping
                 labels, field requirements, and checkout blocks.
               </p>
               <Link
                 href="/admin/checkout-rules"
-                className="mt-2 inline-flex text-sm font-semibold text-[#1D1D1F] underline-offset-2 hover:underline"
+                className="mt-1.5 inline-flex text-[11px] font-semibold text-[#1D1D1F] underline-offset-2 hover:underline"
               >
                 Manage rules →
               </Link>
@@ -513,7 +524,7 @@ export default function AdminSettingsPage() {
             title="Operations"
             description="Stock alerts and locale defaults for the HQ console."
           >
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               <Field label="Low-stock threshold">
                 <input
                   type="number"
@@ -555,7 +566,7 @@ export default function AdminSettingsPage() {
               </Field>
             </div>
 
-            <div className="mt-4">
+            <div className="mt-1">
               <SettingsToggle
                 label="Hide out-of-stock products"
                 description={
@@ -568,11 +579,11 @@ export default function AdminSettingsPage() {
               />
             </div>
 
-            <div className="mt-6 border-t border-black/[0.06] pt-5">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#86868B]">
+            <div className="border-t border-black/[0.05] pt-3.5">
+              <p className="mb-2.5 ez-mono text-[9px] font-medium uppercase tracking-[0.14em] text-[#86868B]">
                 Analytics
               </p>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="GA4 Measurement ID">
                   <input
                     value={settings.gaMeasurementId}
@@ -605,13 +616,13 @@ export default function AdminSettingsPage() {
             title="Team"
             description="Staff roles for this HQ (UI gate only until Phase 2 authZ)."
           >
-            <div className="overflow-hidden rounded-xl border border-black/[0.08]">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-[#F7F7F8] ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
+            <div className="overflow-hidden rounded-lg border border-black/[0.06]">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#FAFAFB] ez-mono text-[8px] uppercase tracking-[0.12em] text-[#86868B]">
                   <tr>
-                    <th className="px-3 py-2.5">Member</th>
-                    <th className="px-3 py-2.5">Role</th>
-                    <th className="px-3 py-2.5">Access</th>
+                    <th className="px-3 py-2">Member</th>
+                    <th className="px-3 py-2">Role</th>
+                    <th className="px-3 py-2">Access</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/[0.05]">
@@ -622,15 +633,15 @@ export default function AdminSettingsPage() {
                     { name: "Finance", role: "Viewer", access: "Reports read-only" },
                   ].map((row) => (
                     <tr key={row.name}>
-                      <td className="px-3 py-2.5 font-medium">{row.name}</td>
-                      <td className="px-3 py-2.5 text-[#6E6E73]">{row.role}</td>
-                      <td className="px-3 py-2.5 text-[#86868B]">{row.access}</td>
+                      <td className="px-3 py-2 font-medium">{row.name}</td>
+                      <td className="px-3 py-2 text-[#6E6E73]">{row.role}</td>
+                      <td className="px-3 py-2 text-[#86868B]">{row.access}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <p className="mt-3 text-xs text-[#86868B]">
+            <p className="text-[11px] text-[#86868B]">
               Manage invites and the permissions matrix on{" "}
               <Link href="/admin/team" className="font-semibold text-[#424245] hover:underline">
                 Team
@@ -645,7 +656,7 @@ export default function AdminSettingsPage() {
             title="Tax"
             description="GST readiness for exports — rates are not calculated until order tax snapshots exist."
           >
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="GSTIN">
                 <input
                   value={settings.gstin ?? ""}
@@ -654,7 +665,7 @@ export default function AdminSettingsPage() {
                   className={fieldClass}
                 />
               </Field>
-              <div className="rounded-xl border border-dashed border-black/[0.1] bg-[#F7F7F8] px-4 py-3 text-xs text-[#6E6E73]">
+              <div className={`${calloutClass} border-dashed text-[#6E6E73]`}>
                 CGST / SGST / IGST splits and HSN codes are not captured on orders yet. Use Reports → Tax / GST for readiness exports.
               </div>
             </div>
@@ -666,7 +677,7 @@ export default function AdminSettingsPage() {
             title="Shipping"
             description="Zone stubs for metro / rest of India. Wired to free-shipping minimum from Checkout."
           >
-            <ul className="space-y-2">
+            <ul className="space-y-1.5">
               {[
                 { zone: "Metro", rate: "₹79 flat · free above checkout minimum" },
                 { zone: "Rest of India", rate: "₹119 flat · free above checkout minimum" },
@@ -674,14 +685,14 @@ export default function AdminSettingsPage() {
               ].map((row) => (
                 <li
                   key={row.zone}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-black/[0.06] bg-[#F7F7F8] px-4 py-3"
+                  className={`${insetPanelClass} flex items-center justify-between gap-3`}
                 >
-                  <span className="text-sm font-semibold">{row.zone}</span>
-                  <span className="text-xs text-[#6E6E73]">{row.rate}</span>
+                  <span className="text-xs font-semibold">{row.zone}</span>
+                  <span className="text-[11px] text-[#6E6E73]">{row.rate}</span>
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-[#86868B]">
+            <p className="text-[11px] text-[#86868B]">
               Free shipping threshold: {formatInr(settings.freeShippingMin)}. Carrier APIs stay under Integrations.
             </p>
           </SettingsSection>
@@ -712,7 +723,7 @@ export default function AdminSettingsPage() {
                 onChange={(checked) => patch({ notifyPreorderRelease: checked })}
               />
             </div>
-            <div className="rounded-xl border border-dashed border-black/[0.1] bg-[#FAFAFB] px-4 py-3 text-xs text-[#86868B]">
+            <div className={`${calloutClass} border-dashed`}>
               Email / SMS / WhatsApp delivery is out of scope for this mock HQ. Toggles persist
               so you can design ops flows against them.
             </div>
@@ -726,38 +737,36 @@ export default function AdminSettingsPage() {
             danger
           >
             <DemoRolePicker />
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-black/[0.08] bg-white p-4">
-                <div className="text-sm font-semibold text-[#1D1D1F]">Reset theme knobs</div>
-                <p className="mt-1 text-xs text-[#86868B]">
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <div className={`${insetPanelClass} bg-white p-3`}>
+                <div className="text-xs font-semibold text-[#1D1D1F]">Reset theme knobs</div>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-[#86868B]">
                   Restores accent, offer, checkout, and ops defaults. Keeps catalog & orders.
                 </p>
                 <button
                   type="button"
                   onClick={resetKnobs}
-                  className="mt-4 inline-flex h-9 items-center rounded-lg border border-black/10 bg-[#F7F7F8] px-4 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+                  className="mt-3 inline-flex h-8 items-center rounded-md border border-black/10 bg-[#FAFAFB] px-3 text-[11px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
                 >
                   Reset knobs
                 </button>
               </div>
-              <div className="rounded-xl border border-[#F5C2C0] bg-[#FFF8F8] p-4">
-                <div className="text-sm font-semibold text-[#B42318]">Reset demo data</div>
-                <p className="mt-1 text-xs text-[#912018]/80">
+              <div className="rounded-lg border border-[#F5C2C0] bg-[#FFF8F8] p-3">
+                <div className="text-xs font-semibold text-[#B42318]">Reset demo data</div>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-[#912018]/80">
                   Wipes localStorage and restores seed catalog, orders, codes, and settings.
                 </p>
                 <button
                   type="button"
                   onClick={() => setConfirmReset(true)}
-                  className="mt-4 inline-flex h-9 items-center rounded-lg bg-[#B42318] px-4 text-xs font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B42318]"
+                  className="mt-3 inline-flex h-8 items-center rounded-md bg-[#B42318] px-3 text-[11px] font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B42318]"
                 >
                   Reset everything
                 </button>
               </div>
             </div>
-            <details className="mt-4 rounded-xl border border-black/[0.06] bg-[#FAFAFB] px-4 py-3 text-xs text-[#86868B]">
-              <summary className="cursor-pointer font-semibold text-[#6E6E73]">
-                Demo auth note
-              </summary>
+            <details className={`${calloutClass} [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary]:text-[#6E6E73]`}>
+              <summary>Demo auth note</summary>
               <p className="mt-2 leading-relaxed">
                 Mobiles ending in <span className="ez-mono">0000</span> sign in as admin
                 (e.g. 9876500000). OTP is any 6 digits. Ops data lives in{" "}
@@ -765,8 +774,8 @@ export default function AdminSettingsPage() {
               </p>
             </details>
           </SettingsSection>
-        </div>
-      </div>
+        </SettingsNav>
+      </section>
 
       <ConfirmDialog
         open={confirmReset}
@@ -791,7 +800,7 @@ function Field({
   className?: string;
 }) {
   return (
-    <label className={`flex flex-col gap-1.5 ${className}`}>
+    <label className={`flex flex-col gap-1 ${className}`}>
       <span className={labelClass}>{label}</span>
       {children}
     </label>
@@ -801,27 +810,27 @@ function Field({
 function DemoRolePicker() {
   const { role, setRole } = useStaffRole();
   return (
-    <div className="rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-4 py-3">
+    <div className={`${insetPanelClass} bg-white`}>
       <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
         Demo role (this browser)
       </div>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
         {STAFF_ROLE_OPTIONS.map((option) => (
           <button
             key={option.value}
             type="button"
             onClick={() => setRole(option.value)}
-            className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${
+            className={`h-7 rounded-md px-2.5 text-[11px] font-semibold transition ${
               role === option.value
                 ? "bg-[#1D1D1F] text-white"
-                : "border border-black/10 bg-white text-[#424245] hover:bg-white"
+                : "border border-black/10 bg-white text-[#424245] hover:bg-[#FAFAFB]"
             }`}
           >
             {option.label}
           </button>
         ))}
       </div>
-      <p className="mt-2 text-[11px] text-[#86868B]">
+      <p className="mt-1.5 text-[11px] text-[#86868B]">
         Active: <span className="font-semibold capitalize text-[#1D1D1F]">{role}</span> — gates
         coupons, refunds, imports, and releases in the UI.
       </p>

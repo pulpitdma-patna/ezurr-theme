@@ -128,8 +128,7 @@ export default function AdminOrdersPage() {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [bulkConfirm, setBulkConfirm] = useState<"packed" | "shipped" | null>(null);
   const [density, setDensity] = useState<"compact" | "comfortable">("comfortable");
-  const [viewName, setViewName] = useState("");
-  const { views, saveView, removeView } = useListSavedViews("orders");
+  const { views, removeView } = useListSavedViews("orders");
   const toast = useAdminToast();
   const [listLoading, setListLoading] = useState(true);
   const [apiOrders, setApiOrders] = useState<AdminOrder[]>([]);
@@ -352,7 +351,7 @@ export default function AdminOrdersPage() {
             />
             {dateRange === "custom" ? (
               <>
-                <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-black/[0.07] bg-white pl-3 pr-2 shadow-[0_1px_2px_rgba(17,17,19,0.04)]">
+                <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-black/[0.07] bg-white pl-3 pr-2 shadow-none">
                   <span className="ez-mono shrink-0 text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
                     From
                   </span>
@@ -363,7 +362,7 @@ export default function AdminOrdersPage() {
                     className="h-full border-0 bg-transparent text-xs font-semibold text-[#1D1D1F] outline-none"
                   />
                 </label>
-                <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-black/[0.07] bg-white pl-3 pr-2 shadow-[0_1px_2px_rgba(17,17,19,0.04)]">
+                <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-black/[0.07] bg-white pl-3 pr-2 shadow-none">
                   <span className="ez-mono shrink-0 text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
                     To
                   </span>
@@ -425,62 +424,37 @@ export default function AdminOrdersPage() {
         }
       />
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        {views.map((view) => (
-          <button
-            key={view.id}
-            type="button"
-            onClick={() => {
-              setQuery(view.query);
-              setStatus(view.filters.status ?? "all");
-              setPaymentLocal(
-                view.filters.payment === "COD" || view.filters.payment === "Prepaid"
-                  ? view.filters.payment
-                  : "all",
-              );
-              setDateRange(view.filters.dateRange ?? "all");
-              setDateFrom(view.filters.dateFrom ?? "");
-              setDateTo(view.filters.dateTo ?? "");
-            }}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              removeView(view.id);
-              toast.push("View removed", "neutral");
-            }}
-            className="rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#424245] hover:text-[#1D1D1F]"
-            title="Click to apply · right-click to remove"
-          >
-            {view.name}
-          </button>
-        ))}
-        <input
-          value={viewName}
-          onChange={(e) => setViewName(e.target.value)}
-          placeholder="Save view name"
-          className="h-8 rounded-lg border border-black/[0.08] bg-white px-2.5 text-xs outline-none focus:border-black/[0.14]"
-        />
-        <button
-          type="button"
-          onClick={() => {
-            saveView({
-              name: viewName.trim() || "Orders view",
-              query,
-              filters: {
-                status,
-                payment,
-                dateRange,
-                dateFrom,
-                dateTo,
-              },
-            });
-            setViewName("");
-            toast.push("View saved", "success");
-          }}
-          className="h-8 rounded-lg bg-[#1D1D1F] px-3 text-[11px] font-semibold text-white"
-        >
-          Save view
-        </button>
-      </div>
+      {views.length > 0 ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {views.map((view) => (
+            <button
+              key={view.id}
+              type="button"
+              onClick={() => {
+                setQuery(view.query);
+                setStatus(view.filters.status ?? "all");
+                setPaymentLocal(
+                  view.filters.payment === "COD" || view.filters.payment === "Prepaid"
+                    ? view.filters.payment
+                    : "all",
+                );
+                setDateRange(view.filters.dateRange ?? "all");
+                setDateFrom(view.filters.dateFrom ?? "");
+                setDateTo(view.filters.dateTo ?? "");
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                removeView(view.id);
+                toast.push("View removed", "neutral");
+              }}
+              className="rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#424245] hover:text-[#1D1D1F]"
+              title="Click to apply · right-click to remove"
+            >
+              {view.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <DataTable
         loading={listLoading}

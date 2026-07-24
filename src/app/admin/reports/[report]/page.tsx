@@ -117,11 +117,6 @@ export default function AdminReportDetailPage() {
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {toast ? (
-              <span className="inline-flex h-8 items-center rounded-full border border-[#A6D5B0] bg-[#EAF6ED] px-3 text-[11px] font-semibold text-[#2D6B3C]">
-                {toast}
-              </span>
-            ) : null}
             <Link
               href="/admin/reports"
               className="inline-flex h-9 items-center rounded-lg border border-black/[0.1] bg-[#F7F7F8] px-3 text-xs font-semibold text-[#1D1D1F]"

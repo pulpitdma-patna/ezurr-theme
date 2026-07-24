@@ -161,15 +161,6 @@ export default function CheckoutRuleTemplatesPage() {
         }
       />
 
-      {toast ? (
-        <p
-          role="status"
-          className="mb-4 inline-flex rounded-full border border-[#A6D5B0] bg-[#EAF6ED] px-3 py-1.5 text-[11px] font-semibold text-[#2D6B3C]"
-        >
-          {toast}
-        </p>
-      ) : null}
-
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {templates.map((template) => (
           <article

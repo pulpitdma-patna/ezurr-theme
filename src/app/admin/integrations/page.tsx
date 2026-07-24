@@ -206,15 +206,6 @@ export default function AdminIntegrationsPage() {
         description="Connect the services that keep checkout, fulfillment, and customer updates moving."
         actions={
           <div className="flex items-center gap-2">
-            {toast ? (
-              <span
-                role="status"
-                aria-live="polite"
-                className="inline-flex h-8 items-center rounded-full border border-[#A6D5B0] bg-[#EAF6ED] px-3 text-[11px] font-semibold text-[#2D6B3C]"
-              >
-                {toast}
-              </span>
-            ) : null}
             <span className="hidden rounded-lg border border-black/[0.08] bg-white px-3 py-2 ez-mono text-[10px] text-[#6E6E73] sm:inline">
               {connectedCount} live · {attentionCount} attention
             </span>
@@ -229,25 +220,6 @@ export default function AdminIntegrationsPage() {
         </AdminNotice>
       ) : null}
 
-      <div className="mb-5 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Integration categories">
-        {categories.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={category === item.id}
-            onClick={() => setCategory(item.id)}
-            className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${
-              category === item.id
-                ? "bg-[#1D1D1F] text-white"
-                : "border border-black/[0.07] bg-white text-[#6E6E73] hover:text-[#1D1D1F]"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
       <ListToolbar
         resultLabel={`${rows.length} integrations`}
         search={{
@@ -256,12 +228,23 @@ export default function AdminIntegrationsPage() {
           placeholder: "Search services and categories…",
         }}
         filters={
-          <AdminSelect
-            label="Status"
-            value={status}
-            onChange={(value) => setStatus(value as AdminIntegrationStatus | "all")}
-            options={statusOptions}
-          />
+          <>
+            <AdminSelect
+              label="Category"
+              value={category}
+              onChange={(value) => setCategory(value as AdminIntegrationCategory | "all")}
+              options={categories.map((item) => ({
+                value: item.id,
+                label: item.label,
+              }))}
+            />
+            <AdminSelect
+              label="Status"
+              value={status}
+              onChange={(value) => setStatus(value as AdminIntegrationStatus | "all")}
+              options={statusOptions}
+            />
+          </>
         }
       />
 

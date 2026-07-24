@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminSelect } from "@/components/admin/AdminSelect";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
-import { FilterBar } from "@/components/admin/FilterBar";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { StockBadge } from "@/components/admin/StockBadge";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -186,7 +186,8 @@ export default function AdminInventoryPage() {
           placeholder: "Search SKU, name, platform…",
         }}
         filters={
-          <FilterBar
+          <AdminSelect
+            label="Stock"
             value={filter}
             onChange={setFilterLocal}
             options={[

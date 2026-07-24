@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AutomationBuilder } from "@/components/admin/AutomationBuilder";
-import { ListToolbar } from "@/components/admin/ListToolbar";
+import { AdminSelect } from "@/components/admin/AdminSelect";
 import { isApiEnabled } from "@/lib/apiClient";
 import type { AdminAutomationRule, AutomationTrigger } from "@/data/admin";
 import {
@@ -27,6 +27,8 @@ const triggerLabels: Record<AutomationTrigger, string> = {
   payment_captured: "Payment captured",
   payment_failed: "Payment failed",
 };
+
+const compactSelectClass = "h-9 rounded-lg shadow-none";
 
 const actionShort: Record<string, string> = {
   notify_internal: "Notify",
@@ -94,15 +96,6 @@ export default function AdminAutomationTemplatesPage() {
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {toast ? (
-              <span
-                role="status"
-                aria-live="polite"
-                className="inline-flex h-8 items-center rounded-full border border-[#A6D5B0] bg-[#EAF6ED] px-3 text-[11px] font-semibold text-[#2D6B3C]"
-              >
-                {toast}
-              </span>
-            ) : null}
             <Link
               href="/admin/automations"
               className="inline-flex h-9 items-center rounded-lg border border-black/[0.1] bg-white px-3.5 text-xs font-semibold text-[#1D1D1F] transition hover:bg-[#F5F5F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
@@ -153,37 +146,43 @@ export default function AdminAutomationTemplatesPage() {
         </span>
       </div>
 
-      <div
-        className="mb-4 flex gap-2 overflow-x-auto pb-1"
-        role="tablist"
-        aria-label="Template categories"
-      >
-        {automationTemplateCategories.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={category === item.id}
-            onClick={() => setCategory(item.id)}
-            className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${
-              category === item.id
-                ? "bg-[#1D1D1F] text-white"
-                : "border border-black/[0.07] bg-white text-[#6E6E73] hover:text-[#1D1D1F]"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <div className="mb-4 flex flex-col gap-2.5 rounded-xl border border-black/[0.06] bg-[#FAFAFB] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <div className="relative min-w-0 flex-1 lg:max-w-sm">
+            <span
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#AEAEB2]"
+              aria-hidden
+            >
+              <SearchGlyph />
+            </span>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search templates…"
+              className="h-9 w-full rounded-lg border border-black/[0.07] bg-white pl-8 pr-3 text-sm shadow-[0_1px_2px_rgba(17,17,19,0.03)] outline-none placeholder:text-[#AEAEB2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+            />
+          </div>
+          <span className="hidden shrink-0 ez-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B] sm:inline">
+            {rows.length} templates
+          </span>
+        </div>
 
-      <ListToolbar
-        resultLabel={`${rows.length} templates`}
-        search={{
-          value: query,
-          onChange: setQuery,
-          placeholder: "Search templates…",
-        }}
-      />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <AdminSelect
+            label="Category"
+            value={category}
+            onChange={(value) =>
+              setCategory(value as AutomationTemplateCategory | "all")
+            }
+            options={automationTemplateCategories.map((item) => ({
+              value: item.id,
+              label: item.label,
+            }))}
+            className={compactSelectClass}
+          />
+        </div>
+      </div>
 
       {rows.length ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -223,6 +222,15 @@ export default function AdminAutomationTemplatesPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+function SearchGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="6" cy="6" r="4.25" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M9.2 9.2L12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
   );
 }
 

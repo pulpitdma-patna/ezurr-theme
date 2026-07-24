@@ -14,7 +14,7 @@ type ListToolbarProps = {
   bulkBar?: ReactNode;
 };
 
-/** Search left; filters + action buttons right. */
+/** Compact search + filters + result count on one row (#FAFAFB bar). */
 export function ListToolbar({
   resultLabel,
   search,
@@ -23,13 +23,13 @@ export function ListToolbar({
   bulkBar,
 }: ListToolbarProps) {
   return (
-    <div className="mb-4 space-y-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+    <div className="mb-4">
+      <div className="flex flex-col gap-2.5 rounded-xl border border-black/[0.06] bg-[#FAFAFB] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {search ? (
-            <div className="relative w-full max-w-md">
+            <div className="relative min-w-0 flex-1 lg:max-w-sm">
               <span
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#AEAEB2]"
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#AEAEB2]"
                 aria-hidden
               >
                 <SearchGlyph />
@@ -39,23 +39,23 @@ export function ListToolbar({
                 value={search.value}
                 onChange={(e) => search.onChange(e.target.value)}
                 placeholder={search.placeholder ?? "Search…"}
-                className="h-10 w-full rounded-xl border border-black/[0.07] bg-white pl-9 pr-3 text-sm shadow-[0_1px_2px_rgba(17,17,19,0.04)] outline-none placeholder:text-[#AEAEB2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+                className="h-9 w-full rounded-lg border border-black/[0.07] bg-white pl-8 pr-3 text-sm shadow-[0_1px_2px_rgba(17,17,19,0.03)] outline-none placeholder:text-[#AEAEB2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
               />
             </div>
           ) : null}
           {resultLabel ? (
-            <span className="hidden shrink-0 ez-mono text-[10px] uppercase tracking-[0.12em] text-[#86868B] sm:inline">
+            <span className="hidden shrink-0 ez-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B] sm:inline">
               {resultLabel}
             </span>
           ) : null}
         </div>
 
-        <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {filters}
           {actions}
         </div>
       </div>
-      {bulkBar}
+      {bulkBar ? <div className="mt-3">{bulkBar}</div> : null}
     </div>
   );
 }

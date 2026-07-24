@@ -21,7 +21,7 @@ export function AdminSelect({
   className = "",
 }: AdminSelectProps) {
   return (
-    <label className={`inline-flex h-10 items-center gap-2 rounded-xl border border-black/[0.07] bg-white pl-3 pr-2 shadow-[0_1px_2px_rgba(17,17,19,0.04)] ${className}`}>
+    <label className={`inline-flex h-9 items-center gap-2 rounded-lg border border-black/[0.07] bg-white pl-3 pr-2 shadow-none ${className}`}>
       <span className="ez-mono shrink-0 text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
         {label}
       </span>

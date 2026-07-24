@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminNotice } from "@/components/admin/AdminNotice";
+import { AdminSelect } from "@/components/admin/AdminSelect";
+import { ListToolbar } from "@/components/admin/ListToolbar";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { api, isApiEnabled } from "@/lib/apiClient";
@@ -120,20 +122,22 @@ export default function AdminRecoveryPage() {
         ))}
       </div>
 
-      <div className="mb-4 flex gap-2">
-        {(["carts", "payments"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`h-8 rounded-lg px-3 text-[11px] font-semibold ${
-              tab === t ? "bg-[#1D1D1F] text-white" : "border border-black/[0.1] bg-white"
-            }`}
-          >
-            {t === "carts" ? `Abandoned carts (${sessions.length})` : `Payment issues (${orders.length})`}
-          </button>
-        ))}
-      </div>
+      <ListToolbar
+        resultLabel={
+          tab === "carts" ? `${sessions.length} carts` : `${orders.length} orders`
+        }
+        filters={
+          <AdminSelect
+            label="View"
+            value={tab}
+            onChange={(value) => setTab(value as "carts" | "payments")}
+            options={[
+              { value: "carts", label: `Abandoned carts (${sessions.length})` },
+              { value: "payments", label: `Payment issues (${orders.length})` },
+            ]}
+          />
+        }
+      />
 
       <div className="overflow-x-auto rounded-2xl border border-black/[0.07] bg-white">
         {tab === "carts" ? (
