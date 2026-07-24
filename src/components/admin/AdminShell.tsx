@@ -310,6 +310,7 @@ const pageTitles: { match: (path: string) => boolean; title: string; crumb?: str
   { match: (p) => p.startsWith("/admin/digital-codes"), title: "Digital codes", crumb: "Fulfillment", crumbHref: "/admin/orders" },
   { match: (p) => p.startsWith("/admin/customers"), title: "Customers", crumb: "Grow", crumbHref: "/admin/customers" },
   { match: (p) => p.startsWith("/admin/coupons"), title: "Coupons", crumb: "Grow", crumbHref: "/admin/coupons" },
+  { match: (p) => p.startsWith("/admin/recovery"), title: "Recovery", crumb: "Grow", crumbHref: "/admin/recovery" },
   { match: (p) => p === "/admin/cms", title: "Pages", crumb: "Online store", crumbHref: "/admin/cms" },
   { match: (p) => p === "/admin/cms/widgets", title: "Widgets", crumb: "Online store", crumbHref: "/admin/cms" },
   { match: (p) => p === "/admin/cms/code", title: "Custom code", crumb: "Online store", crumbHref: "/admin/cms" },
@@ -320,6 +321,7 @@ const pageTitles: { match: (path: string) => boolean; title: string; crumb?: str
   { match: (p) => p.startsWith("/admin/team"), title: "Team", crumb: "System", crumbHref: "/admin/settings" },
   { match: (p) => p.startsWith("/admin/integrations"), title: "Integrations", crumb: "System", crumbHref: "/admin/settings" },
   { match: (p) => p.startsWith("/admin/automations"), title: "Automations", crumb: "System", crumbHref: "/admin/settings" },
+  { match: (p) => p.startsWith("/admin/message-templates"), title: "Message templates", crumb: "System", crumbHref: "/admin/settings" },
   { match: (p) => p.startsWith("/admin/activity"), title: "Activity", crumb: "System", crumbHref: "/admin/settings" },
   { match: (p) => p.startsWith("/admin/tools"), title: "Import", crumb: "System", crumbHref: "/admin/settings" },
   { match: (p) => p.startsWith("/admin/settings"), title: "Settings", crumb: "System", crumbHref: "/admin/settings" },
@@ -422,6 +424,7 @@ const navSubmenus: NavGroup[] = [
     items: [
       { href: "/admin/customers", label: "Customers", icon: <IconUsers /> },
       { href: "/admin/coupons", label: "Coupons", icon: <IconTag /> },
+      { href: "/admin/recovery", label: "Recovery", icon: <IconGrow /> },
     ],
   },
   {
@@ -443,6 +446,7 @@ const navSubmenus: NavGroup[] = [
       { href: "/admin/team", label: "Team", icon: <IconUsers /> },
       { href: "/admin/integrations", label: "Integrations", icon: <IconPlug /> },
       { href: "/admin/automations", label: "Automations", icon: <IconBolt /> },
+      { href: "/admin/message-templates", label: "Message templates", icon: <IconReports /> },
       { href: "/admin/activity", label: "Activity", icon: <IconActivity /> },
       { href: "/admin/tools/import", label: "Import", icon: <IconReports /> },
       { href: "/admin/settings", label: "Settings", icon: <IconGear /> },
@@ -463,6 +467,27 @@ const SIDEBAR_COLLAPSED_EVENT = "ezurr-admin-sidebar-collapsed";
 function isActive(pathname: string, href: string) {
   if (href === "/admin") return pathname === "/admin";
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+// Every nav href, used to resolve the single best (longest) match so a parent
+// like /admin/cms doesn't highlight alongside its child /admin/cms/widgets.
+const ALL_NAV_HREFS = [
+  ...topLevelNav.map((i) => i.href),
+  ...navSubmenus.flatMap((g) => g.items.map((i) => i.href)),
+];
+
+function bestActiveHref(pathname: string): string | null {
+  let best: string | null = null;
+  for (const href of ALL_NAV_HREFS) {
+    if (!isActive(pathname, href)) continue;
+    if (best === null || href.length > best.length) best = href;
+  }
+  return best;
+}
+
+// A single nav item is active only if it is THE best match for the path.
+function isBestActive(pathname: string, href: string) {
+  return bestActiveHref(pathname) === href;
 }
 
 function groupHasActive(pathname: string, items: NavItem[]) {
@@ -592,7 +617,7 @@ function NavLinkItem({
   nested?: boolean;
   collapsed?: boolean;
 }) {
-  const active = isActive(pathname, item.href);
+  const active = isBestActive(pathname, item.href);
   if (collapsed) {
     return (
       <Link
@@ -772,7 +797,7 @@ function NavSubmenu({
             </div>
             <ul className="flex flex-col gap-0.5 px-1.5 py-1.5">
               {group.items.map((item) => {
-                const active = isActive(pathname, item.href);
+                const active = isBestActive(pathname, item.href);
                 return (
                   <li key={item.href}>
                     <Link
@@ -852,7 +877,7 @@ function NavSubmenu({
         {open ? (
           <ul className="flex flex-col gap-0.5 pl-[2.65rem] pr-0.5">
             {group.items.map((item) => {
-              const active = isActive(pathname, item.href);
+              const active = isBestActive(pathname, item.href);
               return (
                 <li key={item.href}>
                   <Link

@@ -1,20 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { FilterBar } from "@/components/admin/FilterBar";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { StockBadge } from "@/components/admin/StockBadge";
+import { useAdminToast } from "@/components/admin/AdminToast";
 import type { AdminCatalogRow } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 import { adjustStock } from "@/lib/adminStore";
+import { api, apiUpdateProduct, isApiEnabled } from "@/lib/apiClient";
+import { mapApiProductToAdminRow } from "@/lib/apiMappers";
 
 export default function AdminInventoryPage() {
   const store = useAdminStore();
+  const toast = useAdminToast();
   const searchParams = useSearchParams();
   const urlFilter = searchParams.get("filter");
   const [filterLocal, setFilterLocal] = useState<string | null>(null);
@@ -34,6 +38,31 @@ export default function AdminInventoryPage() {
   const [delta, setDelta] = useState("1");
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const apiOn = isApiEnabled();
+  const [apiProducts, setApiProducts] = useState<AdminCatalogRow[]>([]);
+
+  const loadProducts = useCallback(async () => {
+    if (!apiOn) return;
+    try {
+      const perPage = 100;
+      const first = await api.adminProducts({ page: 1, per_page: perPage });
+      let all = Array.isArray(first.data) ? first.data : [];
+      const lastPage = Number(first.last_page ?? 1);
+      for (let p = 2; p <= lastPage; p += 1) {
+        const res = await api.adminProducts({ page: p, per_page: perPage });
+        if (Array.isArray(res.data)) all = all.concat(res.data);
+      }
+      setApiProducts(all.map((p, i) => mapApiProductToAdminRow(p, i)));
+    } catch {
+      setApiProducts([]);
+    }
+  }, [apiOn]);
+
+  useEffect(() => {
+    void loadProducts();
+  }, [loadProducts]);
+
+  const source = apiOn ? apiProducts : store.products;
 
   useEffect(() => {
     if (!adjustKey) return;
@@ -49,7 +78,7 @@ export default function AdminInventoryPage() {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     const threshold = store.settings.lowStockThreshold ?? 5;
-    let list = store.products.filter((row) => {
+    let list = source.filter((row) => {
       if (filter === "low" && !(row.stock > 0 && row.stock <= threshold)) return false;
       if (filter === "out" && row.stock !== 0) return false;
       if (!q) return true;
@@ -64,7 +93,7 @@ export default function AdminInventoryPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [store.products, store.settings.lowStockThreshold, filter, query, sortKey, sortDir]);
+  }, [source, store.settings.lowStockThreshold, filter, query, sortKey, sortDir]);
 
   const columns: DataTableColumn<AdminCatalogRow>[] = [
     {
@@ -117,15 +146,30 @@ export default function AdminInventoryPage() {
     },
   ];
 
-  function applyAdjust(sign: 1 | -1) {
+  async function applyAdjust(sign: 1 | -1) {
     if (!adjustKey) return;
     const amount = Math.abs(Number(delta) || 0);
     if (amount === 0) return;
+    if (apiOn) {
+      const key = adjustKey;
+      const current = source.find((p) => p.key === key)?.stock ?? 0;
+      const nextStock = Math.max(0, current + sign * amount);
+      try {
+        await apiUpdateProduct(key, { stock: nextStock });
+        await loadProducts();
+        toast.push(`Stock updated to ${nextStock}`, "success");
+        setAdjustKey(null);
+      } catch (err) {
+        // Keep the modal open so the failed adjustment isn't mistaken for a save.
+        toast.push(err instanceof Error ? err.message : "Could not update stock", "warning");
+      }
+      return;
+    }
     adjustStock(adjustKey, sign * amount);
     setAdjustKey(null);
   }
 
-  const adjusting = store.products.find((p) => p.key === adjustKey);
+  const adjusting = source.find((p) => p.key === adjustKey);
 
   return (
     <div>
@@ -230,14 +274,14 @@ export default function AdminInventoryPage() {
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
-                onClick={() => applyAdjust(1)}
+                onClick={() => void applyAdjust(1)}
                 className="h-8 flex-1 rounded-md bg-[#1D1D1F] text-xs font-semibold text-white"
               >
                 Add
               </button>
               <button
                 type="button"
-                onClick={() => applyAdjust(-1)}
+                onClick={() => void applyAdjust(-1)}
                 className="h-8 flex-1 rounded-md border border-black/10 text-xs font-semibold"
               >
                 Remove

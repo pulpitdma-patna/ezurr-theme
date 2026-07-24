@@ -24,12 +24,12 @@ export function resolveProductId(
   return `item-${index}`;
 }
 
-/** Unique PDP URL for a catalog product. Never bare `/product`. */
+/** SEO-friendly PDP URL for a catalog product: `/products/<handle>`. */
 export function productDetailHref(
   product: Pick<CatalogProduct, "id" | "name">,
   index = 0,
 ): string {
-  return `/product?key=${encodeURIComponent(resolveProductId(product, index))}`;
+  return `/products/${encodeURIComponent(resolveProductId(product, index))}`;
 }
 
 /**

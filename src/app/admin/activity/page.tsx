@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminNotice } from "@/components/admin/AdminNotice";
+import { api, isApiEnabled, type ApiActivityEntry } from "@/lib/apiClient";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { FilterBar } from "@/components/admin/FilterBar";
 import { ListToolbar } from "@/components/admin/ListToolbar";
@@ -33,24 +35,54 @@ function entityHref(entry: AdminActivityEntry) {
   return "/admin/activity";
 }
 
+function mapApiActivity(a: ApiActivityEntry): AdminActivityEntry {
+  return {
+    id: String(a.id),
+    at: a.created_at ?? new Date().toISOString(),
+    actor: a.actor,
+    action: a.action,
+    entityType: a.entityType.toLowerCase() as AdminActivityEntry["entityType"],
+    entityId: a.entityId != null ? String(a.entityId) : "",
+    detail: a.meta ? JSON.stringify(a.meta) : undefined,
+  };
+}
+
 export default function AdminActivityPage() {
   const router = useRouter();
+  const apiOn = isApiEnabled();
   const store = useAdminStore();
+  const [remote, setRemote] = useState<AdminActivityEntry[]>([]);
   const [query, setQuery] = useSearchQueryParam();
   const [entityType, setEntityType] = useState("all");
   const [page, setPage] = usePagedList(`${query}|${entityType}`);
 
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    void api
+      .adminActivity()
+      .then((res) => {
+        if (!cancelled) setRemote(res.data.map(mapApiActivity));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn]);
+
+  const source = apiOn ? remote : store.activityLog;
+
   const entityCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: store.activityLog.length };
-    for (const entry of store.activityLog) {
+    const counts: Record<string, number> = { all: source.length };
+    for (const entry of source) {
       counts[entry.entityType] = (counts[entry.entityType] ?? 0) + 1;
     }
     return counts;
-  }, [store.activityLog]);
+  }, [source]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return store.activityLog.filter((entry) => {
+    return source.filter((entry) => {
       if (entityType !== "all" && entry.entityType !== entityType) return false;
       if (!q) return true;
       return (
@@ -60,7 +92,7 @@ export default function AdminActivityPage() {
         entry.actor.toLowerCase().includes(q)
       );
     });
-  }, [store.activityLog, query, entityType]);
+  }, [source, query, entityType]);
 
   const columns: DataTableColumn<AdminActivityEntry>[] = [
     {
@@ -102,6 +134,11 @@ export default function AdminActivityPage() {
 
   return (
     <div>
+      {!apiOn ? (
+        <AdminNotice tone="demo">
+          This activity log shows local demo events — enable the store API for the live audit trail.
+        </AdminNotice>
+      ) : null}
       <AdminPageHeader
         title="Activity"
         description="Audit trail of admin mutations in this workspace."

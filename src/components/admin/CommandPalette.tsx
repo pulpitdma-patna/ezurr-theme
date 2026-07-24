@@ -127,6 +127,14 @@ export function CommandPalette({
     return () => window.clearTimeout(t);
   }, [open]);
 
+  // Keep the keyboard-highlighted option scrolled into view.
+  useEffect(() => {
+    if (!open) return;
+    document
+      .getElementById(`${listId}-opt-${safeActive}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [open, safeActive, listId]);
+
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
@@ -178,8 +186,11 @@ export function CommandPalette({
             }}
             placeholder="Jump to pages, orders, products, customers…"
             className="w-full bg-transparent text-sm outline-none placeholder:text-[#AEAEB2]"
+            role="combobox"
+            aria-expanded={items.length > 0}
             aria-controls={listId}
             aria-autocomplete="list"
+            aria-activedescendant={items.length > 0 ? `${listId}-opt-${safeActive}` : undefined}
           />
         </div>
         <div id={listId} role="listbox" className="max-h-[360px] overflow-y-auto py-1">
@@ -197,7 +208,12 @@ export function CommandPalette({
                   {groupItems.map((item, ii) => {
                     const index = flatIndex(gi, ii);
                     return (
-                      <li key={item.id} role="option" aria-selected={index === safeActive}>
+                      <li
+                        key={item.id}
+                        id={`${listId}-opt-${index}`}
+                        role="option"
+                        aria-selected={index === safeActive}
+                      >
                         <button
                           type="button"
                           className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition ${

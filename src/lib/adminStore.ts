@@ -153,6 +153,13 @@ let state: AdminStoreState = createSeedState();
 let hydrated = false;
 const listeners = new Set<Listener>();
 
+// Stable seed for SSR / hydration — never mutated, never reads localStorage,
+// so getServerSnapshot matches the server-rendered HTML.
+const SERVER_SNAPSHOT: AdminStoreState = createSeedState();
+export function getServerAdminState(): AdminStoreState {
+  return SERVER_SNAPSHOT;
+}
+
 function emit() {
   listeners.forEach((listener) => listener());
 }
@@ -623,6 +630,13 @@ function restockOrderStock(
   return { products: nextProducts, ledger: nextLedger };
 }
 
+export function deleteProduct(key: string) {
+  setAdminState((prev) => ({
+    ...prev,
+    products: prev.products.filter((row) => row.key !== key),
+  }));
+}
+
 export function upsertProduct(
   product: Omit<AdminCatalogRow, "index"> & { index?: number },
 ) {
@@ -1002,6 +1016,7 @@ export function createCategory(input: {
   label: string;
   description?: string;
   key?: string;
+  active?: boolean;
 }) {
   const key = input.key?.trim() || slugify(input.label) || `cat-${Date.now()}`;
   const record: AdminCategoryRecord = {
@@ -1009,7 +1024,7 @@ export function createCategory(input: {
     key,
     label: input.label.trim(),
     description: input.description?.trim() ?? "",
-    active: true,
+    active: input.active ?? true,
   };
   upsertCategory(record);
   return record;

@@ -5,6 +5,7 @@ import { CategoryPage } from "@/components/catalog/CategoryPage";
 import { GameCardGrid } from "@/components/ui/GameCardGrid";
 import { MicroBar } from "@/components/layout/MicroBar";
 import { Header } from "@/components/layout/Header";
+import { FooterFull } from "@/components/layout/Footer";
 import Link from "next/link";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import {
@@ -30,17 +31,15 @@ export function ApiCatalogCategoryPage({
   categorySlug?: string;
 }) {
   const apiOn = isApiEnabled();
-  const [products, setProducts] = useState<CatalogProduct[]>(
-    apiOn ? [] : fallbackProducts,
-  );
-  const [loading, setLoading] = useState(apiOn);
+  // SSR the static fallback so the page has content on first paint; the effect
+  // refreshes from the API on the client.
+  const [products, setProducts] = useState<CatalogProduct[]>(fallbackProducts);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<"api" | "static">(apiOn ? "api" : "static");
 
   useEffect(() => {
     if (!apiOn) {
       setProducts(fallbackProducts);
-      setSource("static");
       setLoading(false);
       return;
     }
@@ -55,13 +54,11 @@ export function ApiCatalogCategoryPage({
         if (cancelled) return;
         const rows = Array.isArray(res.data) ? res.data : [];
         setProducts(rows.map(mapApiProductToCatalog));
-        setSource("api");
       })
       .catch((err: Error) => {
         if (cancelled) return;
         setProducts([]);
         setError(err.message || "Could not load catalog");
-        setSource("api");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -74,11 +71,6 @@ export function ApiCatalogCategoryPage({
 
   return (
     <>
-      {source === "api" ? (
-        <p className="ez-mono mx-auto max-w-6xl px-4 pt-4 text-[10px] uppercase tracking-[0.14em] text-[#86868B]">
-          Catalog from Laravel API
-        </p>
-      ) : null}
       {error ? (
         <p className="mx-auto max-w-6xl px-4 pt-2 text-sm text-[#B42318]" role="alert">
           {error}
@@ -106,8 +98,8 @@ export function ApiGameCardsPage({
   fallbackCards: GameCardProduct[];
 }) {
   const apiOn = isApiEnabled();
-  const [cards, setCards] = useState<GameCardProduct[]>(apiOn ? [] : fallbackCards);
-  const [loading, setLoading] = useState(apiOn);
+  const [cards, setCards] = useState<GameCardProduct[]>(fallbackCards);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -176,22 +168,7 @@ export function ApiGameCardsPage({
           <GameCardGrid cards={cards} />
         )}
       </section>
-      <footer className="mt-16 border-t border-[#E8E8ED] bg-white sm:mt-24">
-        <div className="ez-page flex flex-col items-start justify-between gap-4 py-5 md:flex-row md:items-center">
-          <Link href="/" className="flex items-baseline gap-2">
-            <span className="text-base font-bold tracking-[-0.03em]">Ezurr</span>
-            <span className="ez-mono text-[9px] uppercase tracking-[0.18em] text-[#86868B]">
-              Play HQ
-            </span>
-          </Link>
-          <span className="text-xs text-[#86868B]">
-            Digital codes are non-refundable once delivered.
-          </span>
-          <span className="ez-mono text-[10.5px] tracking-[0.08em] text-[#86868B]">
-            © 2026 EZURR
-          </span>
-        </div>
-      </footer>
+      <FooterFull />
     </div>
   );
 }

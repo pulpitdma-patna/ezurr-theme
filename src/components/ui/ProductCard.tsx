@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { CatalogProduct } from "@/lib/types";
+import type { CatalogProduct, ProductBadge } from "@/lib/types";
 import { useAccountStore } from "@/hooks/useAccountStore";
 import { catalogKeyForProduct, toggleWishlistKey } from "@/lib/accountStore";
 import { productDetailHref } from "@/lib/productKey";
+import { api, isApiEnabled } from "@/lib/apiClient";
+import { getSession } from "@/lib/auth";
 
 type ProductCardProps = CatalogProduct & {
   href?: string;
@@ -13,6 +15,33 @@ type ProductCardProps = CatalogProduct & {
   productKey?: string;
   showWishlist?: boolean;
 };
+
+const RIBBON_STYLES: Record<string, string> = {
+  discount: "bg-[#E5484D] text-white",
+  new: "bg-[#0B8A4B] text-white",
+  preorder: "bg-[#111113] text-white",
+  bestprice: "bg-[#C98A16] text-white",
+  soldout: "bg-[#8A8A8E] text-white",
+};
+
+/** Corner ribbons (New, Pre-order, -24%, Best Price, Sold out) over the media. */
+function ProductRibbons({ badges }: { badges?: ProductBadge[] }) {
+  if (!badges || badges.length === 0) return null;
+  return (
+    <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col items-start gap-1.5">
+      {badges.map((b, i) => (
+        <span
+          key={`${b.kind}-${i}`}
+          className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase leading-none tracking-[0.12em] shadow-[0_4px_12px_rgba(17,17,19,0.18)] ${
+            RIBBON_STYLES[b.kind] ?? "bg-[#111113] text-white"
+          }`}
+        >
+          {b.label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function WishlistButton({
   productKey,
@@ -32,7 +61,15 @@ function WishlistButton({
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        toggleWishlistKey(productKey);
+        const nowActive = toggleWishlistKey(productKey);
+        // Best-effort server sync for signed-in shoppers; no-ops (404) for
+        // catalog-only keys, so it never blocks the local UX.
+        if (isApiEnabled() && getSession()) {
+          const call = nowActive
+            ? api.addWishlist(productKey)
+            : api.removeWishlist(productKey);
+          void call.catch(() => {});
+        }
       }}
       className={`absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border transition duration-300 ${
         active
@@ -94,6 +131,7 @@ export function ProductCard({
   name,
   price,
   strike,
+  badges,
   href,
   variant = "grid",
   productKey,
@@ -109,6 +147,7 @@ export function ProductCard({
     return (
       <div className="relative h-full">
         {showWishlist ? <WishlistButton productKey={key} name={name} /> : null}
+        <ProductRibbons badges={badges} />
         <Link
           href={resolvedHref}
           className="ez-product-card group flex h-full flex-col overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_0_rgba(17,17,19,0.04),0_20px_48px_rgba(17,17,19,0.06)] transition-[transform,box-shadow,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-black/[0.1] hover:shadow-[0_1px_0_rgba(17,17,19,0.04),0_32px_64px_rgba(17,17,19,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1D1D1F] sm:rounded-[28px]"
@@ -158,6 +197,7 @@ export function ProductCard({
   return (
     <div className="relative h-full">
       {showWishlist ? <WishlistButton productKey={key} name={name} /> : null}
+      <ProductRibbons badges={badges} />
       <Link
         href={resolvedHref}
         className="ez-product-card group flex h-full flex-col overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_0_rgba(17,17,19,0.04),0_20px_48px_rgba(17,17,19,0.06)] transition-[transform,box-shadow,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-black/[0.1] hover:shadow-[0_1px_0_rgba(17,17,19,0.04),0_32px_64px_rgba(17,17,19,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1D1D1F] sm:rounded-[28px]"
@@ -184,16 +224,10 @@ export function ProductCard({
                 </span>
               ) : null}
             </div>
-            {strike ? (
-              <span className="ez-mono rounded-full bg-[#111113] px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.14em] text-white">
-                Sale
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[12px] font-semibold tracking-[-0.01em] text-[#111113] transition group-hover:gap-1.5">
-                View
-                <span aria-hidden>→</span>
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1 text-[12px] font-semibold tracking-[-0.01em] text-[#111113] transition group-hover:gap-1.5">
+              View
+              <span aria-hidden>→</span>
+            </span>
           </div>
         </div>
       </Link>

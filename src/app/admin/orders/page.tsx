@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSelect } from "@/components/admin/AdminSelect";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
@@ -140,22 +141,29 @@ export default function AdminOrdersPage() {
     }
     let cancelled = false;
     setListLoading(true);
-    void api
-      .adminOrders({ page: 1 })
-      .then((res) => {
+    void (async () => {
+      try {
+        // Page through the full order book (server clamps per_page to 100)
+        // instead of showing only the first page.
+        const perPage = 100;
+        const first = await api.adminOrders({ page: 1, per_page: perPage });
+        let all = Array.isArray(first.data) ? first.data : [];
+        const lastPage = Number(first.last_page ?? 1);
+        for (let p = 2; p <= lastPage && !cancelled; p += 1) {
+          const res = await api.adminOrders({ page: p, per_page: perPage });
+          if (Array.isArray(res.data)) all = all.concat(res.data);
+        }
         if (cancelled) return;
-        const rows = Array.isArray(res.data) ? res.data : [];
-        setApiOrders(rows.map((raw) => mapApiOrderToAdmin(raw)));
+        setApiOrders(all.map((raw) => mapApiOrderToAdmin(raw)));
         setListError(null);
-      })
-      .catch((err: Error) => {
+      } catch (err) {
         if (cancelled) return;
         setApiOrders([]);
-        setListError(err.message || "Could not load orders");
-      })
-      .finally(() => {
+        setListError(err instanceof Error ? err.message : "Could not load orders");
+      } finally {
         if (!cancelled) setListLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -293,7 +301,10 @@ export default function AdminOrdersPage() {
     }
   }
 
-  const pendingCod = store.orders.filter(
+  // In API mode apiOrders holds the full order book, so counts must read it —
+  // not the local seed store.
+  const orderSource = isApiEnabled() ? apiOrders : store.orders;
+  const pendingCod = orderSource.filter(
     (o) => o.payment === "COD" && o.status === "pending",
   ).length;
 
@@ -304,8 +315,12 @@ export default function AdminOrdersPage() {
         description="Confirm COD, pack prepaid, and ship — open any row for fulfillment."
       />
 
+      {listError ? (
+        <AdminNotice tone="error">{listError}</AdminNotice>
+      ) : null}
+
       <ListToolbar
-        resultLabel={`${rows.length} of ${store.orders.length}`}
+        resultLabel={`${rows.length} of ${orderSource.length}`}
         search={{
           value: query,
           onChange: setQuery,

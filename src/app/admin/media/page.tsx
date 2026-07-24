@@ -1,26 +1,55 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { Phase2PageShell } from "@/components/admin/Phase2PageShell";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { useAdminStore } from "@/hooks/useAdminStore";
+import { api, isApiEnabled, uploadImage, type ApiMediaAsset } from "@/lib/apiClient";
 
 type MediaAsset = {
   id: string;
+  assetId?: number; // set for API-backed assets (enables delete)
   name: string;
   url: string;
   kind: "product" | "banner" | "upload";
   bytesLabel: string;
 };
 
+function fromApiAsset(a: ApiMediaAsset): MediaAsset {
+  return {
+    id: `api-${a.id}`,
+    assetId: a.id,
+    name: a.path.split("/").pop() ?? a.path,
+    url: a.url,
+    kind: "upload",
+    bytesLabel: `${Math.round((a.bytes || 0) / 1024)} KB · ${a.folder}`,
+  };
+}
+
 export default function AdminMediaPage() {
+  const apiOn = isApiEnabled();
   const store = useAdminStore();
   const toast = useAdminToast();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [uploads, setUploads] = useState<MediaAsset[]>([]);
+  const [remote, setRemote] = useState<MediaAsset[]>([]);
+
+  const reload = useCallback(async () => {
+    if (!apiOn) return;
+    try {
+      const res = await api.adminMedia({ page: 1 });
+      setRemote((res.data ?? []).map(fromApiAsset));
+    } catch {
+      /* keep prior */
+    }
+  }, [apiOn]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   const catalogAssets = useMemo<MediaAsset[]>(
     () =>
@@ -35,29 +64,33 @@ export default function AdminMediaPage() {
   );
 
   const assets = useMemo(() => {
-    const all = [...uploads, ...catalogAssets];
+    const all = apiOn ? remote : [...uploads, ...catalogAssets];
     const q = query.trim().toLowerCase();
     if (!q) return all;
     return all.filter((asset) => asset.name.toLowerCase().includes(q));
-  }, [uploads, catalogAssets, query]);
+  }, [apiOn, remote, uploads, catalogAssets, query]);
 
   const active = assets.find((asset) => asset.id === selected) ?? assets[0] ?? null;
 
   return (
     <Phase2PageShell
       title="Media"
-      description="CDN library for product stills and merchandising — uploads stay local until Phase 2."
+      description={
+        apiOn
+          ? "Optimised image library — every upload is compressed and stored on the server."
+          : "CDN library for product stills and merchandising — uploads stay local until the API is enabled."
+      }
       breadcrumbs={[
         { label: "Catalog", href: "/admin/products" },
         { label: "Media" },
       ]}
-      bannerTitle="CDN pipeline preview"
-      bannerDescription="Uploads use object URLs in this browser only. Crop, variants, and signed CDN URLs arrive with the media service."
-      planned={[
-        "Signed CDN uploads & variants",
-        "Crop studio & focal points",
-        "Asset usage across catalog",
-      ]}
+      bannerTitle={apiOn ? "Live media library" : "CDN pipeline preview"}
+      bannerDescription={
+        apiOn
+          ? "Uploads are optimised (auto-orient, strip metadata, downscale, re-encode) and served from the public storage disk."
+          : "Uploads use object URLs in this browser only. Enable the store API for server-backed media."
+      }
+      planned={apiOn ? [] : ["Signed CDN uploads & variants", "Crop studio & focal points"]}
       actions={
         <label className="inline-flex h-9 cursor-pointer items-center rounded-xl bg-[#1D1D1F] px-3.5 text-xs font-semibold text-white">
           Upload
@@ -68,6 +101,18 @@ export default function AdminMediaPage() {
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (!file) return;
+              e.target.value = "";
+              if (apiOn) {
+                void uploadImage(file, "media")
+                  .then(() => {
+                    toast.push("Uploaded & optimised", "success");
+                    return reload();
+                  })
+                  .catch((err) =>
+                    toast.push(err instanceof Error ? err.message : "Upload failed", "warning"),
+                  );
+                return;
+              }
               const url = URL.createObjectURL(file);
               const asset: MediaAsset = {
                 id: `up-${Date.now()}`,
@@ -79,7 +124,6 @@ export default function AdminMediaPage() {
               setUploads((prev) => [asset, ...prev]);
               setSelected(asset.id);
               toast.push("File staged locally — not uploaded to CDN", "warning");
-              e.target.value = "";
             }}
           />
         </label>
@@ -158,19 +202,39 @@ export default function AdminMediaPage() {
                   type="button"
                   onClick={() => {
                     void navigator.clipboard.writeText(active.url);
-                    toast.push("URL copied (may be local blob)", "success");
+                    toast.push(apiOn ? "URL copied" : "URL copied (may be local blob)", "success");
                   }}
                   className="h-9 rounded-xl border border-black/10 text-xs font-semibold"
                 >
                   Copy URL
                 </button>
-                <button
-                  type="button"
-                  onClick={() => toast.push("Crop studio is Phase 2 UI only", "warning")}
-                  className="h-9 rounded-xl bg-[#1D1D1F] text-xs font-semibold text-white"
-                >
-                  Open crop studio
-                </button>
+                {apiOn && active.assetId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = active.assetId!;
+                      void api
+                        .deleteMedia(id)
+                        .then(() => {
+                          toast.push("Asset deleted", "success");
+                          setSelected(null);
+                          return reload();
+                        })
+                        .catch(() => toast.push("Could not delete", "warning"));
+                    }}
+                    className="h-9 rounded-xl border border-red-200 text-xs font-semibold text-red-700"
+                  >
+                    Delete asset
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => toast.push("Crop studio is a later feature", "warning")}
+                    className="h-9 rounded-xl bg-[#1D1D1F] text-xs font-semibold text-white"
+                  >
+                    Open crop studio
+                  </button>
+                )}
               </div>
             </>
           ) : (

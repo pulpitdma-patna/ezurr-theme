@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSelect } from "@/components/admin/AdminSelect";
+import { api, isApiEnabled, type ApiIntegration } from "@/lib/apiClient";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import {
   type AdminIntegration,
@@ -47,8 +49,41 @@ const categoryMeta: Record<AdminIntegrationCategory, { label: string; accent: st
 const fieldClass =
   "w-full rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 py-2.5 text-sm outline-none transition hover:border-black/[0.12] focus:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
 
+function apiToIntegration(i: ApiIntegration): AdminIntegration {
+  return {
+    id: i.id,
+    name: i.name,
+    category: i.category as AdminIntegrationCategory,
+    description: i.description ?? "",
+    status: i.status as AdminIntegrationStatus,
+    enabled: i.enabled,
+    lastSync: i.lastSync ?? undefined,
+    accountLabel: i.accountLabel ?? undefined,
+    apiKeyMasked: i.apiKeyMasked ?? undefined,
+    webhookUrl: i.webhookUrl ?? undefined,
+  };
+}
+
 export default function AdminIntegrationsPage() {
-  const { integrations } = useAdminStore();
+  const store = useAdminStore();
+  const apiOn = isApiEnabled();
+  const [apiIntegrations, setApiIntegrations] = useState<AdminIntegration[]>([]);
+
+  const loadIntegrations = useCallback(async () => {
+    if (!apiOn) return;
+    try {
+      const res = await api.integrations();
+      setApiIntegrations((res.data ?? []).map(apiToIntegration));
+    } catch {
+      setApiIntegrations([]);
+    }
+  }, [apiOn]);
+
+  useEffect(() => {
+    void loadIntegrations();
+  }, [loadIntegrations]);
+
+  const integrations = apiOn ? apiIntegrations : store.integrations;
   const [category, setCategory] = useState<AdminIntegrationCategory | "all">("all");
   const [status, setStatus] = useState<AdminIntegrationStatus | "all">("all");
   const [query, setQuery] = useState("");
@@ -82,7 +117,17 @@ export default function AdminIntegrationsPage() {
     setToast("");
   }
 
-  function connect(integration: AdminIntegration) {
+  async function connect(integration: AdminIntegration) {
+    if (apiOn) {
+      try {
+        await api.connectIntegration(integration.id, {});
+        await loadIntegrations();
+        setToast(`${integration.name} connected`);
+      } catch {
+        setToast("Could not connect");
+      }
+      return;
+    }
     updateIntegration(integration.id, {
       enabled: true,
       status: "connected",
@@ -91,13 +136,31 @@ export default function AdminIntegrationsPage() {
     setToast(`${integration.name} connected`);
   }
 
-  function toggle(integration: AdminIntegration, enabled: boolean) {
-    updateIntegration(integration.id, { enabled });
+  async function toggle(integration: AdminIntegration, enabled: boolean) {
+    if (apiOn) {
+      try {
+        await api.updateIntegration(integration.id, { enabled });
+        await loadIntegrations();
+      } catch {
+        setToast("Could not update");
+      }
+    } else {
+      updateIntegration(integration.id, { enabled });
+    }
     setToast(`${integration.name} ${enabled ? "enabled" : "paused"}`);
   }
 
-  function testConnection() {
+  async function testConnection() {
     if (!active) return;
+    if (apiOn) {
+      try {
+        const res = await api.testIntegration(active.id);
+        setToast(`${active.name}: ${res.message}`);
+      } catch {
+        setToast("Test failed");
+      }
+      return;
+    }
     updateIntegration(active.id, {
       status: "connected",
       lastSync: new Date().toISOString(),
@@ -116,8 +179,21 @@ export default function AdminIntegrationsPage() {
     }
   }
 
-  function saveCredentialAlias() {
+  async function saveCredentialAlias() {
     if (!active || !credentialDraft.trim()) return;
+    if (apiOn) {
+      try {
+        await api.updateIntegration(active.id, {
+          credentials: { api_key: credentialDraft.trim() },
+        });
+        await loadIntegrations();
+        setCredentialDraft("");
+        setToast("Credential saved (encrypted server-side)");
+      } catch {
+        setToast("Could not save credential");
+      }
+      return;
+    }
     updateIntegration(active.id, { apiKeyMasked: "••••••••••••••••" });
     setCredentialDraft("");
     setToast("Masked credential saved");
@@ -145,6 +221,13 @@ export default function AdminIntegrationsPage() {
           </div>
         }
       />
+
+      {apiOn ? (
+        <AdminNotice tone="info">
+          Connections and credentials are saved to the server (secrets are stored
+          encrypted and shown masked). Provider test-calls report the connected state.
+        </AdminNotice>
+      ) : null}
 
       <div className="mb-5 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Integration categories">
         {categories.map((item) => (
@@ -231,7 +314,13 @@ export default function AdminIntegrationsPage() {
             toastMessage={toast}
             onCredentialDraft={setCredentialDraft}
             onSaveCredential={saveCredentialAlias}
-            onPatch={(patch) => updateIntegration(active.id, patch)}
+            onPatch={(patch) => {
+              if (apiOn) {
+                void api.updateIntegration(active.id, patch).then(loadIntegrations);
+              } else {
+                updateIntegration(active.id, patch);
+              }
+            }}
             onTest={testConnection}
             onCopyWebhook={copyWebhook}
             onToggle={(enabled) => toggle(active, enabled)}

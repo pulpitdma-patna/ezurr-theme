@@ -89,6 +89,9 @@ export type AdminOrder = {
   city: string;
   items: AdminOrderItem[];
   tracking?: string;
+  trackingUrl?: string;
+  carrierName?: string;
+  eta?: string;
   notes?: string;
   timeline: AdminOrderEvent[];
   /** Stock was decremented via ledger for physical/preorder lines */
@@ -274,11 +277,14 @@ export type AdminSettings = {
   freeShippingMin: number;
   orderIdPrefix: string;
   lowStockThreshold: number;
+  hideOutOfStock: boolean;
   timezone: string;
   currencyLabel: string;
   notifyNewOrder: boolean;
   notifyLowStock: boolean;
   notifyPreorderRelease: boolean;
+  gaMeasurementId: string;
+  metaPixelId: string;
 };
 
 export function parsePrice(value: string): number {
@@ -1104,11 +1110,14 @@ export const defaultAdminSettings: AdminSettings = {
   freeShippingMin: 2999,
   orderIdPrefix: "EZX",
   lowStockThreshold: 5,
+  hideOutOfStock: false,
   timezone: "Asia/Kolkata",
   currencyLabel: "INR",
   notifyNewOrder: true,
   notifyLowStock: true,
   notifyPreorderRelease: true,
+  gaMeasurementId: "",
+  metaPixelId: "",
 };
 
 export const adminProductTabs: { key: AdminProductCategory; label: string }[] = [
@@ -1206,6 +1215,33 @@ export const orderStatusLabels: Record<AdminOrderStatus, string> = {
   preorder: "Pre-order",
   refunded: "Refunded",
 };
+
+/** Linear fulfilment rail shown in the customer order tracker. */
+export const ORDER_STEPS: AdminOrderStatus[] = [
+  "pending",
+  "confirmed",
+  "packed",
+  "shipped",
+  "delivered",
+];
+
+/** Tailwind classes for a status pill (shared by list + tracker). */
+export function statusTone(status: AdminOrderStatus): string {
+  switch (status) {
+    case "delivered":
+      return "bg-[#E7F6EC] text-[#1E7B3C]";
+    case "shipped":
+    case "packed":
+      return "bg-[#E8F0FE] text-[#1A56C4]";
+    case "cancelled":
+    case "refunded":
+      return "bg-[#FDECEC] text-[#B42318]";
+    case "preorder":
+      return "bg-[#F2ECFB] text-[#6B3FA0]";
+    default:
+      return "bg-[#F0F0F2] text-[#6E6E73]";
+  }
+}
 
 export const productStatusLabels: Record<AdminProductStatus, string> = {
   draft: "Draft",

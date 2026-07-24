@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { ListToolbar } from "@/components/admin/ListToolbar";
@@ -15,8 +16,11 @@ import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 import { useStaffRole } from "@/hooks/useStaffRole";
 import { can } from "@/lib/adminPermissions";
 import { markPreordersReady } from "@/lib/adminStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
+import { mapApiOrderToAdmin } from "@/lib/apiMappers";
 
 export default function AdminPreordersPage() {
+  const apiOn = isApiEnabled();
   const store = useAdminStore();
   const toast = useAdminToast();
   const { role } = useStaffRole();
@@ -26,11 +30,23 @@ export default function AdminPreordersPage() {
   const [query, setQuery] = useSearchQueryParam();
   const [page, setPage] = usePagedList(query);
   const [catalogPage, setCatalogPage] = usePagedList(`catalog|${query}`);
+  const [apiOrders, setApiOrders] = useState<AdminOrder[]>([]);
+
+  const loadPreorders = () => {
+    if (!apiOn) return;
+    void api
+      .adminOrders({ status: "preorder", per_page: 100 })
+      .then((res) => setApiOrders((res.data ?? []).map((raw) => mapApiOrderToAdmin(raw))))
+      .catch(() => {});
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadPreorders, [apiOn]);
+
+  const allPreorders = apiOn ? apiOrders : store.orders.filter((o) => o.status === "preorder");
 
   const preorderOrders = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return store.orders.filter((o) => {
-      if (o.status !== "preorder") return false;
+    return allPreorders.filter((o) => {
       if (!q) return true;
       return (
         o.id.toLowerCase().includes(q) ||
@@ -38,7 +54,8 @@ export default function AdminPreordersPage() {
         (o.items[0]?.name ?? "").toLowerCase().includes(q)
       );
     });
-  }, [store.orders, query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allPreorders, query]);
 
   const catalogPreorders = useMemo(
     () => store.products.filter((p) => p.category === "preorders"),
@@ -47,7 +64,7 @@ export default function AdminPreordersPage() {
 
   const holdsByTitle = useMemo(() => {
     const map = new Map<string, { name: string; releaseDate?: string; orders: AdminOrder[] }>();
-    for (const order of store.orders.filter((o) => o.status === "preorder")) {
+    for (const order of allPreorders) {
       const item = order.items[0];
       const key = item?.productKey ?? item?.name ?? order.id;
       const product = store.products.find((p) => p.key === item?.productKey);
@@ -60,7 +77,8 @@ export default function AdminPreordersPage() {
       map.set(key, prev);
     }
     return [...map.values()];
-  }, [store.orders, store.products]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allPreorders, store.products]);
 
   const orderColumns: DataTableColumn<AdminOrder>[] = [
     {
@@ -139,11 +157,24 @@ export default function AdminPreordersPage() {
       toast.push("Read-only role cannot release holds", "warning");
       return;
     }
+    const count = selected.length;
+    if (apiOn) {
+      setConfirmRelease(false);
+      void (async () => {
+        try {
+          // Release = confirm the preorder; the API emits preorder_released.
+          await Promise.all(selected.map((id) => api.patchOrderStatus(id, { status: "confirmed" })));
+          toast.push(`Released ${count} hold${count === 1 ? "" : "s"} → confirmed`, "success");
+          setSelected([]);
+          loadPreorders();
+        } catch (e) {
+          toast.push(e instanceof Error ? e.message : "Release failed", "warning");
+        }
+      })();
+      return;
+    }
     markPreordersReady(selected);
-    toast.push(
-      `Released ${selected.length} hold${selected.length === 1 ? "" : "s"} · stock allocated`,
-      "success",
-    );
+    toast.push(`Released ${count} hold${count === 1 ? "" : "s"} · stock allocated`, "success");
     setSelected([]);
     setConfirmRelease(false);
   }
@@ -166,6 +197,13 @@ export default function AdminPreordersPage() {
           ) : null
         }
       />
+
+      {!apiOn ? (
+        <AdminNotice tone="demo" className="mb-4">
+          Pre-orders shown here are derived from local demo data — enable the store
+          API for live pre-order holds and release.
+        </AdminNotice>
+      ) : null}
 
       {holdsByTitle.length > 0 ? (
         <section className="mb-5 grid gap-2 sm:grid-cols-2">

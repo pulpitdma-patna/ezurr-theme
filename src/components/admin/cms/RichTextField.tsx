@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { sanitizeHtml } from "@/lib/cms/sanitizeHtml";
 
 type RichTextFieldProps = {
   value: string;
@@ -50,9 +51,9 @@ export function RichTextField({ value, onChange }: RichTextFieldProps) {
         contentEditable
         suppressContentEditableWarning
         className="min-h-[120px] px-3 py-2 text-sm outline-none"
-        dangerouslySetInnerHTML={{ __html: value }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
         onInput={() => {
-          if (ref.current) onChange(ref.current.innerHTML);
+          if (ref.current) onChange(sanitizeHtml(ref.current.innerHTML));
         }}
       />
     </div>

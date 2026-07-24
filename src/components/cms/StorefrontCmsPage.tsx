@@ -1,15 +1,23 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { MicroBar } from "@/components/layout/MicroBar";
 import { Header } from "@/components/layout/Header";
 import { FooterFull } from "@/components/layout/Footer";
 import { PageRenderer } from "@/components/cms/PageRenderer";
 import { useCmsPage, useCmsWidgets, usePublishedSections } from "@/hooks/useCmsStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
+import type { CmsPageDocument, PageRevisionSnapshot } from "@/lib/cms/types";
 
 type StorefrontCmsPageProps = {
   pageId: string;
   notFoundFallback?: boolean;
 };
+
+/** Storefront path for a CMS pageId (matches how the admin stores page.path). */
+function pathForPageId(pageId: string): string {
+  return pageId === "home" ? "/" : `/pages/${pageId}`;
+}
 
 function CmsSkeleton() {
   return (
@@ -30,13 +38,54 @@ export function StorefrontCmsPage({
   pageId,
   notFoundFallback = false,
 }: StorefrontCmsPageProps) {
-  const page = useCmsPage(pageId);
+  const localPage = useCmsPage(pageId);
   const widgets = useCmsWidgets();
-  const { sections, customCss, customJs, ready, missing } = usePublishedSections(
-    page,
-  );
 
-  if (!ready) {
+  // Server-published content (client-side) overrides the local store when the
+  // API is live. Home still SSRs its seed, then hydrates to the server version.
+  const [apiPage, setApiPage] = useState<CmsPageDocument | null>(null);
+  const [apiLoading, setApiLoading] = useState(isApiEnabled());
+  useEffect(() => {
+    if (!isApiEnabled()) return;
+    let cancelled = false;
+    setApiLoading(true);
+    void api
+      .publicCmsPage(pathForPageId(pageId))
+      .then((res) => {
+        if (cancelled) return;
+        setApiLoading(false);
+        setApiPage({
+          id: res.id,
+          title: res.title,
+          path: res.path,
+          status: "published",
+          updatedAt: "",
+          // The API strips executable JS from the snapshot before serving.
+          draft: res.snapshot as unknown as PageRevisionSnapshot,
+          published: res.snapshot as unknown as PageRevisionSnapshot,
+          revisions: [],
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setApiLoading(false);
+        setApiPage(null); // unpublished/missing → local fallback
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pageId]);
+
+  const usingApi = apiPage !== null;
+  const page = apiPage ?? localPage;
+  const { sections, customCss, ready, missing } = usePublishedSections(page);
+
+  // The home page has a server-renderable seed, so we SSR it and hydrate to the
+  // published (localStorage) version on the client. Other CMS pages live only
+  // in localStorage, so they wait for hydration to avoid a not-found flash.
+  // Wait for hydration and, in API mode, for the server lookup to settle before
+  // deciding a non-home page is missing.
+  if ((!ready || (apiLoading && !usingApi)) && pageId !== "home") {
     return <CmsSkeleton />;
   }
 
@@ -85,8 +134,9 @@ export function StorefrontCmsPage({
           sections={sections}
           widgets={widgets}
           pageCss={customCss}
-          pageJs={customJs}
-          allowJs
+          // Storefront never executes author JS in-page; code blocks published by
+          // the API carry a sandboxRef and render inside an isolated iframe.
+          sandboxPageId={apiPage?.id}
         />
       </main>
       <FooterFull />

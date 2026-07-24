@@ -6,6 +6,7 @@ import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { logActivity, setAdminState } from "@/lib/adminStore";
+import { apiImport, isApiEnabled } from "@/lib/apiClient";
 import type { AdminCatalogRow, AdminDigitalCode } from "@/data/admin";
 
 function parseCsv(text: string): string[][] {
@@ -45,6 +46,49 @@ export default function AdminImportPage() {
       }
       const [header, ...body] = rows;
       const idx = (name: string) => header.findIndex((h) => h.toLowerCase() === name);
+
+      // API mode: send the parsed rows to the server's import endpoint instead
+      // of only writing to localStorage.
+      if (isApiEnabled()) {
+        const cell = (cells: string[], name: string) => {
+          const i = idx(name);
+          return i >= 0 ? cells[i] : undefined;
+        };
+        const products = body
+          .map((cells) => {
+            const name = cell(cells, "name");
+            if (!name) return null;
+            const key = cell(cells, "key") || name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+            return {
+              key,
+              title: name,
+              slug: key,
+              price: Number(String(cell(cells, "price") ?? "0").replace(/[^\d]/g, "")) || 0,
+              stock: Number(cell(cells, "stock") ?? 0) || 0,
+              category_slug: cell(cells, "category") || null,
+              brand_slug: cell(cells, "brand") || null,
+              active: (cell(cells, "status") || "draft") === "published",
+            };
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null);
+
+        if (products.length === 0) {
+          setReport(["No valid rows (each row needs a name)"]);
+          return;
+        }
+
+        void apiImport({ products, dryRun: false })
+          .then((res) => {
+            setReport([`Imported / upserted ${res.summary.products} product row(s) via API`]);
+            toast.push(`Products import: ${res.summary.products} rows`, "success");
+          })
+          .catch((err: Error) => {
+            setReport([`Import failed: ${err.message}`]);
+            toast.push("Import failed", "warning");
+          });
+        return;
+      }
+
       const notes: string[] = [];
       let imported = 0;
       setAdminState((prev) => {

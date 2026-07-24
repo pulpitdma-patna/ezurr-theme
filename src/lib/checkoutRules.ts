@@ -207,9 +207,7 @@ function conditionMatches(
   condition: CheckoutRuleCondition,
   ctx: CheckoutContext,
 ): boolean {
-  if (condition.mode === "script" && condition.script?.trim()) {
-    return evalCheckoutScript(condition.script, ctx).ok;
-  }
+  // Per-condition script mode was removed (client new Function / server eval()).
 
   const raw =
     condition.field === "subtotal"
@@ -235,49 +233,22 @@ function conditionMatches(
 }
 
 function ruleConditionsMatch(rule: AdminCheckoutRule, ctx: CheckoutContext): boolean {
-  if (rule.conditionMode === "script") {
-    if (!rule.script?.trim()) return true;
-    return evalCheckoutScript(rule.script, ctx).ok;
-  }
+  // Script mode was removed for security; such rules no longer match.
+  if (rule.conditionMode === "script") return false;
   if (rule.conditions.length === 0) return true;
   return rule.conditions.every((c) => conditionMatches(c, ctx));
 }
 
-/** Sandboxed checkout DSL — identifiers from cart context only. */
+/**
+ * Script mode was removed — it used `new Function` (client) / `eval()` (server),
+ * an arbitrary-code-execution surface. Kept as a no-op so any legacy reference
+ * resolves to "does not match" rather than executing code.
+ */
 export function evalCheckoutScript(
-  script: string,
-  ctx: CheckoutContext,
+  _script: string,
+  _ctx: CheckoutContext,
 ): ScriptEvalResult {
-  const trimmed = script.trim();
-  if (!trimmed) return { ok: true };
-
-  const safe = trimmed.replace(/[^a-zA-Z0-9_+\-*/%().\s'"<>=!&|,]/g, "");
-  if (safe !== trimmed) {
-    return { ok: false, error: "Unsupported characters in script." };
-  }
-
-  const env: Record<string, string | number> = {
-    subtotal: ctx.subtotal,
-    pincode: ctx.pincode ?? "",
-    city: ctx.city ?? "",
-    payment_method: ctx.paymentMethod ?? "",
-    fulfillment_type: ctx.fulfillmentType ?? "",
-    product_category: ctx.productCategory ?? "",
-  };
-
-  try {
-    const keys = Object.keys(env);
-    const fn = new Function(
-      ...keys,
-      `"use strict"; return Boolean(${safe});`,
-    ) as (...args: (string | number)[]) => boolean;
-    return { ok: fn(...keys.map((k) => env[k])) };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Script failed to evaluate.",
-    };
-  }
+  return { ok: false, error: "Script mode has been removed." };
 }
 
 function experimentBucket(sessionKey: string, experimentId: string): number {

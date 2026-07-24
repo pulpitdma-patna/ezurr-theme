@@ -7,6 +7,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { CheckoutRuleBuilder } from "@/components/admin/CheckoutRuleBuilder";
 import { useAutoBanner } from "@/hooks/useAutoBanner";
 import { upsertCheckoutRule } from "@/lib/adminStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
 import type { AdminCheckoutRule, CheckoutActionType } from "@/lib/checkoutRules";
 import type { AutomationCondition } from "@/data/admin";
 
@@ -194,7 +195,21 @@ export default function CheckoutRuleTemplatesPage() {
         <CheckoutRuleBuilder
           rule={draft}
           onClose={() => setDraft(null)}
-          onSave={(rule) => {
+          onSave={async (rule) => {
+            if (isApiEnabled()) {
+              try {
+                // New rule from a template carries no id, so this POSTs to the
+                // server; mirror it into the local store for instant display.
+                const saved = await api.upsertCheckoutRule(rule);
+                upsertCheckoutRule(saved as AdminCheckoutRule);
+                setDraft(null);
+                setToast("Rule saved from template");
+                router.push("/admin/checkout-rules");
+              } catch {
+                setToast("Could not save rule to the server");
+              }
+              return;
+            }
             upsertCheckoutRule({ ...rule, id: rule.id || `cr-${Date.now()}` });
             setDraft(null);
             setToast("Rule saved from template");

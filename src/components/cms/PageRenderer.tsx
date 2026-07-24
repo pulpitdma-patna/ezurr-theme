@@ -21,6 +21,7 @@ import { BrandExplorer } from "@/components/home/BrandExplorer";
 import { DigitalCardFeature } from "@/components/home/DigitalCardFeature";
 import { CategoryShowcase } from "@/components/home/CategoryShowcase";
 import { CmsCodeInjector } from "./CmsCodeInjector";
+import { CmsSandboxFrame } from "./CmsSandboxFrame";
 import {
   duplicateCmsBlock,
   removeCmsBlock,
@@ -31,12 +32,13 @@ export type PageRendererProps = {
   sections: CmsBlock[];
   widgets?: CmsWidgetDefinition[];
   pageCss?: string;
-  pageJs?: string;
-  allowJs?: boolean;
   interactive?: boolean;
   selectedId?: string | null;
   onSelect?: (id: string) => void;
   pageId?: string;
+  /** Published page public_id — when set, code blocks carrying a `sandboxRef`
+   *  render inside an isolated sandbox iframe served by the API. */
+  sandboxPageId?: string;
   onAddBetween?: (index: number) => void;
   showDisabled?: boolean;
 };
@@ -161,27 +163,15 @@ function BlockShell({
 function WidgetBlock({
   block,
   widgets,
-  allowJs,
 }: {
   block: CmsBlock;
   widgets: CmsWidgetDefinition[];
-  allowJs?: boolean;
 }) {
   const widget = widgets.find((w) => w.id === block.widgetId);
-  const hostRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!allowJs || !widget?.templateJs?.trim() || !hostRef.current) return;
-    const id = `ezurr-wgt-js-${block.id}`;
-    document.getElementById(id)?.remove();
-    const script = document.createElement("script");
-    script.id = id;
-    script.text = interpolateTemplate(widget.templateJs, block.props);
-    document.body.appendChild(script);
-    return () => {
-      document.getElementById(id)?.remove();
-    };
-  }, [allowJs, widget?.templateJs, block.id, block.props]);
+  // NOTE: admin-authored widget JS is NEVER executed in the storefront document.
+  // A widget's templateJs must run in the CMS sandbox iframe (see CmsSandboxFrame),
+  // not via a parent-context <script> injection. Only sanitized HTML/CSS renders here.
 
   if (!widget || !widget.enabled) {
     return (
@@ -195,7 +185,7 @@ function WidgetBlock({
     ? scopeBlockCss(block.id, interpolateTemplate(widget.templateCss, block.props))
     : "";
   return (
-    <div ref={hostRef}>
+    <div>
       {css ? <style>{css}</style> : null}
       <div dangerouslySetInnerHTML={{ __html: html }} />
     </div>
@@ -209,7 +199,7 @@ function OverlayChild({
   selectedId,
   onSelect,
   pageId,
-  allowJs,
+  sandboxPageId,
   showDisabled,
 }: {
   child: CmsBlock;
@@ -218,7 +208,7 @@ function OverlayChild({
   selectedId?: string | null;
   onSelect?: (id: string) => void;
   pageId?: string;
-  allowJs?: boolean;
+  sandboxPageId?: string;
   showDisabled?: boolean;
 }) {
   const layout = child.layout ?? { xPct: 10, yPct: 20, wPct: 40, zIndex: 1 };
@@ -277,7 +267,7 @@ function OverlayChild({
         selectedId={selectedId}
         onSelect={onSelect}
         pageId={pageId}
-        allowJs={allowJs}
+        sandboxPageId={sandboxPageId}
         showDisabled={showDisabled}
       />
       {interactive && pageId && selectedId === child.id ? (
@@ -306,7 +296,7 @@ function RenderBlock({
   selectedId,
   onSelect,
   pageId,
-  allowJs,
+  sandboxPageId,
   showDisabled,
 }: {
   block: CmsBlock;
@@ -315,7 +305,7 @@ function RenderBlock({
   selectedId?: string | null;
   onSelect?: (id: string) => void;
   pageId?: string;
-  allowJs?: boolean;
+  sandboxPageId?: string;
   showDisabled?: boolean;
 }) {
   if (!block.enabled && !showDisabled) return null;
@@ -408,6 +398,19 @@ function RenderBlock({
         </section>,
       );
     case "custom_html":
+      // A published block that carried code ships no raw HTML/JS — only a
+      // sandboxRef. Render it in the cross-origin, opaque-origin sandbox iframe
+      // so nothing executes in the storefront document. Editor/preview (no
+      // sandboxRef) still shows sanitized inline HTML.
+      if (block.sandboxRef && sandboxPageId) {
+        return shell(
+          <CmsSandboxFrame
+            pageId={sandboxPageId}
+            variant="A"
+            blockId={block.sandboxRef}
+          />,
+        );
+      }
       return shell(
         <div
           dangerouslySetInnerHTML={{
@@ -416,9 +419,16 @@ function RenderBlock({
         />,
       );
     case "widget":
-      return shell(
-        <WidgetBlock block={block} widgets={widgets} allowJs={allowJs} />,
-      );
+      if (block.sandboxRef && sandboxPageId) {
+        return shell(
+          <CmsSandboxFrame
+            pageId={sandboxPageId}
+            variant="A"
+            blockId={block.sandboxRef}
+          />,
+        );
+      }
+      return shell(<WidgetBlock block={block} widgets={widgets} />);
     case "column": {
       const children = (block.children ?? []).filter(
         (c) => c.enabled || showDisabled,
@@ -439,7 +449,7 @@ function RenderBlock({
                 selectedId={selectedId}
                 onSelect={onSelect}
                 pageId={pageId}
-                allowJs={allowJs}
+                sandboxPageId={sandboxPageId}
                 showDisabled={showDisabled}
               />
             ))
@@ -499,7 +509,7 @@ function RenderBlock({
               selectedId={selectedId}
               onSelect={onSelect}
               pageId={pageId}
-              allowJs={allowJs}
+              sandboxPageId={sandboxPageId}
               showDisabled={showDisabled}
             />
           ))}
@@ -533,7 +543,7 @@ function RenderBlock({
               selectedId={selectedId}
               onSelect={onSelect}
               pageId={pageId}
-              allowJs={allowJs}
+              sandboxPageId={sandboxPageId}
               showDisabled={showDisabled}
             />
           ))}
@@ -582,12 +592,11 @@ export function PageRenderer({
   sections,
   widgets = [],
   pageCss = "",
-  pageJs = "",
-  allowJs = true,
   interactive,
   selectedId,
   onSelect,
   pageId,
+  sandboxPageId,
   onAddBetween,
   showDisabled,
 }: PageRendererProps) {
@@ -598,12 +607,7 @@ export function PageRenderer({
 
   return (
     <>
-      <CmsCodeInjector
-        pageCss={pageCss}
-        pageJs={pageJs}
-        blockCss={blockCss}
-        allowJs={allowJs && !interactive}
-      />
+      <CmsCodeInjector pageCss={pageCss} blockCss={blockCss} />
       <div
         className={interactive ? "min-h-[480px] bg-white" : undefined}
         onClick={interactive ? () => onSelect?.("") : undefined}
@@ -632,7 +636,7 @@ export function PageRenderer({
               selectedId={selectedId}
               onSelect={onSelect}
               pageId={pageId}
-              allowJs={allowJs && !interactive}
+              sandboxPageId={sandboxPageId}
               showDisabled={showDisabled}
             />
           </SortableSectionWrapper>

@@ -73,7 +73,18 @@ export function mapApiProductToCatalog(p: ApiProduct): CatalogProduct {
     name: p.title,
     price: formatInr(p.price),
     strike: p.mrp && p.mrp > p.price ? formatInr(p.mrp) : "",
+    badges: p.badges ?? [],
   };
+}
+
+/** HTML → a short, tag-free one-liner (for card subtitles etc.). */
+export function toPlainSnippet(html: string | null | undefined, max = 90): string {
+  const text = (html ?? "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
 }
 
 export function mapApiProductToGameCard(p: ApiProduct, index: number): GameCardProduct {
@@ -83,7 +94,7 @@ export function mapApiProductToGameCard(p: ApiProduct, index: number): GameCardP
     id,
     title: p.title,
     tag: p.fulfillment_type === "digital" ? "Instant" : "Digital",
-    sub: p.description || "Delivered to your email",
+    sub: toPlainSnippet(p.description) || "Delivered to your email",
     bg: GAME_CARD_BACKGROUNDS[index % GAME_CARD_BACKGROUNDS.length],
     value,
     name: p.title,
@@ -154,6 +165,21 @@ export function mapApiOrderToAdmin(raw: Record<string, unknown>): AdminOrder {
     };
   });
 
+  const eventRows = Array.isArray(raw.events) ? raw.events : [];
+  const timeline = eventRows.map((e, i) => {
+    const ev = e as Record<string, unknown>;
+    const meta = (ev.meta as Record<string, unknown> | null) ?? null;
+    const trackingNote = meta && typeof meta.tracking === "string" ? meta.tracking : undefined;
+    const actor = meta && typeof meta.by === "string" ? meta.by : undefined;
+    return {
+      id: String(ev.id ?? `evt-${i}`),
+      at: String(ev.created_at ?? raw.created_at ?? new Date().toISOString()),
+      label: String(ev.label ?? ev.type ?? "Update"),
+      detail: trackingNote ? `Tracking: ${trackingNote}` : undefined,
+      actor,
+    };
+  });
+
   return {
     id: String(raw.public_id ?? raw.id),
     customerName: addr.firstName
@@ -166,8 +192,18 @@ export function mapApiOrderToAdmin(raw: Record<string, unknown>): AdminOrder {
     status,
     placedAt: String(raw.created_at ?? new Date().toISOString()),
     items,
-    timeline: [],
+    timeline,
     addressLine1: addr.address,
     pincode: addr.pincode,
+    tracking: raw.tracking ? String(raw.tracking) : undefined,
+    trackingUrl: raw.tracking_url ? String(raw.tracking_url) : undefined,
+    carrierName: raw.carrier_name ? String(raw.carrier_name) : undefined,
+    eta: raw.eta ? String(raw.eta) : undefined,
+    notes: raw.notes ? String(raw.notes) : undefined,
   };
+}
+
+/** Public /track response → the same AdminOrder shape (trimmed source data). */
+export function mapApiTrackedOrder(raw: Record<string, unknown>): AdminOrder {
+  return mapApiOrderToAdmin(raw);
 }

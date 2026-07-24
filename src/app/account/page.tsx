@@ -2,12 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { SectionHeading } from "@/components/home/SectionHeading";
 import { useAccountStore } from "@/hooks/useAccountStore";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { orderStatusLabels, type AdminOrder } from "@/data/admin";
 import { normalizeMobile } from "@/lib/auth";
+import { api, isApiEnabled } from "@/lib/apiClient";
 
 function firstName(name: string) {
   return name.split(/\s+/)[0] || name;
@@ -30,20 +32,44 @@ export default function AccountPage() {
   const inFlight = mine.filter((o) =>
     ["pending", "confirmed", "packed", "shipped", "preorder"].includes(o.status),
   ).length;
-  const wishlistCount = account.wishlistKeys.length;
+  const apiOn = isApiEnabled();
+  const [apiStats, setApiStats] = useState<{
+    orders: number;
+    points: number;
+    wishlist: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!apiOn || !session) return;
+    let cancelled = false;
+    void Promise.all([
+      api.accountOrders().then((r) => r.total ?? r.data?.length ?? 0).catch(() => 0),
+      api.accountPoints().then((r) => r.balance).catch(() => 0),
+      api.accountWishlist().then((r) => r.length).catch(() => 0),
+    ]).then(([orders, points, wishlist]) => {
+      if (!cancelled) setApiStats({ orders, points, wishlist });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn, session]);
+
+  const ordersCount = apiStats ? apiStats.orders : mine.length;
+  const pointsValue = apiStats ? apiStats.points : account.points;
+  const wishlistCount = apiStats ? apiStats.wishlist : account.wishlistKeys.length;
 
   const stats = [
     {
       label: "Orders",
-      value: String(mine.length).padStart(2, "0"),
+      value: String(ordersCount).padStart(2, "0"),
       detail: inFlight ? `${inFlight} in progress` : "No open deliveries",
       href: "/account/orders",
       tone: "dark" as const,
     },
     {
       label: "Ezurr points",
-      value: account.points.toLocaleString("en-IN"),
-      detail: `₹${Math.round(account.points / 10)} reward value`,
+      value: pointsValue.toLocaleString("en-IN"),
+      detail: `₹${Math.round(pointsValue / 10)} reward value`,
       href: "/account/points",
       tone: "light" as const,
     },

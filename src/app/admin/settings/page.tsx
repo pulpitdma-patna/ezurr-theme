@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
@@ -40,6 +40,14 @@ const HUE_PRESETS = [
 function isValidTab(value: string | null): value is SettingsTabId {
   return SETTINGS_TABS.some((tab) => tab.id === value);
 }
+
+const SETTING_KEYS: (keyof AdminSettings)[] = [
+  "storeName", "supportEmail", "supportPhone", "city", "gstin",
+  "accentHue", "showOffer", "releaseDate", "prepaidDiscount", "codEnabled",
+  "codLimit", "freeShippingMin", "orderIdPrefix", "lowStockThreshold", "hideOutOfStock",
+  "timezone", "currencyLabel", "notifyNewOrder", "notifyLowStock", "notifyPreorderRelease",
+  "gaMeasurementId", "metaPixelId",
+];
 
 export default function AdminSettingsPage() {
   const { settings } = useAdminStore();
@@ -91,37 +99,64 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     if (!isApiEnabled()) return;
     void api.adminSettings().then((remote) => {
-      updateSettings({
-        codEnabled: remote.codEnabled as boolean | undefined,
-        codLimit: remote.codLimit as number | undefined,
-        prepaidDiscount: remote.prepaidDiscount as number | undefined,
-        freeShippingMin: remote.freeShippingMin as number | undefined,
-        releaseDate: (remote.releaseDate as string | undefined) ?? undefined,
-        accentHue: remote.accentHue as number | undefined,
-        showOffer: remote.showOffer as boolean | undefined,
-      });
+      const next: Partial<AdminSettings> = {};
+      for (const k of SETTING_KEYS) {
+        if (k in remote && remote[k] !== null && remote[k] !== undefined) {
+          (next as Record<string, unknown>)[k] = remote[k];
+        }
+      }
+      updateSettings(next);
       invalidateApiSettings();
     }).catch(() => {
       /* keep local */
     });
   }, []);
 
+  // Accumulate changed keys and flush to the API once typing pauses, instead of
+  // firing a PUT on every keystroke.
+  const pendingRef = useRef<Record<string, unknown>>({});
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushSettings = useCallback((toast: string) => {
+    if (flushTimer.current) {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    const payload = pendingRef.current;
+    pendingRef.current = {};
+    if (!Object.keys(payload).length) return;
+    void api
+      .updateAdminSettings(payload)
+      .then(() => {
+        invalidateApiSettings();
+        setMsg(toast);
+      })
+      .catch((err) => setMsg(err instanceof Error ? `Not saved: ${err.message}` : "Not saved to server"));
+  }, []);
+
+  // Persist any pending change if the page unmounts before the debounce fires.
+  useEffect(() => () => flushSettings("Saved just now"), [flushSettings]);
+
   function patch(partial: Partial<AdminSettings>, toast = "Saved just now") {
     updateSettings(partial);
-    if (isApiEnabled()) {
-      const payload: Record<string, unknown> = {};
-      if ("codEnabled" in partial) payload.codEnabled = partial.codEnabled;
-      if ("codLimit" in partial) payload.codLimit = partial.codLimit;
-      if ("prepaidDiscount" in partial) payload.prepaidDiscount = partial.prepaidDiscount;
-      if ("freeShippingMin" in partial) payload.freeShippingMin = partial.freeShippingMin;
-      if ("releaseDate" in partial) payload.releaseDate = partial.releaseDate;
-      if ("accentHue" in partial) payload.accentHue = partial.accentHue;
-      if ("showOffer" in partial) payload.showOffer = partial.showOffer;
-      if (Object.keys(payload).length) {
-        void api.updateAdminSettings(payload).then(() => invalidateApiSettings()).catch(() => undefined);
+    if (!isApiEnabled()) {
+      setMsg(toast);
+      return;
+    }
+    let queued = false;
+    for (const k of SETTING_KEYS) {
+      if (k in partial) {
+        pendingRef.current[k] = partial[k];
+        queued = true;
       }
     }
-    setMsg(toast);
+    if (!queued) {
+      setMsg(toast);
+      return;
+    }
+    setMsg("Saving…");
+    if (flushTimer.current) clearTimeout(flushTimer.current);
+    flushTimer.current = setTimeout(() => flushSettings(toast), 600);
   }
 
   function resetKnobs() {
@@ -518,6 +553,49 @@ export default function AdminSettingsPage() {
                   <option value="AED">AED · د.إ</option>
                 </select>
               </Field>
+            </div>
+
+            <div className="mt-4">
+              <SettingsToggle
+                label="Hide out-of-stock products"
+                description={
+                  settings.hideOutOfStock
+                    ? "Products with 0 stock are hidden from storefront listings"
+                    : "Out-of-stock products stay visible (marked “Sold out”)"
+                }
+                checked={settings.hideOutOfStock}
+                onChange={(checked) => patch({ hideOutOfStock: checked })}
+              />
+            </div>
+
+            <div className="mt-6 border-t border-black/[0.06] pt-5">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#86868B]">
+                Analytics
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="GA4 Measurement ID">
+                  <input
+                    value={settings.gaMeasurementId}
+                    onChange={(e) => patch({ gaMeasurementId: e.target.value.trim() })}
+                    placeholder="G-XXXXXXXXXX"
+                    className={fieldClass}
+                  />
+                  <p className="mt-1.5 text-[11px] text-[#86868B]">
+                    Loads Google Analytics 4 after cookie consent. Leave blank to disable.
+                  </p>
+                </Field>
+                <Field label="Meta Pixel ID">
+                  <input
+                    value={settings.metaPixelId}
+                    onChange={(e) => patch({ metaPixelId: e.target.value.trim() })}
+                    placeholder="000000000000000"
+                    className={fieldClass}
+                  />
+                  <p className="mt-1.5 text-[11px] text-[#86868B]">
+                    Loads the Meta Pixel after consent. Leave blank to disable.
+                  </p>
+                </Field>
+              </div>
             </div>
           </SettingsSection>
 

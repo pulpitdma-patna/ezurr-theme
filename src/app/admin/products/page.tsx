@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
+import { AdminNotice } from "@/components/admin/AdminNotice";
+import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSelect } from "@/components/admin/AdminSelect";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
@@ -27,8 +29,20 @@ import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAutoBanner } from "@/hooks/useAutoBanner";
 import { useListSavedViews } from "@/hooks/useListSavedViews";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
-import { adjustStock, publishProducts, unpublishProducts, upsertProduct } from "@/lib/adminStore";
-import { apiCreateProduct, apiUpdateProduct, api, isApiEnabled } from "@/lib/apiClient";
+import {
+  adjustStock,
+  deleteProduct,
+  publishProducts,
+  unpublishProducts,
+  upsertProduct,
+} from "@/lib/adminStore";
+import {
+  apiCreateProduct,
+  apiDeleteProduct,
+  apiUpdateProduct,
+  api,
+  isApiEnabled,
+} from "@/lib/apiClient";
 import { mapApiProductToAdminRow } from "@/lib/apiMappers";
 import { useSearchParams } from "next/navigation";
 
@@ -120,6 +134,9 @@ export default function AdminProductsPage() {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [form, setForm] = useState<ProductFormValues>(emptyForm);
   const [toast, setToast] = useAutoBanner();
+  const [saving, setSaving] = useState(false);
+  const [saveTone, setSaveTone] = useState<"success" | "error">("success");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [openedFromNewParam, setOpenedFromNewParam] = useState(false);
   const [listLoading, setListLoading] = useState(true);
   const [apiProducts, setApiProducts] = useState<AdminCatalogRow[]>([]);
@@ -127,33 +144,36 @@ export default function AdminProductsPage() {
   const [viewName, setViewName] = useState("");
   const { views, saveView, removeView } = useListSavedViews("products");
 
-  useEffect(() => {
+  const loadProducts = useCallback(async () => {
     if (!isApiEnabled()) {
-      const t = window.setTimeout(() => setListLoading(false), 220);
-      return () => window.clearTimeout(t);
+      setListLoading(false);
+      return;
     }
-    let cancelled = false;
     setListLoading(true);
-    void api
-      .adminProducts({ page: 1 })
-      .then((res) => {
-        if (cancelled) return;
-        const rows = Array.isArray(res.data) ? res.data : [];
-        setApiProducts(rows.map((p, i) => mapApiProductToAdminRow(p, i)));
-        setListError(null);
-      })
-      .catch((err: Error) => {
-        if (cancelled) return;
-        setApiProducts([]);
-        setListError(err.message || "Could not load products");
-      })
-      .finally(() => {
-        if (!cancelled) setListLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      // Page through the full catalog (server clamps per_page to 100) instead
+      // of showing only the first page.
+      const perPage = 100;
+      const first = await api.adminProducts({ page: 1, per_page: perPage });
+      let all = Array.isArray(first.data) ? first.data : [];
+      const lastPage = Number(first.last_page ?? 1);
+      for (let p = 2; p <= lastPage; p += 1) {
+        const res = await api.adminProducts({ page: p, per_page: perPage });
+        if (Array.isArray(res.data)) all = all.concat(res.data);
+      }
+      setApiProducts(all.map((p, i) => mapApiProductToAdminRow(p, i)));
+      setListError(null);
+    } catch (err) {
+      setApiProducts([]);
+      setListError(err instanceof Error ? err.message : "Could not load products");
+    } finally {
+      setListLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadProducts();
+  }, [loadProducts]);
 
   const activeProduct = useMemo(
     () =>
@@ -253,10 +273,48 @@ export default function AdminProductsPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSave(event: React.FormEvent) {
+  async function handleSave(event: React.FormEvent) {
     event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setSaveTone("success");
+    try {
+      await saveProduct();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveProduct() {
     if (drawerMode === "add") {
       const key = `${form.category}:new-${Date.now()}`;
+      if (isApiEnabled()) {
+        try {
+          await apiCreateProduct(
+            productApiPayload({
+              key,
+              name: form.name,
+              category: form.category,
+              brand: form.brand,
+              price: form.price,
+              strike: form.strike,
+              stock: Number(form.stock) || 0,
+              digital: form.digital,
+              status: form.status,
+              image: form.image,
+            }),
+          );
+          setToast("Product created");
+          await loadProducts();
+          closeDrawer();
+        } catch (err) {
+          setSaveTone("error");
+          setToast(
+            err instanceof Error ? `Could not create product: ${err.message}` : "Could not create product",
+          );
+        }
+        return;
+      }
       upsertProduct({
         key,
         category: form.category,
@@ -273,22 +331,6 @@ export default function AdminProductsPage() {
         image: form.image,
         releaseDate: form.releaseDate,
       });
-      if (isApiEnabled()) {
-        void apiCreateProduct(
-          productApiPayload({
-            key,
-            name: form.name,
-            category: form.category,
-            brand: form.brand,
-            price: form.price,
-            strike: form.strike,
-            stock: Number(form.stock) || 0,
-            digital: form.digital,
-            status: form.status,
-            image: form.image,
-          }),
-        ).catch(() => undefined);
-      }
       setToast("Product created");
       window.setTimeout(closeDrawer, 500);
       return;
@@ -296,6 +338,34 @@ export default function AdminProductsPage() {
 
     if (!activeProduct) return;
     const nextStock = Number(form.stock) || 0;
+    if (isApiEnabled()) {
+      try {
+        await apiUpdateProduct(
+          activeProduct.key.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80),
+          productApiPayload({
+            key: activeProduct.key,
+            name: form.name,
+            category: form.category,
+            brand: form.brand,
+            price: form.price,
+            strike: form.strike,
+            stock: nextStock,
+            digital: form.digital,
+            status: form.status,
+            image: form.image,
+          }),
+        );
+        setToast("Product saved");
+        await loadProducts();
+        closeDrawer();
+      } catch (err) {
+        setSaveTone("error");
+        setToast(
+          err instanceof Error ? `Could not save product: ${err.message}` : "Could not save product",
+        );
+      }
+      return;
+    }
     const delta = nextStock - activeProduct.stock;
     upsertProduct({
       key: activeProduct.key,
@@ -316,25 +386,45 @@ export default function AdminProductsPage() {
     if (delta !== 0) {
       adjustStock(activeProduct.key, delta, "Product edit stock");
     }
-    if (isApiEnabled()) {
-      void apiUpdateProduct(
-        activeProduct.key.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80),
-        productApiPayload({
-          key: activeProduct.key,
-          name: form.name,
-          category: form.category,
-          brand: form.brand,
-          price: form.price,
-          strike: form.strike,
-          stock: nextStock,
-          digital: form.digital,
-          status: form.status,
-          image: form.image,
-        }),
-      ).catch(() => undefined);
-    }
     setToast("Product saved");
     window.setTimeout(closeDrawer, 500);
+  }
+
+  async function handleDelete() {
+    if (!activeProduct) return;
+    setConfirmDelete(false);
+    if (isApiEnabled()) {
+      try {
+        await apiDeleteProduct(activeProduct.key);
+        await loadProducts();
+        closeDrawer();
+      } catch (err) {
+        setSaveTone("error");
+        setToast(
+          err instanceof Error ? `Could not delete: ${err.message}` : "Could not delete product",
+        );
+      }
+      return;
+    }
+    deleteProduct(activeProduct.key);
+    closeDrawer();
+  }
+
+  async function bulkSetActive(active: boolean) {
+    const keys = [...selected];
+    setSelected([]);
+    if (isApiEnabled()) {
+      try {
+        await Promise.all(keys.map((k) => apiUpdateProduct(k, { active })));
+        setToast(active ? "Published" : "Unpublished");
+        await loadProducts();
+      } catch (err) {
+        setToast(err instanceof Error ? `Bulk update failed: ${err.message}` : "Bulk update failed");
+      }
+      return;
+    }
+    if (active) publishProducts(keys);
+    else unpublishProducts(keys);
   }
 
   function toggleRow(key: string) {
@@ -462,6 +552,10 @@ export default function AdminProductsPage() {
         title="Products"
         description="Quick edit in the drawer · full editor for deep catalog fields and media."
       />
+
+      {listError ? (
+        <AdminNotice tone="error">{listError}</AdminNotice>
+      ) : null}
 
       <ListToolbar
         resultLabel={`${rows.length} products`}
@@ -603,20 +697,14 @@ export default function AdminProductsPage() {
             <span className="text-xs font-semibold">{selected.length} selected</span>
             <button
               type="button"
-              onClick={() => {
-                publishProducts(selected);
-                setSelected([]);
-              }}
+              onClick={() => void bulkSetActive(true)}
               className="h-7 rounded-md bg-white px-2.5 text-[11px] font-semibold text-[#1D1D1F]"
             >
               Publish drafts
             </button>
             <button
               type="button"
-              onClick={() => {
-                unpublishProducts(selected);
-                setSelected([]);
-              }}
+              onClick={() => void bulkSetActive(false)}
               className="h-7 rounded-md border border-white/30 px-2.5 text-[11px] font-semibold text-white"
             >
               Unpublish
@@ -687,9 +775,39 @@ export default function AdminProductsPage() {
             onCancel={closeDrawer}
             embedded
             toastMessage={toast || undefined}
+            toastTone={saveTone}
+            submitting={saving}
           />
         )}
+
+        {drawerMode === "edit" && activeProduct ? (
+          <div className="mt-6 flex items-center justify-between gap-3 border-t border-black/[0.08] pt-4">
+            <div>
+              <p className="text-xs font-semibold text-[#1D1D1F]">Delete product</p>
+              <p className="text-[11px] text-[#86868B]">
+                Removes it from the catalog. Blocked if it appears in existing orders.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="inline-flex h-9 shrink-0 items-center rounded-lg border border-red-200 px-3 text-xs font-semibold text-red-700 hover:bg-red-50"
+            >
+              Delete
+            </button>
+          </div>
+        ) : null}
       </AdminDrawer>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete product?"
+        description={`"${activeProduct?.name ?? "This product"}" will be removed from the catalog. This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={() => void handleDelete()}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "ezurr_admin_list_views";
 
@@ -26,9 +26,12 @@ function readViews(): SavedListView[] {
 }
 
 export function useListSavedViews(listId: SavedListView["listId"]) {
-  const [views, setViews] = useState<SavedListView[]>(() =>
-    readViews().filter((view) => view.listId === listId),
-  );
+  // Seed empty to match SSR; read persisted views only after mount.
+  const [views, setViews] = useState<SavedListView[]>([]);
+
+  useEffect(() => {
+    setViews(readViews().filter((view) => view.listId === listId));
+  }, [listId]);
 
   const persist = useCallback(
     (next: SavedListView[]) => {

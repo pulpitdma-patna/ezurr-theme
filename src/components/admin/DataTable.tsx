@@ -93,7 +93,7 @@ export function DataTable<T>({
         </div>
       ) : null}
 
-      <div className="max-h-[min(70vh,720px)] overflow-auto">
+      <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-left">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-black/[0.06] bg-[#FAFAFB]">

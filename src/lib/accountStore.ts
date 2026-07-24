@@ -116,6 +116,12 @@ function defaultState(): AccountStoreState {
 let memory: AccountStoreState | null = null;
 const listeners = new Set<() => void>();
 
+// Stable seed for SSR / hydration (never reads localStorage).
+const SERVER_SNAPSHOT: AccountStoreState = defaultState();
+export function getServerAccountState(): AccountStoreState {
+  return SERVER_SNAPSHOT;
+}
+
 function read(): AccountStoreState {
   if (typeof window === "undefined") return defaultState();
   if (memory) return memory;

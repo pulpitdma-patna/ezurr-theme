@@ -1,15 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import type { AdminCustomerStatus } from "@/data/admin";
+import {
+  formatInr,
+  type AdminCustomer,
+  type AdminCustomerStatus,
+  type AdminOrderStatus,
+} from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAutoBanner } from "@/hooks/useAutoBanner";
 import { updateCustomer } from "@/lib/adminStore";
+import { api, isApiEnabled, type ApiCustomerDetail } from "@/lib/apiClient";
 import { formatMobileDisplay } from "@/lib/auth";
+
+type OrderRow = { id: string; placedAt: string; total: string; status: string };
 
 export default function AdminCustomerDetailPage({
   params,
@@ -17,18 +26,56 @@ export default function AdminCustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const apiOn = isApiEnabled();
   const store = useAdminStore();
-  const customer = useMemo(
+  const [remote, setRemote] = useState<ApiCustomerDetail | null>(null);
+
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    void api
+      .adminCustomer(Number(id))
+      .then((c) => {
+        if (!cancelled) setRemote(c);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn, id]);
+
+  const storeCustomer = useMemo(
     () => store.customers.find((c) => c.id === id) ?? null,
     [store.customers, id],
   );
-  const orders = useMemo(
-    () =>
-      store.orders.filter(
-        (o) => o.customerId === id || o.customerMobile === customer?.mobile,
-      ),
-    [store.orders, id, customer?.mobile],
-  );
+
+  // Unified read view: API when live, else the local store.
+  const customer: AdminCustomer | null = apiOn
+    ? remote
+      ? {
+          id: String(remote.id),
+          name: remote.name,
+          mobile: remote.mobile ?? "",
+          orders: remote.orders_count,
+          spent: formatInr(remote.lifetime_value),
+          lastOrderAt: remote.last_order_at ?? "—",
+          city: "—",
+          status: remote.lifetime_value >= 50000 ? "vip" : remote.orders_count > 0 ? "active" : "new",
+          tags: remote.tags,
+        }
+      : null
+    : storeCustomer;
+
+  const orders: OrderRow[] = apiOn
+    ? (remote?.orders ?? []).map((o) => ({
+        id: o.public_id,
+        placedAt: o.created_at ?? "",
+        total: formatInr(o.total),
+        status: o.status,
+      }))
+    : store.orders
+        .filter((o) => o.customerId === id || o.customerMobile === storeCustomer?.mobile)
+        .map((o) => ({ id: o.id, placedAt: o.placedAt, total: o.total, status: o.status }));
   const [notesId, setNotesId] = useState(customer?.id ?? null);
   const [notes, setNotes] = useState(customer?.notes ?? "");
   const [tagDraft, setTagDraft] = useState("");
@@ -44,7 +91,7 @@ export default function AdminCustomerDetailPage({
     return (
       <div>
         <AdminPageHeader
-          title="Customer not found"
+          title={apiOn && !remote ? "Loading customer…" : "Customer not found"}
           breadcrumbs={[
             { label: "Customers", href: "/admin/customers" },
             { label: id },
@@ -100,6 +147,13 @@ export default function AdminCustomerDetailPage({
         }
       />
 
+      {apiOn ? (
+        <AdminNotice tone="demo">
+          Profile &amp; orders are live from the API. VIP/ban/notes/tags edits are
+          not yet persisted server-side (local only).
+        </AdminNotice>
+      ) : null}
+
       {msg ? (
         <div
           role="status"
@@ -135,7 +189,7 @@ export default function AdminCustomerDetailPage({
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="ez-mono text-xs">{order.total}</span>
-                      <StatusBadge kind="order" status={order.status} />
+                      <StatusBadge kind="order" status={order.status as AdminOrderStatus} />
                     </div>
                   </Link>
                 </li>

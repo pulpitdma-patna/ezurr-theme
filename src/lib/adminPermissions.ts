@@ -12,7 +12,8 @@ export type Permission =
   | "settings.write"
   | "automations.write"
   | "import.write"
-  | "reports.export";
+  | "reports.export"
+  | "cms.code.write";
 
 const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
   owner: [
@@ -26,6 +27,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     "automations.write",
     "import.write",
     "reports.export",
+    "cms.code.write",
   ],
   manager: [
     "orders.write",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { DatePreset } from "@/lib/reports/dateRange";
 import type { ReportId } from "@/lib/reports/types";
 
@@ -29,7 +29,12 @@ function readViews(): SavedReportView[] {
 }
 
 export function useReportSavedViews(reportId?: ReportId) {
-  const [views, setViews] = useState<SavedReportView[]>(() => readViews());
+  // Seed empty to match SSR; read persisted views only after mount.
+  const [views, setViews] = useState<SavedReportView[]>([]);
+
+  useEffect(() => {
+    setViews(readViews());
+  }, []);
 
   const persist = useCallback((next: SavedReportView[]) => {
     setViews(next);

@@ -2,22 +2,44 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { useAdminToast } from "@/components/admin/AdminToast";
+import { api, isApiEnabled } from "@/lib/apiClient";
 import { useCmsPages } from "@/hooks/useCmsStore";
 import {
   createCmsPage,
   deleteCmsPage,
   duplicateCmsPage,
+  getCmsPage,
   publishCmsPage,
   unpublishCmsPage,
 } from "@/lib/adminStore";
+
+// Persist a page's structured document to the server (executable JS is stripped
+// server-side before it can ever reach the storefront).
+function syncCmsPageToApi(id: string) {
+  if (!isApiEnabled()) return;
+  const doc = getCmsPage(id);
+  if (!doc) return;
+  void api
+    .upsertCmsPage({
+      id: doc.id,
+      path: doc.path,
+      title: doc.title,
+      status: doc.status,
+      document: doc as unknown as Record<string, unknown>,
+    })
+    .catch(() => {});
+}
 
 export default function AdminCmsPagesPage() {
   const pages = useCmsPages();
   const toast = useAdminToast();
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
+  const [deletePage, setDeletePage] = useState<{ id: string; title: string } | null>(null);
 
   return (
     <div className="space-y-6">
@@ -25,6 +47,14 @@ export default function AdminCmsPagesPage() {
         title="Pages"
         description="Build storefront pages with a section builder — homepage, landings, and custom modules."
       />
+
+      {isApiEnabled() ? (
+        <AdminNotice tone="info">
+          Publishing a page saves its structured content to the server. Custom
+          JS/CSS is kept for editing but is not served to the storefront yet
+          (pending a security sandbox).
+        </AdminNotice>
+      ) : null}
 
       <div className="rounded-2xl border border-black/[0.07] bg-white p-5">
         <p className="text-sm font-semibold text-[#1D1D1F]">Create page</p>
@@ -68,8 +98,8 @@ export default function AdminCmsPagesPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-black/[0.07] bg-white">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-black/[0.07] bg-white">
+        <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="border-b border-black/[0.06] bg-[#F8F8FA] text-[11px] uppercase tracking-[0.1em] text-[#86868B]">
             <tr>
               <th className="px-4 py-3 font-semibold">Page</th>
@@ -119,6 +149,7 @@ export default function AdminCmsPagesPage() {
                           type="button"
                           onClick={() => {
                             unpublishCmsPage(page.id);
+                            syncCmsPageToApi(page.id);
                             toast.push("Unpublished", "neutral");
                           }}
                           className="rounded-lg border border-black/[0.1] px-2.5 py-1 text-[11px] font-semibold hover:bg-[#F5F5F7]"
@@ -130,6 +161,7 @@ export default function AdminCmsPagesPage() {
                           type="button"
                           onClick={() => {
                             publishCmsPage(page.id);
+                            syncCmsPageToApi(page.id);
                             toast.push("Re-published", "success");
                           }}
                           className="rounded-lg border border-black/[0.1] px-2.5 py-1 text-[11px] font-semibold hover:bg-[#F5F5F7]"
@@ -142,6 +174,7 @@ export default function AdminCmsPagesPage() {
                         type="button"
                         onClick={() => {
                           publishCmsPage(page.id);
+                          syncCmsPageToApi(page.id);
                           toast.push("Published", "success");
                         }}
                         className="rounded-lg border border-black/[0.1] px-2.5 py-1 text-[11px] font-semibold hover:bg-[#F5F5F7]"
@@ -163,12 +196,7 @@ export default function AdminCmsPagesPage() {
                     {page.id !== "home" ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm(`Delete “${page.title}”?`)) {
-                            deleteCmsPage(page.id);
-                            toast.push("Deleted", "success");
-                          }
-                        }}
+                        onClick={() => setDeletePage({ id: page.id, title: page.title })}
                         className="rounded-lg border border-red-200 px-2.5 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
                       >
                         Delete
@@ -202,6 +230,24 @@ export default function AdminCmsPagesPage() {
           Appearance settings →
         </Link>
       </div>
+
+      <ConfirmDialog
+        open={deletePage !== null}
+        title="Delete page?"
+        description={`"${deletePage?.title ?? "This page"}" will be removed. This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        onCancel={() => setDeletePage(null)}
+        onConfirm={() => {
+          if (deletePage) {
+            const id = deletePage.id;
+            deleteCmsPage(id);
+            if (isApiEnabled()) void api.deleteCmsPage(id).catch(() => {});
+            toast.push("Deleted", "success");
+          }
+          setDeletePage(null);
+        }}
+      />
     </div>
   );
 }

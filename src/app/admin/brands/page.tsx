@@ -1,10 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { IconButton, PencilIcon, PlusIcon } from "@/components/admin/IconButton";
+import { ImageUploadField } from "@/components/admin/ImageUploadField";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import type { AdminBrandRecord } from "@/data/admin";
@@ -14,17 +18,29 @@ import { createBrand, deleteBrand, upsertBrand } from "@/lib/adminStore";
 import { api, isApiEnabled } from "@/lib/apiClient";
 
 type DrawerMode = "add" | "edit" | null;
+type BrandRow = AdminBrandRecord & {
+  slug?: string;
+  image?: string | null;
+  parentId?: string | null;
+  parentKey?: string | null;
+};
 
 export default function AdminBrandsPage() {
   const store = useAdminStore();
   const apiOn = isApiEnabled();
   const [query, setQuery] = useState("");
   const [page, setPage] = usePagedList(query);
-  const [apiBrands, setApiBrands] = useState<(AdminBrandRecord & { slug: string })[]>([]);
+  const [apiBrands, setApiBrands] = useState<BrandRow[]>([]);
   const [listError, setListError] = useState<string | null>(null);
+  // Errors from drawer actions must render INSIDE the drawer, or they'd sit
+  // behind the modal overlay and be invisible.
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState(false);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
-  const [editing, setEditing] = useState<(AdminBrandRecord & { slug?: string }) | null>(null);
+  const [editing, setEditing] = useState<BrandRow | null>(null);
   const [name, setName] = useState("");
+  const [image, setImage] = useState("");
+  const [parentId, setParentId] = useState("");
   const [active, setActive] = useState(true);
 
   useEffect(() => {
@@ -33,7 +49,17 @@ export default function AdminBrandsPage() {
       .adminBrands()
       .then((res) => {
         const rows = Array.isArray(res.data) ? res.data : [];
-        setApiBrands(rows.map((b) => ({ id: b.id, slug: b.slug, name: b.name, active: b.active })));
+        setApiBrands(
+          rows.map((b) => ({
+            id: b.id,
+            slug: b.slug,
+            name: b.name,
+            image: b.image ?? null,
+            parentId: b.parentId ?? null,
+            parentKey: b.parentKey ?? null,
+            active: b.active,
+          })),
+        );
         setListError(null);
       })
       .catch((err: Error) => {
@@ -42,7 +68,7 @@ export default function AdminBrandsPage() {
       });
   }, [apiOn]);
 
-  const brandSource = apiOn ? apiBrands : store.brands;
+  const brandSource: BrandRow[] = apiOn ? apiBrands : store.brands;
   const productSource = apiOn ? [] : store.products;
 
   const rows = useMemo(() => {
@@ -62,13 +88,17 @@ export default function AdminBrandsPage() {
   function openAdd() {
     setEditing(null);
     setName("");
+    setImage("");
+    setParentId("");
     setActive(true);
     setDrawerMode("add");
   }
 
-  function openEdit(row: AdminBrandRecord & { slug?: string }) {
+  function openEdit(row: BrandRow) {
     setEditing(row);
     setName(row.name);
+    setImage(row.image ?? "");
+    setParentId(row.parentId ?? "");
     setActive(row.active);
     setDrawerMode("edit");
   }
@@ -76,24 +106,31 @@ export default function AdminBrandsPage() {
   function closeDrawer() {
     setDrawerMode(null);
     setEditing(null);
+    setFormError(null);
   }
 
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
     if (!name.trim()) return;
+    setFormError(null);
     if (apiOn) {
       const slug = name.trim().toLowerCase().replace(/\s+/g, "-");
       void api
         .upsertBrand({
           key: drawerMode === "edit" ? editing?.slug : undefined,
           name: name.trim(),
+          imageUrl: image || null,
+          parentId: parentId || null,
           active,
         })
         .then((saved) => {
-          const record = {
+          const record: BrandRow = {
             id: saved.id,
             slug: saved.slug,
             name: saved.name,
+            image: saved.image ?? null,
+            parentId: saved.parentId ?? null,
+            parentKey: saved.parentKey ?? null,
             active: saved.active,
           };
           setApiBrands((prev) => {
@@ -107,7 +144,7 @@ export default function AdminBrandsPage() {
           });
           closeDrawer();
         })
-        .catch(() => setListError("Could not save brand"));
+        .catch((err) => setFormError(err instanceof Error ? err.message : "Could not save brand"));
       return;
     }
     if (drawerMode === "add") {
@@ -122,13 +159,51 @@ export default function AdminBrandsPage() {
     closeDrawer();
   }
 
+  function handleDelete() {
+    if (!editing) return;
+    setPendingDelete(false);
+    setFormError(null);
+    if (apiOn) {
+      const slug = editing.slug;
+      if (!slug) {
+        setFormError("This brand has no server slug and can't be deleted via the API.");
+        return;
+      }
+      void api
+        .deleteBrand(slug)
+        .then(() => {
+          setApiBrands((prev) => prev.filter((b) => b.slug !== slug));
+          closeDrawer();
+        })
+        .catch((err) => setFormError(err instanceof Error ? err.message : "Could not delete brand"));
+      return;
+    }
+    // Local mode deletes by id (local rows may not carry a slug).
+    deleteBrand(editing.id);
+    closeDrawer();
+  }
+
+  const parentOptions = brandSource.filter((b) => b.slug !== editing?.slug);
+
   const columns: DataTableColumn<(typeof rows)[number]>[] = [
     {
       key: "name",
       header: "Brand",
       sortable: true,
       render: (row) => (
-        <span className="text-sm font-semibold tracking-[-0.02em]">{row.name}</span>
+        <div className="flex items-center gap-3">
+          <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-black/[0.06] bg-[#F7F7F8]">
+            {row.image ? (
+              <Image src={row.image} alt="" fill className="object-cover" sizes="36px" unoptimized />
+            ) : null}
+          </span>
+          <div>
+            <div className="text-sm font-semibold tracking-[-0.02em]">{row.name}</div>
+            {row.parentKey ? (
+              <div className="mt-0.5 text-[10px] text-[#86868B]">↳ under {row.parentKey}</div>
+            ) : null}
+          </div>
+        </div>
       ),
     },
     {
@@ -191,6 +266,8 @@ export default function AdminBrandsPage() {
         }
       />
 
+      {listError ? <AdminNotice tone="error">{listError}</AdminNotice> : null}
+
       <DataTable
         columns={columns}
         rows={rows}
@@ -219,6 +296,7 @@ export default function AdminBrandsPage() {
         onClose={closeDrawer}
       >
         <form onSubmit={handleSave} className="space-y-4">
+          {formError ? <AdminNotice tone="error">{formError}</AdminNotice> : null}
           <label className="flex flex-col gap-1.5">
             <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
               Brand name
@@ -231,17 +309,33 @@ export default function AdminBrandsPage() {
               placeholder="PlayStation"
             />
           </label>
-          {drawerMode === "edit" ? (
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={active}
-                onChange={(e) => setActive(e.target.checked)}
-                className="accent-[#1D1D1F]"
-              />
-              Active in filters
-            </label>
-          ) : null}
+          <ImageUploadField value={image} onChange={setImage} folder="brands" label="Logo / image" />
+          <label className="flex flex-col gap-1.5">
+            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+              Parent brand
+            </span>
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className="h-10 rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+            >
+              <option value="">None (top level)</option>
+              {parentOptions.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={active}
+              onChange={(e) => setActive(e.target.checked)}
+              className="accent-[#1D1D1F]"
+            />
+            Active in filters
+          </label>
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="submit"
@@ -256,15 +350,10 @@ export default function AdminBrandsPage() {
             >
               Cancel
             </button>
-            {drawerMode === "edit" &&
-            editing &&
-            store.products.filter((p) => p.brand === editing.name).length === 0 ? (
+            {drawerMode === "edit" && editing ? (
               <button
                 type="button"
-                onClick={() => {
-                  deleteBrand(editing.id);
-                  closeDrawer();
-                }}
+                onClick={() => setPendingDelete(true)}
                 className="ml-auto inline-flex h-9 items-center rounded-lg px-4 text-xs font-semibold text-[#B42318]"
               >
                 Delete
@@ -273,6 +362,16 @@ export default function AdminBrandsPage() {
           </div>
         </form>
       </AdminDrawer>
+
+      <ConfirmDialog
+        open={pendingDelete}
+        title="Delete brand?"
+        description={`"${editing?.name ?? "This brand"}" will be removed. This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        onCancel={() => setPendingDelete(false)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

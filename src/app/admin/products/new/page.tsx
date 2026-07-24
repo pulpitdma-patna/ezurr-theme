@@ -6,6 +6,9 @@ import { useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ProductForm, type ProductFormValues } from "@/components/admin/ProductForm";
 import { upsertProduct } from "@/lib/adminStore";
+import { apiCreateProduct, isApiEnabled } from "@/lib/apiClient";
+import { productFormToApiPayload } from "@/lib/productPayload";
+import { useAutoBanner } from "@/hooks/useAutoBanner";
 
 const emptyForm: ProductFormValues = {
   category: "games",
@@ -25,6 +28,9 @@ const emptyForm: ProductFormValues = {
 export default function AdminNewProductPage() {
   const router = useRouter();
   const [form, setForm] = useState<ProductFormValues>(emptyForm);
+  const [toast, setToast] = useAutoBanner();
+  const [saving, setSaving] = useState(false);
+  const [tone, setTone] = useState<"success" | "error">("success");
 
   function update<K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -32,7 +38,33 @@ export default function AdminNewProductPage() {
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (saving) return;
     const key = `${form.category}:new-${Date.now()}`;
+    if (isApiEnabled()) {
+      setSaving(true);
+      setTone("success");
+      void apiCreateProduct(
+        productFormToApiPayload({
+          key,
+          name: form.name,
+          category: form.category,
+          brand: form.brand,
+          price: form.price,
+          strike: form.strike,
+          stock: Number(form.stock) || 0,
+          digital: form.digital,
+          status: form.status,
+          image: form.image,
+        }),
+      )
+        .then(() => router.push("/admin/products"))
+        .catch((err) => {
+          setTone("error");
+          setToast(err instanceof Error ? `Could not create: ${err.message}` : "Could not create product");
+          setSaving(false);
+        });
+      return;
+    }
     upsertProduct({
       key,
       category: form.category,
@@ -71,7 +103,15 @@ export default function AdminNewProductPage() {
         }
       />
 
-      <ProductForm form={form} update={update} onSubmit={handleSubmit} submitLabel="Save product" />
+      <ProductForm
+        form={form}
+        update={update}
+        onSubmit={handleSubmit}
+        submitLabel="Save product"
+        toastMessage={toast}
+        toastTone={tone}
+        submitting={saving}
+      />
     </div>
   );
 }

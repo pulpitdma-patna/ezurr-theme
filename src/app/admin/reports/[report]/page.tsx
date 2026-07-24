@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import { useMemo, useState } from "react";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ReportDateFilter } from "@/components/admin/reports/ReportDateFilter";
 import { ReportView } from "@/components/admin/reports/ReportView";
@@ -22,6 +23,7 @@ import {
 import type { ReportId } from "@/lib/reports/types";
 import { parsePrice } from "@/data/admin";
 import { StatCard } from "@/components/admin/StatCard";
+import { isApiEnabled } from "@/lib/apiClient";
 
 export default function AdminReportDetailPage() {
   const params = useParams<{ report: string }>();
@@ -100,6 +102,12 @@ export default function AdminReportDetailPage() {
 
   return (
     <div>
+      {isApiEnabled() ? (
+        <AdminNotice tone="demo">
+          This report is derived from local demo data — not your live server
+          data yet. Figures and CSV exports are for preview only.
+        </AdminNotice>
+      ) : null}
       <AdminPageHeader
         title={meta.title}
         description={meta.description}

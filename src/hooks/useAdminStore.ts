@@ -3,12 +3,11 @@
 import { useSyncExternalStore } from "react";
 import {
   getAdminState,
+  getServerAdminState,
   subscribeAdminStore,
   type AdminStoreState,
 } from "@/lib/adminStore";
 
-const serverSnapshot: AdminStoreState = getAdminState();
-
 export function useAdminStore(): AdminStoreState {
-  return useSyncExternalStore(subscribeAdminStore, getAdminState, () => serverSnapshot);
+  return useSyncExternalStore(subscribeAdminStore, getAdminState, getServerAdminState);
 }

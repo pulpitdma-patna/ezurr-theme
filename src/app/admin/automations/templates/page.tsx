@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AutomationBuilder } from "@/components/admin/AutomationBuilder";
 import { ListToolbar } from "@/components/admin/ListToolbar";
+import { isApiEnabled } from "@/lib/apiClient";
 import type { AdminAutomationRule, AutomationTrigger } from "@/data/admin";
 import {
   automationTemplateCategories,
@@ -110,6 +112,13 @@ export default function AdminAutomationTemplatesPage() {
           </div>
         }
       />
+
+      {isApiEnabled() ? (
+        <AdminNotice tone="demo">
+          Automations run on local demo data — a rule saved from a template is
+          stored in this browser only, not on the live server.
+        </AdminNotice>
+      ) : null}
 
       <div
         className="mb-5 inline-flex w-full max-w-full gap-1 overflow-x-auto rounded-xl border border-black/[0.06] bg-[#F0F0F2] p-1 sm:w-auto"

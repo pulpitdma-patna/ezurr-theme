@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { navItems, type NavKey } from "@/lib/theme";
 import { clearSession } from "@/lib/auth";
 import { useAuthSession } from "@/hooks/useAuthSession";
+import { useCart } from "@/lib/cart";
 
 function BagIcon() {
   return (
@@ -72,8 +73,40 @@ type HeaderProps = {
   compact?: boolean;
 };
 
+function HeaderSearch({ className, onSubmitted }: { className: string; onSubmitted?: () => void }) {
+  const router = useRouter();
+  const [q, setQ] = useState("");
+  return (
+    <form
+      role="search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const term = q.trim();
+        if (!term) return;
+        onSubmitted?.();
+        router.push(`/search?q=${encodeURIComponent(term)}`);
+      }}
+      className={className}
+    >
+      <span className="relative h-3 w-3 shrink-0 rounded-full border-[1.6px] border-[#86868B]" aria-hidden>
+        <span className="absolute left-[9px] top-[10px] h-[1.6px] w-[5px] rotate-45 bg-[#86868B]" />
+      </span>
+      <input
+        type="search"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search games, consoles…"
+        aria-label="Search products"
+        enterKeyHint="search"
+        className="min-w-0 flex-1 border-none bg-transparent text-[13px] text-[#1D1D1F] outline-none placeholder:text-[#86868B]"
+      />
+    </form>
+  );
+}
+
 export function Header({ active, showSearch = false, compact = false }: HeaderProps) {
   const router = useRouter();
+  const cart = useCart();
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
@@ -140,12 +173,7 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
 
         <div className="ml-auto flex items-center gap-3 sm:gap-[22px]">
           {showSearch && (
-            <div className="hidden min-w-[90px] w-[174px] shrink cursor-text items-center gap-2 rounded-full border border-black/[0.04] bg-[#F5F5F7] px-4 py-2.5 text-[13px] text-[#86868B] md:flex">
-              <span className="relative h-3 w-3 shrink-0 rounded-full border-[1.6px] border-[#86868B]">
-                <span className="absolute left-[9px] top-[10px] h-[1.6px] w-[5px] rotate-45 bg-[#86868B]" />
-              </span>
-              Search
-            </div>
+            <HeaderSearch className="hidden w-[174px] min-w-[90px] shrink items-center gap-2 rounded-full border border-black/[0.04] bg-[#F5F5F7] px-4 py-2.5 md:flex" />
           )}
           {!compact && session?.role === "admin" && (
             <Link
@@ -222,17 +250,22 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
               )}
             </div>
           )}
-          <Link
-            href="/checkout"
+          <button
+            type="button"
             className="relative flex items-center"
-            aria-label="Bag"
-            onClick={closeMenu}
+            aria-label={`Cart${cart.hydrated && cart.count > 0 ? ` (${cart.count})` : ""}`}
+            onClick={() => {
+              closeMenu();
+              cart.openDrawer();
+            }}
           >
             <BagIcon />
-            <span className="absolute -right-2 -top-[7px] inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-[var(--ez-accent)] text-[10.5px] font-semibold text-white">
-              1
-            </span>
-          </Link>
+            {cart.hydrated && cart.count > 0 ? (
+              <span className="absolute -right-2 -top-[7px] inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-[var(--ez-accent)] px-1 text-[10.5px] font-semibold text-white">
+                {cart.count}
+              </span>
+            ) : null}
+          </button>
           {!compact && (
             <button
               type="button"
@@ -288,12 +321,10 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
                 {accountLabel}
               </Link>
               {showSearch && (
-                <div className="mt-2 flex items-center gap-2 rounded-full bg-[#F5F5F7] px-4 py-3 text-[13px] text-[#86868B] md:hidden">
-                  <span className="relative h-3 w-3 shrink-0 rounded-full border-[1.6px] border-[#86868B]">
-                    <span className="absolute left-[9px] top-[10px] h-[1.6px] w-[5px] rotate-45 bg-[#86868B]" />
-                  </span>
-                  Search games, consoles…
-                </div>
+                <HeaderSearch
+                  className="mt-2 flex items-center gap-2 rounded-full bg-[#F5F5F7] px-4 py-3 md:hidden"
+                  onSubmitted={closeMenu}
+                />
               )}
             </div>
           </div>

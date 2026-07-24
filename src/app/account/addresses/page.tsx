@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SectionHeading } from "@/components/home/SectionHeading";
 import { useAccountStore } from "@/hooks/useAccountStore";
 import { useAuthSession } from "@/hooks/useAuthSession";
@@ -8,13 +8,44 @@ import {
   addAddress,
   removeAddress,
   setDefaultAddress,
-  type AccountAddress,
 } from "@/lib/accountStore";
 import { formatMobileDisplay, normalizeMobile } from "@/lib/auth";
+import { api, isApiEnabled, type ApiAddress } from "@/lib/apiClient";
+
+/** Unified view model spanning the API and the localStorage store. */
+type AddrView = {
+  id: string | number;
+  label: string;
+  name: string;
+  mobile: string;
+  line1: string;
+  city: string;
+  state: string;
+  pincode: string;
+  isDefault: boolean;
+};
+
+const fromApi = (a: ApiAddress): AddrView => ({
+  id: a.id,
+  label: a.label ?? "Address",
+  name: a.name,
+  mobile: a.mobile,
+  line1: a.line1,
+  city: a.city,
+  state: a.state ?? "",
+  pincode: a.pincode,
+  isDefault: a.is_default,
+});
 
 export default function AddressesPage() {
+  const apiOn = isApiEnabled();
   const account = useAccountStore();
   const { session } = useAuthSession();
+
+  const [remote, setRemote] = useState<AddrView[]>([]);
+  const [loading, setLoading] = useState(apiOn);
+  const [error, setError] = useState<string | null>(null);
+
   const [showForm, setShowForm] = useState(false);
   const [label, setLabel] = useState("Home");
   const [fullName, setFullName] = useState(session?.name ?? "");
@@ -24,12 +55,101 @@ export default function AddressesPage() {
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
 
+  const reload = useCallback(async () => {
+    if (!apiOn) return;
+    setError(null);
+    try {
+      const rows = await api.accountAddresses();
+      setRemote(rows.map(fromApi));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load addresses");
+    } finally {
+      setLoading(false);
+    }
+  }, [apiOn]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
   useEffect(() => {
     if (session) {
       setFullName(session.name);
       setMobile(session.mobile);
     }
   }, [session]);
+
+  // Source of truth: API when enabled, else the local store.
+  const addresses: AddrView[] = apiOn
+    ? remote
+    : account.addresses.map((a) => ({
+        id: a.id,
+        label: a.label,
+        name: a.fullName,
+        mobile: a.mobile,
+        line1: a.line1,
+        city: a.city,
+        state: a.state,
+        pincode: a.pincode,
+        isDefault: a.isDefault,
+      }));
+
+  async function handleCreate() {
+    const name = fullName.trim();
+    const normMobile = normalizeMobile(mobile) || session?.mobile || "";
+    if (!name || !line1.trim() || !city.trim() || pincode.trim().length < 6) return;
+
+    if (apiOn) {
+      try {
+        await api.createAddress({
+          label: label.trim() || "Home",
+          name,
+          mobile: normMobile,
+          line1: line1.trim(),
+          city: city.trim(),
+          state: state.trim() || undefined,
+          pincode: pincode.trim(),
+          is_default: addresses.length === 0,
+        });
+        await reload();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save address");
+        return;
+      }
+    } else {
+      addAddress({
+        label: label.trim() || "Home",
+        fullName: name,
+        mobile: normMobile,
+        line1: line1.trim(),
+        city: city.trim(),
+        state: state.trim() || "—",
+        pincode: pincode.trim(),
+        isDefault: account.addresses.length === 0,
+      });
+    }
+
+    setShowForm(false);
+    setLine1("");
+    setCity("");
+    setPincode("");
+  }
+
+  async function handleRemove(id: string | number) {
+    if (apiOn) {
+      await api.deleteAddress(Number(id)).then(reload).catch(() => {});
+    } else {
+      removeAddress(String(id));
+    }
+  }
+
+  async function handleSetDefault(id: string | number) {
+    if (apiOn) {
+      await api.setDefaultAddress(Number(id)).then(reload).catch(() => {});
+    } else {
+      setDefaultAddress(String(id));
+    }
+  }
 
   return (
     <div>
@@ -49,26 +169,18 @@ export default function AddressesPage() {
         }
       />
 
+      {error ? (
+        <p className="mt-3 text-sm text-[#B42318]" role="alert">
+          {error}
+        </p>
+      ) : null}
+
       {showForm ? (
         <form
           className="mt-2 rounded-2xl border border-black/[0.07] bg-[#F8F8FA] p-5 sm:p-7"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!fullName.trim() || !line1.trim() || !city.trim() || pincode.length < 6) return;
-            addAddress({
-              label: label.trim() || "Home",
-              fullName: fullName.trim(),
-              mobile: normalizeMobile(mobile) || session?.mobile || "",
-              line1: line1.trim(),
-              city: city.trim(),
-              state: state.trim() || "—",
-              pincode: pincode.trim(),
-              isDefault: account.addresses.length === 0,
-            });
-            setShowForm(false);
-            setLine1("");
-            setCity("");
-            setPincode("");
+            void handleCreate();
           }}
         >
           <h2 className="text-xl font-semibold tracking-[-0.03em]">New delivery address</h2>
@@ -92,14 +204,21 @@ export default function AddressesPage() {
         </form>
       ) : null}
 
-      {account.addresses.length === 0 ? (
+      {loading ? (
+        <div className="mt-6 text-sm text-[#86868B]">Loading addresses…</div>
+      ) : addresses.length === 0 ? (
         <div className="mt-6 rounded-2xl border border-dashed border-black/[0.1] bg-[#F7F7F8] px-5 py-10 text-center text-sm text-[#6E6E73]">
           No saved addresses yet. Add one for faster checkout.
         </div>
       ) : (
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {account.addresses.map((address) => (
-            <AddressCard key={address.id} address={address} />
+          {addresses.map((address) => (
+            <AddressCard
+              key={address.id}
+              address={address}
+              onRemove={() => handleRemove(address.id)}
+              onSetDefault={() => handleSetDefault(address.id)}
+            />
           ))}
         </div>
       )}
@@ -133,7 +252,15 @@ function Field({
   );
 }
 
-function AddressCard({ address }: { address: AccountAddress }) {
+function AddressCard({
+  address,
+  onRemove,
+  onSetDefault,
+}: {
+  address: AddrView;
+  onRemove: () => void;
+  onSetDefault: () => void;
+}) {
   return (
     <article className="rounded-2xl border border-black/[0.07] p-5 sm:p-6">
       <div className="flex items-center justify-between">
@@ -147,7 +274,7 @@ function AddressCard({ address }: { address: AccountAddress }) {
         </div>
       </div>
       <address className="mt-5 not-italic text-sm leading-7 text-[#6E6E73]">
-        <div>{address.fullName}</div>
+        <div>{address.name}</div>
         <div>{address.line1}</div>
         <div>
           {address.city}, {address.state} {address.pincode}
@@ -158,17 +285,13 @@ function AddressCard({ address }: { address: AccountAddress }) {
         {!address.isDefault ? (
           <button
             type="button"
-            onClick={() => setDefaultAddress(address.id)}
+            onClick={onSetDefault}
             className="text-xs font-semibold text-[#424245]"
           >
             Set as default
           </button>
         ) : null}
-        <button
-          type="button"
-          onClick={() => removeAddress(address.id)}
-          className="text-xs font-semibold text-[#B42318]"
-        >
+        <button type="button" onClick={onRemove} className="text-xs font-semibold text-[#B42318]">
           Remove
         </button>
       </div>

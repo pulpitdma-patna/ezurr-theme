@@ -1,0 +1,63 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { getApiBaseUrl, isApiEnabled, apiFetch, ApiError, setApiToken } from "@/lib/apiClient";
+
+function mockResponse(status: number, body: string) {
+  return { ok: status >= 200 && status < 300, status, text: async () => body };
+}
+
+describe("getApiBaseUrl / isApiEnabled", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("returns null and disabled when the URL is unset", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    expect(getApiBaseUrl()).toBeNull();
+    expect(isApiEnabled()).toBe(false);
+  });
+
+  it("strips a trailing slash and enables the API", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:8000/");
+    expect(getApiBaseUrl()).toBe("http://localhost:8000");
+    expect(isApiEnabled()).toBe(true);
+  });
+});
+
+describe("apiFetch", () => {
+  beforeEach(() => setApiToken(null));
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    setApiToken(null);
+  });
+
+  it("throws ApiError when the API URL is not configured", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    await expect(apiFetch("/x")).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("prefixes /api, injects a Bearer token, and parses JSON", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "http://api.test");
+    setApiToken("tok123");
+    const fetchMock = vi.fn(async () => mockResponse(200, JSON.stringify({ ok: true })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await apiFetch<{ ok: boolean }>("/health");
+    expect(res.ok).toBe(true);
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://api.test/api/health");
+    expect((init.headers as Headers).get("Authorization")).toBe("Bearer tok123");
+    expect((init.headers as Headers).get("Accept")).toBe("application/json");
+  });
+
+  it("uses body.message for the ApiError message", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "http://api.test");
+    vi.stubGlobal("fetch", vi.fn(async () => mockResponse(422, JSON.stringify({ message: "Nope" }))));
+    await expect(apiFetch("/x")).rejects.toMatchObject({ status: 422, message: "Nope" });
+  });
+
+  it("falls back to 'API {status}' when there is no message", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "http://api.test");
+    vi.stubGlobal("fetch", vi.fn(async () => mockResponse(500, "")));
+    await expect(apiFetch("/x")).rejects.toMatchObject({ status: 500, message: "API 500" });
+  });
+});

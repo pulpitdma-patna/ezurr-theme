@@ -1,9 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdminChart } from "@/components/admin/AdminChart";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminNotice } from "@/components/admin/AdminNotice";
+import {
+  api,
+  isApiEnabled,
+  type ApiReportSeriesPoint,
+  type ApiReportSku,
+  type ApiReportSummary,
+} from "@/lib/apiClient";
 import { ReportDateFilter } from "@/components/admin/reports/ReportDateFilter";
 import { StatCard } from "@/components/admin/StatCard";
 import { derivePlatformMix, deriveTopSkus, formatInr, parsePrice } from "@/data/admin";
@@ -19,10 +27,38 @@ import {
 } from "@/lib/reports/dateRange";
 
 export default function AdminAnalyticsPage() {
+  const apiOn = isApiEnabled();
   const store = useAdminStore();
   const filters = useReportFilters(store.orders, "7d");
   const priorRange = useMemo(() => previousPeriodRange(filters.range), [filters.range]);
 
+  const days = useMemo(
+    () => Math.max(1, eachDayInRange(filters.range.start, filters.range.end).length),
+    [filters.range],
+  );
+
+  // --- Live API data ---
+  const [apiSummary, setApiSummary] = useState<ApiReportSummary | null>(null);
+  const [apiSeries, setApiSeries] = useState<ApiReportSeriesPoint[]>([]);
+  const [apiSkus, setApiSkus] = useState<ApiReportSku[]>([]);
+
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    void Promise.all([api.reportSummary(days), api.reportSeries(days), api.reportTopSkus()])
+      .then(([summary, series, skus]) => {
+        if (cancelled) return;
+        setApiSummary(summary);
+        setApiSeries(series);
+        setApiSkus(skus);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn, days]);
+
+  // --- Mock fallback derivations ---
   const periodOrders = useMemo(
     () =>
       store.orders.filter(
@@ -38,34 +74,44 @@ export default function AdminAnalyticsPage() {
     [store.orders, priorRange],
   );
 
-  const series = useMemo(() => {
-    return eachDayInRange(filters.range.start, filters.range.end).map((date) => {
-      const dayOrders = periodOrders.filter((order) => order.placedAt.slice(0, 10) === date);
-      return {
-        date,
-        revenue: dayOrders.reduce((sum, order) => sum + parsePrice(order.total), 0),
-        orders: dayOrders.length,
-      };
-    });
-  }, [periodOrders, filters.range]);
-
-  const revenue = periodOrders.reduce((s, o) => s + parsePrice(o.total), 0);
-  const priorRevenue = priorOrders.reduce((s, o) => s + parsePrice(o.total), 0);
-  const orders = periodOrders.length;
-  const priorCount = priorOrders.length;
-  const aov = orders ? Math.round(revenue / orders) : 0;
-
-  const topSkus = useMemo(
-    () => deriveTopSkus(periodOrders, store.products, 6),
-    [periodOrders, store.products],
+  const mockSeries = useMemo(
+    () =>
+      eachDayInRange(filters.range.start, filters.range.end).map((date) => {
+        const dayOrders = periodOrders.filter((order) => order.placedAt.slice(0, 10) === date);
+        return {
+          date,
+          revenue: dayOrders.reduce((sum, order) => sum + parsePrice(order.total), 0),
+          orders: dayOrders.length,
+        };
+      }),
+    [periodOrders, filters.range],
   );
+
+  // --- Unified view ---
+  const series = apiOn ? apiSeries : mockSeries;
+  const revenue = apiOn ? apiSummary?.revenue ?? 0 : periodOrders.reduce((s, o) => s + parsePrice(o.total), 0);
+  const priorRevenue = apiOn
+    ? apiSummary?.prev_revenue ?? 0
+    : priorOrders.reduce((s, o) => s + parsePrice(o.total), 0);
+  const orders = apiOn ? apiSummary?.orders ?? 0 : periodOrders.length;
+  const priorCount = apiOn ? 0 : priorOrders.length;
+  const aov = apiOn ? apiSummary?.aov ?? 0 : orders ? Math.round(revenue / orders) : 0;
+
+  const topSkus = apiOn
+    ? apiSkus.map((s) => ({ sku: s.product_key, name: s.product_key, revenue: s.revenue, qty: s.qty }))
+    : deriveTopSkus(periodOrders, store.products, 6);
   const platformMix = useMemo(
-    () => derivePlatformMix(periodOrders, store.products).slice(0, 8),
-    [periodOrders, store.products],
+    () => (apiOn ? [] : derivePlatformMix(periodOrders, store.products).slice(0, 8)),
+    [apiOn, periodOrders, store.products],
   );
 
   return (
     <div>
+      {!apiOn ? (
+        <AdminNotice tone="demo">
+          Analytics shows local demo data — enable the store API for your live order book.
+        </AdminNotice>
+      ) : null}
       <AdminPageHeader
         title="Analytics"
         description="Booked sales overview from your order book — for deeper cuts open Reports."
@@ -108,9 +154,9 @@ export default function AdminAnalyticsPage() {
           label="Orders"
           value={String(orders)}
           detail="Non-cancelled"
-          delta={formatDelta(orders, priorCount)}
+          delta={apiOn ? undefined : formatDelta(orders, priorCount)}
           deltaPositive={
-            percentChange(orders, priorCount) === null
+            apiOn || percentChange(orders, priorCount) === null
               ? null
               : (percentChange(orders, priorCount) ?? 0) >= 0
           }
@@ -163,19 +209,21 @@ export default function AdminAnalyticsPage() {
             )}
           </ul>
         </section>
-        <section className="rounded-lg border border-black/[0.08] bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold">Platform mix</h2>
-          {platformMix.length === 0 ? (
-            <p className="py-6 text-center text-sm text-[#86868B]">No platform data.</p>
-          ) : (
-            <AdminChart
-              values={platformMix.map((row) => row.count)}
-              labels={platformMix.map((row) => row.platform)}
-              variant="bar"
-              ariaLabel="Units by platform"
-            />
-          )}
-        </section>
+        {!apiOn ? (
+          <section className="rounded-lg border border-black/[0.08] bg-white p-4">
+            <h2 className="mb-3 text-sm font-semibold">Platform mix</h2>
+            {platformMix.length === 0 ? (
+              <p className="py-6 text-center text-sm text-[#86868B]">No platform data.</p>
+            ) : (
+              <AdminChart
+                values={platformMix.map((row) => row.count)}
+                labels={platformMix.map((row) => row.platform)}
+                variant="bar"
+                ariaLabel="Units by platform"
+              />
+            )}
+          </section>
+        ) : null}
       </div>
     </div>
   );

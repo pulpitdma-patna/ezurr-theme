@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminChart } from "@/components/admin/AdminChart";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { useApiSettings } from "@/hooks/useApiSettings";
 import { ReportDateFilter } from "@/components/admin/reports/ReportDateFilter";
 import { StatCard } from "@/components/admin/StatCard";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { StockBadge } from "@/components/admin/StockBadge";
-import { formatInr, parsePrice } from "@/data/admin";
+import { formatInr, parsePrice, type AdminCatalogRow, type AdminOrder } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useReportFilters } from "@/hooks/useReportFilters";
 import { getDerivedAlerts } from "@/lib/adminStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
+import { mapApiOrderToAdmin, mapApiProductToAdminRow } from "@/lib/apiMappers";
 import {
   eachDayInRange,
   formatDelta,
@@ -30,24 +34,68 @@ const alertTones = {
 
 export default function AdminDashboardPage() {
   const store = useAdminStore();
-  const filters = useReportFilters(store.orders, "7d");
-  const alerts = getDerivedAlerts(store);
+  const apiOn = isApiEnabled();
+  const [apiOrders, setApiOrders] = useState<AdminOrder[]>([]);
+  const [apiProducts, setApiProducts] = useState<AdminCatalogRow[]>([]);
+  const [dashError, setDashError] = useState<string | null>(null);
+  const apiSettings = useApiSettings();
+
+  const loadData = useCallback(async () => {
+    if (!apiOn) return;
+    const perPage = 100;
+    try {
+      setDashError(null);
+      const firstO = await api.adminOrders({ page: 1, per_page: perPage });
+      let allO = Array.isArray(firstO.data) ? firstO.data : [];
+      const lastO = Number(firstO.last_page ?? 1);
+      for (let p = 2; p <= lastO; p += 1) {
+        const res = await api.adminOrders({ page: p, per_page: perPage });
+        if (Array.isArray(res.data)) allO = allO.concat(res.data);
+      }
+      setApiOrders(allO.map((raw) => mapApiOrderToAdmin(raw)));
+
+      const firstP = await api.adminProducts({ page: 1, per_page: perPage });
+      let allP = Array.isArray(firstP.data) ? firstP.data : [];
+      const lastP = Number(firstP.last_page ?? 1);
+      for (let p = 2; p <= lastP; p += 1) {
+        const res = await api.adminProducts({ page: p, per_page: perPage });
+        if (Array.isArray(res.data)) allP = allP.concat(res.data);
+      }
+      setApiProducts(allP.map((row, i) => mapApiProductToAdminRow(row, i)));
+    } catch (err) {
+      setDashError(
+        err instanceof Error
+          ? `Could not load live dashboard data: ${err.message}`
+          : "Could not load live dashboard data",
+      );
+    }
+  }, [apiOn]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const orders = apiOn ? apiOrders : store.orders;
+  const products = apiOn ? apiProducts : store.products;
+
+  const filters = useReportFilters(orders, "7d");
+  const alerts = getDerivedAlerts(apiOn ? { ...store, orders, products } : store);
 
   const periodOrders = useMemo(
     () =>
-      store.orders.filter(
+      orders.filter(
         (order) => order.status !== "cancelled" && isDateInRange(order.placedAt, filters.range),
       ),
-    [store.orders, filters.range],
+    [orders, filters.range],
   );
 
   const priorRange = useMemo(() => previousPeriodRange(filters.range), [filters.range]);
   const priorOrders = useMemo(
     () =>
-      store.orders.filter(
+      orders.filter(
         (order) => order.status !== "cancelled" && isDateInRange(order.placedAt, priorRange),
       ),
-    [store.orders, priorRange],
+    [orders, priorRange],
   );
 
   const series = useMemo(() => {
@@ -67,18 +115,24 @@ export default function AdminDashboardPage() {
   const aov = periodOrders.length ? Math.round(bookedSales / periodOrders.length) : 0;
 
   const openStatuses = ["pending", "confirmed", "packed", "shipped", "preorder"] as const;
-  const openOrders = store.orders.filter((order) =>
+  const openOrders = orders.filter((order) =>
     openStatuses.includes(order.status as (typeof openStatuses)[number]),
   );
-  const pendingCod = store.orders.filter(
+  const pendingCod = orders.filter(
     (order) => order.payment === "COD" && order.status === "pending",
   ).length;
-  const threshold = store.settings.lowStockThreshold ?? 5;
-  const lowStock = store.products
+  const customerCount = apiOn
+    ? new Set(orders.map((o) => o.customerMobile).filter(Boolean)).size
+    : store.customers.length;
+  // In API mode the low-stock threshold comes from the server-persisted
+  // settings, not the local seed store.
+  const threshold =
+    (apiOn ? apiSettings.settings.lowStockThreshold : store.settings.lowStockThreshold) ?? 5;
+  const lowStock = products
     .filter((p) => p.stock > 0 && p.stock <= threshold)
     .sort((a, b) => a.stock - b.stock)
     .slice(0, 6);
-  const recent = [...store.orders]
+  const recent = [...orders]
     .sort((a, b) => b.placedAt.localeCompare(a.placedAt))
     .slice(0, 6);
 
@@ -102,6 +156,8 @@ export default function AdminDashboardPage() {
           </div>
         }
       />
+
+      {dashError ? <AdminNotice tone="error">{dashError}</AdminNotice> : null}
 
       <section className="mb-5">
         <div className="mb-2 flex items-center justify-between gap-3">
@@ -163,13 +219,13 @@ export default function AdminDashboardPage() {
           detail={
             pendingCod > 0
               ? `${pendingCod} COD pending · vs prior ${formatInr(priorBooked)}`
-              : `Vs prior ${formatInr(priorBooked)} · ${store.customers.length} CRM`
+              : `Vs prior ${formatInr(priorBooked)} · ${customerCount} CRM`
           }
         />
         <StatCard
           label="Catalog pulse"
-          value={String(store.products.length)}
-          detail={`${store.products.filter((p) => p.stock > 0 && p.stock <= (store.settings.lowStockThreshold ?? 5)).length} low stock SKUs`}
+          value={String(products.length)}
+          detail={`${products.filter((p) => p.stock > 0 && p.stock <= threshold).length} low stock SKUs`}
         />
       </div>
 

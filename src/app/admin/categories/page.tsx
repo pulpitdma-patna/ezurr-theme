@@ -1,10 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
+import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { IconButton, PencilIcon, PlusIcon } from "@/components/admin/IconButton";
+import { ImageUploadField } from "@/components/admin/ImageUploadField";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import type { AdminCategoryRecord } from "@/data/admin";
@@ -18,19 +22,29 @@ import {
 import { api, isApiEnabled } from "@/lib/apiClient";
 
 type DrawerMode = "add" | "edit" | null;
+type CategoryRow = AdminCategoryRecord & {
+  image?: string | null;
+  parentId?: string | null;
+  parentKey?: string | null;
+};
 
 export default function AdminCategoriesPage() {
   const store = useAdminStore();
   const apiOn = isApiEnabled();
   const [query, setQuery] = useState("");
   const [page, setPage] = usePagedList(query);
-  const [apiCategories, setApiCategories] = useState<AdminCategoryRecord[]>([]);
+  const [apiCategories, setApiCategories] = useState<CategoryRow[]>([]);
   const [listError, setListError] = useState<string | null>(null);
+  // Drawer-action errors must render inside the drawer, not behind its overlay.
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState(false);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
-  const [editing, setEditing] = useState<AdminCategoryRecord | null>(null);
+  const [editing, setEditing] = useState<CategoryRow | null>(null);
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
   const [key, setKey] = useState("");
+  const [image, setImage] = useState("");
+  const [parentId, setParentId] = useState("");
   const [active, setActive] = useState(true);
 
   useEffect(() => {
@@ -45,6 +59,9 @@ export default function AdminCategoriesPage() {
             key: c.key,
             label: c.label,
             description: c.description || "",
+            image: c.image ?? null,
+            parentId: c.parentId ?? null,
+            parentKey: c.parentKey ?? null,
             active: c.active,
           })),
         );
@@ -56,7 +73,7 @@ export default function AdminCategoriesPage() {
       });
   }, [apiOn]);
 
-  const categorySource = apiOn ? apiCategories : store.categories;
+  const categorySource: CategoryRow[] = apiOn ? apiCategories : store.categories;
   const productSource = apiOn ? [] : store.products;
 
   const rows = useMemo(() => {
@@ -82,15 +99,19 @@ export default function AdminCategoriesPage() {
     setLabel("");
     setDescription("");
     setKey("");
+    setImage("");
+    setParentId("");
     setActive(true);
     setDrawerMode("add");
   }
 
-  function openEdit(row: AdminCategoryRecord) {
+  function openEdit(row: CategoryRow) {
     setEditing(row);
     setLabel(row.label);
     setDescription(row.description);
     setKey(row.key);
+    setImage(row.image ?? "");
+    setParentId(row.parentId ?? "");
     setActive(row.active);
     setDrawerMode("edit");
   }
@@ -98,11 +119,13 @@ export default function AdminCategoriesPage() {
   function closeDrawer() {
     setDrawerMode(null);
     setEditing(null);
+    setFormError(null);
   }
 
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
     if (!label.trim()) return;
+    setFormError(null);
     if (apiOn) {
       const slug = (key || label).toLowerCase().replace(/\s+/g, "-");
       void api
@@ -111,14 +134,19 @@ export default function AdminCategoriesPage() {
           slug,
           name: label.trim(),
           description,
+          imageUrl: image || null,
+          parentId: parentId || null,
           active,
         })
         .then((saved) => {
-          const record: AdminCategoryRecord = {
+          const record: CategoryRow = {
             id: saved.id,
             key: saved.key,
             label: saved.label,
             description: saved.description || "",
+            image: saved.image ?? null,
+            parentId: saved.parentId ?? null,
+            parentKey: saved.parentKey ?? null,
             active: saved.active,
           };
           setApiCategories((prev) => {
@@ -132,11 +160,11 @@ export default function AdminCategoriesPage() {
           });
           closeDrawer();
         })
-        .catch(() => setListError("Could not save category"));
+        .catch((err) => setFormError(err instanceof Error ? err.message : "Could not save category"));
       return;
     }
     if (drawerMode === "add") {
-      createCategory({ label, description, key: key || undefined });
+      createCategory({ label, description, key: key || undefined, active });
     } else if (editing) {
       upsertCategory({
         ...editing,
@@ -149,14 +177,44 @@ export default function AdminCategoriesPage() {
     closeDrawer();
   }
 
+  function handleDelete() {
+    if (!editing) return;
+    setPendingDelete(false);
+    setFormError(null);
+    if (apiOn) {
+      void api
+        .deleteCategory(editing.key)
+        .then(() => {
+          setApiCategories((prev) => prev.filter((c) => c.key !== editing.key));
+          closeDrawer();
+        })
+        .catch((err) => setFormError(err instanceof Error ? err.message : "Could not delete category"));
+      return;
+    }
+    deleteCategory(editing.id);
+    closeDrawer();
+  }
+
+  const parentOptions = categorySource.filter((c) => c.key !== editing?.key);
+
   const columns: DataTableColumn<(typeof rows)[number]>[] = [
     {
       key: "label",
       header: "Category",
       render: (row) => (
-        <div>
-          <div className="text-sm font-semibold tracking-[-0.02em]">{row.label}</div>
-          <div className="mt-0.5 ez-mono text-[10px] text-[#86868B]">{row.key}</div>
+        <div className="flex items-center gap-3">
+          <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-black/[0.06] bg-[#F7F7F8]">
+            {row.image ? (
+              <Image src={row.image} alt="" fill className="object-cover" sizes="36px" unoptimized />
+            ) : null}
+          </span>
+          <div>
+            <div className="text-sm font-semibold tracking-[-0.02em]">{row.label}</div>
+            <div className="mt-0.5 ez-mono text-[10px] text-[#86868B]">{row.key}</div>
+            {row.parentKey ? (
+              <div className="mt-0.5 text-[10px] text-[#86868B]">↳ under {row.parentKey}</div>
+            ) : null}
+          </div>
         </div>
       ),
     },
@@ -228,6 +286,8 @@ export default function AdminCategoriesPage() {
         }
       />
 
+      {listError ? <AdminNotice tone="error">{listError}</AdminNotice> : null}
+
       <DataTable
         columns={columns}
         rows={rows}
@@ -257,6 +317,7 @@ export default function AdminCategoriesPage() {
         onClose={closeDrawer}
       >
         <form onSubmit={handleSave} className="space-y-4">
+          {formError ? <AdminNotice tone="error">{formError}</AdminNotice> : null}
           <label className="flex flex-col gap-1.5">
             <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
               Label
@@ -291,17 +352,33 @@ export default function AdminCategoriesPage() {
               className="rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 py-2.5 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
             />
           </label>
-          {drawerMode === "edit" ? (
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={active}
-                onChange={(e) => setActive(e.target.checked)}
-                className="accent-[#1D1D1F]"
-              />
-              Active in filters
-            </label>
-          ) : null}
+          <ImageUploadField value={image} onChange={setImage} folder="categories" label="Image" />
+          <label className="flex flex-col gap-1.5">
+            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+              Parent category
+            </span>
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className="h-10 rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+            >
+              <option value="">None (top level)</option>
+              {parentOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={active}
+              onChange={(e) => setActive(e.target.checked)}
+              className="accent-[#1D1D1F]"
+            />
+            Active in filters
+          </label>
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="submit"
@@ -316,15 +393,10 @@ export default function AdminCategoriesPage() {
             >
               Cancel
             </button>
-            {drawerMode === "edit" &&
-            editing &&
-            store.products.filter((p) => p.category === editing.key).length === 0 ? (
+            {drawerMode === "edit" && editing ? (
               <button
                 type="button"
-                onClick={() => {
-                  deleteCategory(editing.id);
-                  closeDrawer();
-                }}
+                onClick={() => setPendingDelete(true)}
                 className="ml-auto inline-flex h-9 items-center rounded-lg px-4 text-xs font-semibold text-[#B42318]"
               >
                 Delete
@@ -333,6 +405,16 @@ export default function AdminCategoriesPage() {
           </div>
         </form>
       </AdminDrawer>
+
+      <ConfirmDialog
+        open={pendingDelete}
+        title="Delete category?"
+        description={`"${editing?.label ?? "This category"}" will be removed. This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        onCancel={() => setPendingDelete(false)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

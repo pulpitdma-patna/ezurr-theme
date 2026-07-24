@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { OrderTimeline } from "@/components/admin/OrderTimeline";
@@ -13,6 +14,7 @@ import {
   maskDigitalCode,
   orderStatusLabels,
   parsePrice,
+  type AdminOrder,
   type AdminOrderStatus,
 } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
@@ -24,6 +26,8 @@ import {
   updateOrderStatus,
   updateOrderTracking,
 } from "@/lib/adminStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
+import { mapApiOrderToAdmin } from "@/lib/apiMappers";
 import { formatMobileDisplay } from "@/lib/auth";
 import { can } from "@/lib/adminPermissions";
 
@@ -53,7 +57,32 @@ export default function AdminOrderDetailPage({
 }) {
   const { id } = use(params);
   const store = useAdminStore();
-  const order = useMemo(() => store.orders.find((o) => o.id === id) ?? null, [store.orders, id]);
+  const apiOn = isApiEnabled();
+  const [apiOrder, setApiOrder] = useState<AdminOrder | null>(null);
+  const [loading, setLoading] = useState(apiOn);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadOrder = useCallback(async () => {
+    if (!apiOn) return;
+    setLoading(true);
+    try {
+      const raw = await api.adminOrder(id);
+      setApiOrder(mapApiOrderToAdmin(raw));
+      setLoadError(null);
+    } catch (err) {
+      setApiOrder(null);
+      setLoadError(err instanceof Error ? err.message : "Could not load order");
+    } finally {
+      setLoading(false);
+    }
+  }, [apiOn, id]);
+
+  useEffect(() => {
+    void loadOrder();
+  }, [loadOrder]);
+
+  const localOrder = useMemo(() => store.orders.find((o) => o.id === id) ?? null, [store.orders, id]);
+  const order = apiOn ? apiOrder : localOrder;
   const [metaId, setMetaId] = useState(order?.id ?? null);
   const [tracking, setTracking] = useState(order?.tracking ?? "");
   const [notes, setNotes] = useState(order?.notes ?? "");
@@ -76,12 +105,28 @@ export default function AdminOrderDetailPage({
     return () => window.clearTimeout(t);
   }, [copiedId]);
 
+  if (apiOn && loading) {
+    return (
+      <div>
+        <AdminPageHeader
+          title={id}
+          description="Loading order…"
+          breadcrumbs={[
+            { label: "Orders", href: "/admin/orders" },
+            { label: id },
+          ]}
+        />
+        <div className="h-40 animate-pulse rounded-2xl border border-black/[0.06] bg-white" />
+      </div>
+    );
+  }
+
   if (!order) {
     return (
       <div>
         <AdminPageHeader
           title="Order not found"
-          description="That order ID is not in the admin store."
+          description={loadError ?? "That order ID is not in the admin store."}
           breadcrumbs={[
             { label: "Orders", href: "/admin/orders" },
             { label: id },
@@ -111,20 +156,35 @@ export default function AdminOrderDetailPage({
     );
   });
 
-  function applyStatus(next: AdminOrderStatus) {
-    if (next === "cancelled") {
-      setPendingStatus(next);
-      setConfirmCancel(true);
+  function persistStatus(next: AdminOrderStatus) {
+    if (apiOn) {
+      void api
+        .patchOrderStatus(id, { status: next })
+        .then(() => {
+          setSavedMsg(`Status → ${orderStatusLabels[next]}`);
+          return loadOrder();
+        })
+        .catch((err) =>
+          setSavedMsg(err instanceof Error ? `Could not update: ${err.message}` : "Could not update"),
+        );
       return;
     }
     updateOrderStatus(id, next, next === "delivered" ? { cashCollected: true } : undefined);
     setSavedMsg(`Status → ${orderStatusLabels[next]}`);
   }
 
+  function applyStatus(next: AdminOrderStatus) {
+    if (next === "cancelled") {
+      setPendingStatus(next);
+      setConfirmCancel(true);
+      return;
+    }
+    persistStatus(next);
+  }
+
   function confirmCancelAction() {
     if (pendingStatus) {
-      updateOrderStatus(id, pendingStatus);
-      setSavedMsg(`Status → ${orderStatusLabels[pendingStatus]}`);
+      persistStatus(pendingStatus);
     }
     setConfirmCancel(false);
     setPendingStatus(null);
@@ -132,6 +192,18 @@ export default function AdminOrderDetailPage({
 
   function saveMeta(event: React.FormEvent) {
     event.preventDefault();
+    if (apiOn && order) {
+      void api
+        .patchOrderStatus(id, { status: order.status, tracking, notes })
+        .then(() => {
+          setSavedMsg("Tracking & notes saved");
+          return loadOrder();
+        })
+        .catch((err) =>
+          setSavedMsg(err instanceof Error ? `Could not save: ${err.message}` : "Could not save"),
+        );
+      return;
+    }
     updateOrderTracking(id, tracking);
     updateOrderNotes(id, notes);
     setSavedMsg("Tracking & notes saved");
@@ -234,6 +306,11 @@ export default function AdminOrderDetailPage({
               <p className="mb-3 text-xs text-[#86868B]">
                 Assign vault codes to this order. Digital lines do not decrement physical stock.
               </p>
+              {apiOn ? (
+                <AdminNotice tone="demo">
+                  The code vault runs on local demo data — assignments are not saved to the API yet.
+                </AdminNotice>
+              ) : null}
 
               {assignedCodes.length > 0 ? (
                 <ul className="mb-3 space-y-2">
@@ -285,6 +362,10 @@ export default function AdminOrderDetailPage({
                       <button
                         type="button"
                         onClick={() => {
+                          if (apiOn) {
+                            setSavedMsg("Code vault isn't wired to the API yet — not saved");
+                            return;
+                          }
                           assignDigitalCodeToOrder(code.id, order.id);
                           setSavedMsg("Code assigned to order");
                         }}
@@ -472,9 +553,21 @@ export default function AdminOrderDetailPage({
         confirmLabel="Refund"
         danger
         onConfirm={() => {
-          refundOrder(order.id);
+          if (apiOn) {
+            void api
+              .patchOrderStatus(id, { status: "refunded" })
+              .then(() => {
+                setSavedMsg("Order marked refunded");
+                return loadOrder();
+              })
+              .catch((err) =>
+                setSavedMsg(err instanceof Error ? `Could not refund: ${err.message}` : "Could not refund"),
+              );
+          } else {
+            refundOrder(order.id);
+            setSavedMsg("Refund recorded");
+          }
           setConfirmRefund(false);
-          setSavedMsg("Refund recorded");
         }}
         onCancel={() => setConfirmRefund(false)}
       />

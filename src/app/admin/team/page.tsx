@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { ListToolbar } from "@/components/admin/ListToolbar";
@@ -9,6 +10,7 @@ import { Phase2PageShell } from "@/components/admin/Phase2PageShell";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { useStaffRole } from "@/hooks/useStaffRole";
+import { api, isApiEnabled, type ApiTeamMember } from "@/lib/apiClient";
 import {
   STAFF_ROLE_OPTIONS,
   type Permission,
@@ -84,17 +86,42 @@ export default function AdminTeamPage() {
   const [email, setEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<StaffRole>("support");
   const [revokeId, setRevokeId] = useState<string | null>(null);
+  const apiOn = isApiEnabled();
+  const [apiSeats, setApiSeats] = useState<StaffSeat[]>([]);
+  const [teamError, setTeamError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!apiOn) return;
+    void api
+      .adminTeam()
+      .then((res) => {
+        setApiSeats(
+          (res.data ?? []).map((m: ApiTeamMember) => ({
+            id: String(m.id),
+            name: m.name,
+            email: m.mobile,
+            role: (m.staffRole as StaffRole) ?? "viewer",
+            status: "active" as InviteStatus,
+            lastActive: "—",
+          })),
+        );
+        setTeamError(null);
+      })
+      .catch((err) => setTeamError(err instanceof Error ? err.message : "Could not load team"));
+  }, [apiOn]);
+
+  const displaySeats = apiOn ? apiSeats : seats;
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return seats.filter(
+    return displaySeats.filter(
       (seat) =>
         !q ||
         seat.name.toLowerCase().includes(q) ||
         seat.email.toLowerCase().includes(q) ||
         seat.role.includes(q),
     );
-  }, [seats, query]);
+  }, [displaySeats, query]);
 
   const columns: DataTableColumn<StaffSeat>[] = [
     {
@@ -115,6 +142,22 @@ export default function AdminTeamPage() {
           value={row.role}
           onChange={(e) => {
             const next = e.target.value as StaffRole;
+            if (apiOn) {
+              void api
+                .updateTeamMember(Number(row.id), { staffRole: next })
+                .then((m) => {
+                  setApiSeats((prev) =>
+                    prev.map((seat) =>
+                      seat.id === row.id
+                        ? { ...seat, role: (m.staffRole as StaffRole) ?? next }
+                        : seat,
+                    ),
+                  );
+                  toast.push(`Role updated · ${row.email} → ${next}`, "success");
+                })
+                .catch(() => toast.push("Could not update role", "warning"));
+              return;
+            }
             setSeats((prev) =>
               prev.map((seat) => (seat.id === row.id ? { ...seat, role: next } : seat)),
             );
@@ -196,6 +239,14 @@ export default function AdminTeamPage() {
         </button>
       }
     >
+      {teamError ? <AdminNotice tone="error">{teamError}</AdminNotice> : null}
+      {apiOn ? (
+        <AdminNotice tone="demo">
+          Roles are saved to the server. Invites and seat revocation are local-only for now — they
+          don&apos;t email or persist.
+        </AdminNotice>
+      ) : null}
+
       <section className="mb-5 rounded-2xl border border-black/[0.06] bg-white p-4">
         <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
           Your demo session role
@@ -270,6 +321,14 @@ export default function AdminTeamPage() {
           onSubmit={(e) => {
             e.preventDefault();
             if (!email.trim()) return;
+            // In API mode the list comes from the server, so a local seat add
+            // wouldn't even show — and there's no invite endpoint. Be honest.
+            if (apiOn) {
+              setEmail("");
+              setInviteOpen(false);
+              toast.push("Invites aren't wired to the API yet — nothing was sent", "warning");
+              return;
+            }
             setSeats((prev) => [
               {
                 id: `seat-${Date.now()}`,
@@ -324,6 +383,11 @@ export default function AdminTeamPage() {
         confirmLabel="Revoke"
         danger
         onConfirm={() => {
+          if (apiOn) {
+            setRevokeId(null);
+            toast.push("Revoke isn't wired to the API yet — no change saved", "warning");
+            return;
+          }
           setSeats((prev) =>
             prev.map((seat) =>
               seat.id === revokeId ? { ...seat, status: "revoked" as const } : seat,

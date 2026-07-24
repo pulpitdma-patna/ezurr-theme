@@ -6,16 +6,21 @@ import { useAccountStore } from "@/hooks/useAccountStore";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { updateProfileExtras } from "@/lib/accountStore";
 import { formatMobileDisplay, updateSessionProfile } from "@/lib/auth";
+import { api, isApiEnabled } from "@/lib/apiClient";
 
 export default function ProfilePage() {
+  const apiOn = isApiEnabled();
   const { session } = useAuthSession();
   const account = useAccountStore();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [whatsappOptIn, setWhatsappOptIn] = useState(account.notify.whatsapp);
   const [dob, setDob] = useState(account.dob);
   const [gender, setGender] = useState(account.gender);
   const [notify, setNotify] = useState(account.notify);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -23,6 +28,28 @@ export default function ProfilePage() {
     setFirstName(parts[0] ?? "");
     setLastName(parts.slice(1).join(" "));
   }, [session]);
+
+  // Hydrate name/email/opt-in from the real profile when the API is live.
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    void api
+      .accountProfile()
+      .then((p) => {
+        if (cancelled) return;
+        if (p.email) setEmail(p.email);
+        setWhatsappOptIn(p.whatsapp_opt_in);
+        if (p.name) {
+          const parts = p.name.split(/\s+/);
+          setFirstName(parts[0] ?? "");
+          setLastName(parts.slice(1).join(" "));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn]);
 
   useEffect(() => {
     setDob(account.dob);
@@ -44,15 +71,33 @@ export default function ProfilePage() {
         onSubmit={(event) => {
           event.preventDefault();
           const name = [firstName, lastName].filter(Boolean).join(" ").trim();
-          updateSessionProfile({ name: name || session?.name });
-          updateProfileExtras({ dob, gender, notify });
-          setSaved(true);
-          window.setTimeout(() => setSaved(false), 2500);
+          void (async () => {
+            setError(null);
+            if (apiOn) {
+              try {
+                await api.updateAccountProfile({
+                  name: name || session?.name || "",
+                  email: email.trim() || null,
+                  whatsapp_opt_in: whatsappOptIn,
+                });
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Could not save profile");
+                return;
+              }
+            }
+            updateSessionProfile({ name: name || session?.name });
+            updateProfileExtras({ dob, gender, notify: { ...notify, whatsapp: whatsappOptIn } });
+            setSaved(true);
+            window.setTimeout(() => setSaved(false), 2500);
+          })();
         }}
       >
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="First name" value={firstName} onChange={setFirstName} />
           <Field label="Last name" value={lastName} onChange={setLastName} />
+          <div className="sm:col-span-2">
+            <Field label="Email" value={email} onChange={setEmail} type="email" />
+          </div>
           <div className="sm:col-span-2">
             <label className="mb-2 block text-sm font-semibold text-[#424245]" htmlFor="mobile">
               Mobile number
@@ -85,12 +130,24 @@ export default function ProfilePage() {
 
         <fieldset className="mt-8 border-t border-black/[0.06] pt-6">
           <legend className="text-sm font-semibold text-[#1D1D1F]">Notifications</legend>
-          <p className="mt-1 text-xs text-[#86868B]">Local prefs only — no messages leave this browser.</p>
+          <p className="mt-1 text-xs text-[#86868B]">
+            {apiOn
+              ? "WhatsApp updates control your real opt-in; email & offers are local prefs."
+              : "Local prefs only — no messages leave this browser."}
+          </p>
           <div className="mt-4 space-y-3">
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>WhatsApp updates</span>
+              <input
+                type="checkbox"
+                checked={whatsappOptIn}
+                onChange={(e) => setWhatsappOptIn(e.target.checked)}
+                className="h-4 w-4 accent-[#1D1D1F]"
+              />
+            </label>
             {(
               [
                 ["email", "Order emails"],
-                ["whatsapp", "WhatsApp updates"],
                 ["marketing", "Offers & drops"],
               ] as const
             ).map(([key, label]) => (
@@ -117,6 +174,7 @@ export default function ProfilePage() {
           {saved ? (
             <span className="text-sm font-medium text-[#2D6B3C]">Profile updated</span>
           ) : null}
+          {error ? <span className="text-sm font-medium text-[#B42318]">{error}</span> : null}
         </div>
       </form>
 

@@ -29,6 +29,8 @@ function apiToSettings(raw: Record<string, unknown>): AdminSettings {
     releaseDate: String(raw.releaseDate ?? defaultAdminSettings.releaseDate),
     accentHue: Number(raw.accentHue ?? defaultAdminSettings.accentHue),
     showOffer: raw.showOffer !== false,
+    gaMeasurementId: String(raw.gaMeasurementId ?? ""),
+    metaPixelId: String(raw.metaPixelId ?? ""),
   };
 }
 

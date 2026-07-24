@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { api, isApiEnabled, type ApiAutomation } from "@/lib/apiClient";
 import { AdminSelect } from "@/components/admin/AdminSelect";
 import { AutomationBuilder } from "@/components/admin/AutomationBuilder";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
@@ -72,8 +74,56 @@ function blankRule(): AdminAutomationRule {
   };
 }
 
+function apiToRule(a: ApiAutomation): AdminAutomationRule {
+  return {
+    id: a.id ?? "",
+    name: a.name,
+    description: a.description ?? "",
+    trigger: a.trigger as AutomationTrigger,
+    enabled: a.enabled,
+    conditions: (a.conditions ?? []) as AdminAutomationRule["conditions"],
+    actions: (a.actions ?? []) as AdminAutomationRule["actions"],
+    createdAt: a.createdAt ?? "",
+    updatedAt: a.updatedAt ?? "",
+  };
+}
+
 export default function AdminAutomationsPage() {
-  const { automations, automationRuns } = useAdminStore();
+  const store = useAdminStore();
+  const apiOn = isApiEnabled();
+  const [apiAutomations, setApiAutomations] = useState<AdminAutomationRule[]>([]);
+  const [apiRuns, setApiRuns] = useState<AdminAutomationRun[]>([]);
+
+  const loadAutomations = useCallback(async () => {
+    if (!apiOn) return;
+    try {
+      const [rules, runs] = await Promise.all([api.automations(), api.automationRuns()]);
+      setApiAutomations((rules.data ?? []).map(apiToRule));
+      setApiRuns(
+        (runs.data ?? []).map((r) => ({
+          id: r.id,
+          ruleId: r.ruleId ?? "",
+          ruleName: r.ruleName,
+          trigger: r.trigger as AutomationTrigger,
+          at: r.at,
+          status: r.status as AdminAutomationRun["status"],
+          summary: r.summary ?? "",
+          delivery: (r.delivery ?? undefined) as AdminAutomationRun["delivery"],
+        })),
+      );
+    } catch {
+      setApiAutomations([]);
+      setApiRuns([]);
+    }
+  }, [apiOn]);
+
+  useEffect(() => {
+    void loadAutomations();
+  }, [loadAutomations]);
+
+  const automations = apiOn ? apiAutomations : store.automations;
+  const automationRuns = apiOn ? apiRuns : store.automationRuns;
+
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") === "runs" ? "runs" : "rules";
   const [tab, setTab] = useState<"rules" | "runs">(initialTab);
@@ -126,11 +176,78 @@ export default function AdminAutomationsPage() {
     setEditing(blankRule());
   }
 
-  function saveRule(rule: AdminAutomationRule) {
+  function toApiPayload(rule: AdminAutomationRule): ApiAutomation {
+    return {
+      id: rule.id || undefined,
+      name: rule.name,
+      description: rule.description,
+      trigger: rule.trigger,
+      enabled: rule.enabled,
+      priority: 100,
+      conditions: rule.conditions,
+      actions: rule.actions,
+    };
+  }
+
+  async function saveRule(rule: AdminAutomationRule) {
+    if (apiOn) {
+      try {
+        await api.upsertAutomation(toApiPayload(rule));
+        setEditing(null);
+        setToast(rule.id ? "Rule updated" : "Rule created");
+        await loadAutomations();
+      } catch {
+        setToast("Could not save automation");
+      }
+      return;
+    }
     const id = rule.id || `auto-${Date.now()}`;
     upsertAutomation({ ...rule, id });
     setEditing(null);
     setToast(rule.id ? "Rule updated" : "Rule created");
+  }
+
+  async function handleToggle(rule: AdminAutomationRule, enabled: boolean) {
+    if (apiOn) {
+      try {
+        await api.upsertAutomation({ ...toApiPayload(rule), enabled });
+        await loadAutomations();
+      } catch {
+        setToast("Could not update automation");
+      }
+    } else {
+      toggleAutomation(rule.id, enabled);
+    }
+    setToast(enabled ? "Enabled" : "Paused");
+  }
+
+  async function handleTest(rule: AdminAutomationRule) {
+    if (apiOn) {
+      try {
+        await api.testAutomation(rule.id);
+        setToast("Test event fired");
+        await loadAutomations();
+      } catch {
+        setToast("Could not run test");
+      }
+    } else {
+      testAutomation(rule.trigger);
+      setToast(`Test event fired · ${triggerLabels[rule.trigger]}`);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (apiOn) {
+      try {
+        await api.deleteAutomation(id);
+        await loadAutomations();
+      } catch {
+        setToast("Could not delete automation");
+      }
+    } else {
+      deleteAutomation(id);
+    }
+    setToast("Rule deleted");
   }
 
   return (
@@ -165,6 +282,14 @@ export default function AdminAutomationsPage() {
           </div>
         }
       />
+
+      {apiOn ? (
+        <AdminNotice tone="info">
+          Automations run on the live server. WhatsApp/SMS actions send via MSG91
+          once the matching template is approved (until then a run is recorded as
+          &ldquo;blocked&rdquo;).
+        </AdminNotice>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-black/[0.06] bg-white px-3.5 py-2.5 text-xs text-[#6E6E73]">
         <span>
@@ -289,13 +414,9 @@ export default function AdminAutomationsPage() {
                 rule={rule}
                 onEdit={() => setEditing(rule)}
                 onDelete={() => setDeleteId(rule.id)}
-                onToggle={(enabled) => {
-                  toggleAutomation(rule.id, enabled);
-                  setToast(`${rule.name} ${enabled ? "enabled" : "paused"}`);
-                }}
+                onToggle={(enabled) => void handleToggle(rule, enabled)}
                 onTest={() => {
-                  testAutomation(rule.trigger);
-                  setToast(`Test event fired · ${triggerLabels[rule.trigger]}`);
+                  void handleTest(rule);
                   setTab("runs");
                 }}
               />
@@ -350,8 +471,7 @@ export default function AdminAutomationsPage() {
               type="button"
               onClick={() => {
                 if (automations[0]) {
-                  testAutomation(automations[0].trigger);
-                  setToast("Sample test event fired");
+                  void handleTest(automations[0]);
                 } else {
                   openNew();
                 }
@@ -385,9 +505,8 @@ export default function AdminAutomationsPage() {
         danger
         onCancel={() => setDeleteId(null)}
         onConfirm={() => {
-          if (deleteId) deleteAutomation(deleteId);
+          if (deleteId) void handleDelete(deleteId);
           setDeleteId(null);
-          setToast("Rule deleted");
         }}
       />
     </div>

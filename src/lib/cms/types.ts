@@ -64,6 +64,9 @@ export type CmsBlock = {
   children?: CmsBlock[];
   layout?: CmsBlockLayout;
   customCss?: string;
+  /** Server marks code blocks (custom_html/widget) so the storefront renders
+   *  them in an isolated sandbox iframe instead of executing anything. */
+  sandboxRef?: string;
 };
 
 export type PageVariantId = "A" | "B";

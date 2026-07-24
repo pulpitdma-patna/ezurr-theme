@@ -507,8 +507,6 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
                   sections={sections}
                   widgets={widgets}
                   pageCss={draft.customCss}
-                  pageJs={draft.customJs}
-                  allowJs={false}
                   interactive
                   selectedId={selectedId}
                   onSelect={(id) => setSelectedId(id || null)}

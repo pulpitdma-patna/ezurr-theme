@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { useAdminToast } from "@/components/admin/AdminToast";
+import { isApiEnabled } from "@/lib/apiClient";
 import { useCmsWidgets } from "@/hooks/useCmsStore";
 import {
   createCustomCmsWidget,
@@ -51,6 +53,13 @@ export default function AdminCmsWidgetsPage() {
         title="Widget marketplace"
         description="Install Elementor-style add-on modules. Installed widgets appear in the page builder palette."
       />
+
+      {isApiEnabled() ? (
+        <AdminNotice tone="demo">
+          Widgets install to your browser (localStorage) only — they aren&apos;t
+          persisted to the server yet.
+        </AdminNotice>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <input

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminNotice } from "@/components/admin/AdminNotice";
+import { isApiEnabled } from "@/lib/apiClient";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useReportFilters } from "@/hooks/useReportFilters";
 import { REPORT_DEFINITIONS } from "@/lib/reports/definitions";
@@ -14,6 +16,11 @@ export default function AdminReportsHubPage() {
 
   return (
     <div>
+      {isApiEnabled() ? (
+        <AdminNotice tone="demo">
+          Reports are derived from local demo data — not your live server data yet.
+        </AdminNotice>
+      ) : null}
       <AdminPageHeader
         title="Reports"
         description="Derived from your live admin store — booked sales, ops queues, and honest data gaps."

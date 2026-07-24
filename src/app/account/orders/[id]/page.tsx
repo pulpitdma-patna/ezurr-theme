@@ -11,6 +11,7 @@ import { normalizeMobile } from "@/lib/auth";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import { mapApiOrderToAdmin } from "@/lib/apiMappers";
 import { CountdownInline } from "@/components/ui/Countdown";
+import { OrderTracker } from "@/components/orders/OrderTracker";
 
 export default function AccountOrderDetailPage({
   params,
@@ -111,6 +112,10 @@ export default function AccountOrderDetailPage({
           <CountdownInline />. Cancel anytime before dispatch.
         </div>
       ) : null}
+
+      <section className="mb-4 rounded-2xl border border-black/[0.07] bg-white p-5 sm:p-6">
+        <OrderTracker order={order} />
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded-2xl border border-black/[0.07] bg-white p-5">

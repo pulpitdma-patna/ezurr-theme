@@ -18,7 +18,8 @@ export default function AdminCmsCodePage() {
       />
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        Demo only — JS is not sandboxed. Prefer page-level or block-scoped CSS when possible.
+        Demo only — saved to this browser (localStorage), not the live server, and
+        JS is not sandboxed. Prefer page-level or block-scoped CSS when possible.
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">

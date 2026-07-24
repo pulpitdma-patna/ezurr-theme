@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminNotice } from "@/components/admin/AdminNotice";
+import { api, isApiEnabled, type ApiCustomer } from "@/lib/apiClient";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { FilterBar } from "@/components/admin/FilterBar";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { parsePrice, type AdminCustomer } from "@/data/admin";
+import { formatInr, parsePrice, type AdminCustomer, type AdminCustomerStatus } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 import { formatMobileDisplay } from "@/lib/auth";
@@ -20,18 +22,51 @@ const filters = [
   { value: "banned", label: "Banned" },
 ];
 
+function mapApiCustomer(c: ApiCustomer): AdminCustomer {
+  const status: AdminCustomerStatus =
+    c.lifetime_value >= 50000 ? "vip" : c.orders_count > 0 ? "active" : "new";
+  return {
+    id: String(c.id),
+    name: c.name,
+    mobile: c.mobile ?? "",
+    orders: c.orders_count,
+    spent: formatInr(c.lifetime_value),
+    lastOrderAt: c.last_order_at ?? "",
+    city: "—",
+    status,
+    tags: c.tags,
+  };
+}
+
 export default function AdminCustomersPage() {
   const router = useRouter();
+  const apiOn = isApiEnabled();
   const store = useAdminStore();
+  const [remote, setRemote] = useState<AdminCustomer[]>([]);
   const [status, setStatus] = useState("all");
   const [query, setQuery] = useSearchQueryParam();
   const [sortKey, setSortKey] = useState("spent");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = usePagedList(`${status}|${query}|${sortKey}|${sortDir}`);
 
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    void api
+      .adminCustomers({ search: query.trim() || undefined })
+      .then((res) => {
+        if (!cancelled) setRemote(res.data.map(mapApiCustomer));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn, query]);
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = store.customers.filter((customer) => {
+    const source = apiOn ? remote : store.customers;
+    let list = source.filter((customer) => {
       if (status !== "all" && customer.status !== status) return false;
       if (!q) return true;
       return (
@@ -49,7 +84,7 @@ export default function AdminCustomersPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [store.customers, status, query, sortKey, sortDir]);
+  }, [apiOn, remote, store.customers, status, query, sortKey, sortDir]);
 
   const columns: DataTableColumn<AdminCustomer>[] = [
     {
@@ -107,9 +142,14 @@ export default function AdminCustomersPage() {
 
   return (
     <div>
+      {!apiOn ? (
+        <AdminNotice tone="demo">
+          Customer data here is a local demo — enable the store API for live data.
+        </AdminNotice>
+      ) : null}
       <AdminPageHeader
         title="Customers"
-        description="Who is buying — open a profile for VIP, notes, or ban."
+        description="Who is buying — open a profile for order history and lifetime value."
       />
 
       <ListToolbar

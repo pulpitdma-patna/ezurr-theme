@@ -4,13 +4,11 @@ import { useMemo, useState, type ReactNode } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import {
-  evalCheckoutScript,
   mockExperimentStats,
   resolveCheckoutPolicy,
   type AdminCheckoutRule,
   type CheckoutActionType,
   type CheckoutConditionField,
-  type CheckoutConditionMode,
   type CheckoutContext,
   type CheckoutRuleAction,
   type CheckoutRuleCondition,
@@ -139,9 +137,7 @@ export function CheckoutRuleBuilder({
   const { settings } = useAdminStore();
   const [draft, setDraft] = useState(rule);
   const [nameError, setNameError] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(
-    Boolean(rule.conditionMode === "script" || rule.script || rule.experimentId),
-  );
+  const [advancedOpen, setAdvancedOpen] = useState(Boolean(rule.experimentId));
   const [preview, setPreview] = useState<CheckoutContext>({
     subtotal: 5999,
     pincode: "560001",
@@ -154,13 +150,6 @@ export function CheckoutRuleBuilder({
   function update(patch: Partial<AdminCheckoutRule>) {
     setDraft((prev) => ({ ...prev, ...patch }));
   }
-
-  const scriptPreview = useMemo(() => {
-    if (draft.conditionMode !== "script" || !draft.script?.trim()) {
-      return { ok: true as const };
-    }
-    return evalCheckoutScript(draft.script, preview);
-  }, [draft.conditionMode, draft.script, preview]);
 
   const policy = useMemo(
     () => resolveCheckoutPolicy(settings, [draft], preview),
@@ -177,16 +166,10 @@ export function CheckoutRuleBuilder({
       setNameError(true);
       return;
     }
-    if (draft.conditionMode === "script" && draft.script?.trim() && !scriptPreview.ok) {
-      return;
-    }
     onSave({
       ...draft,
       name: draft.name.trim(),
-      conditions:
-        draft.conditionMode === "script"
-          ? []
-          : draft.conditions.filter((c) => c.field.trim()),
+      conditions: draft.conditions.filter((c) => c.field.trim()),
       actions: draft.actions.length ? draft.actions : [emptyAction()],
     });
   }
@@ -266,56 +249,9 @@ export function CheckoutRuleBuilder({
         <BuilderSection
           step={2}
           title="Conditions"
-          description="Row conditions (default) or advanced script mode."
+          description="Row conditions evaluated against cart context."
         >
-          <div className="mb-3 flex gap-2">
-            {(["rows", "script"] as CheckoutConditionMode[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => update({ conditionMode: mode })}
-                className={`h-8 rounded-lg px-3 text-[11px] font-semibold ${
-                  (draft.conditionMode ?? "rows") === mode
-                    ? "bg-[#1D1D1F] text-white"
-                    : "border border-black/[0.1] bg-white"
-                }`}
-              >
-                {mode === "rows" ? "Row conditions" : "Script"}
-              </button>
-            ))}
-          </div>
-
-          {(draft.conditionMode ?? "rows") === "script" ? (
-            <div>
-              <label className="block">
-                <span className={labelClass}>Expression</span>
-                <textarea
-                  className={`${fieldClass} mt-1.5 min-h-[88px] font-mono text-[12px] ${
-                    draft.script?.trim() && !scriptPreview.ok ? "border-[#F5C2C0]" : ""
-                  }`}
-                  value={draft.script ?? ""}
-                  onChange={(e) => update({ script: e.target.value })}
-                  placeholder="subtotal >= 5000 && pincode.startsWith('56')"
-                />
-              </label>
-              {draft.script?.trim() ? (
-                <p
-                  className={`mt-2 text-[11px] ${
-                    scriptPreview.ok ? "text-[#2D6B3C]" : "text-[#B42318]"
-                  }`}
-                >
-                  {scriptPreview.ok
-                    ? "Script evaluates true for preview cart."
-                    : scriptPreview.error ?? "Script evaluates false."}
-                </p>
-              ) : (
-                <p className="mt-2 text-[11px] text-[#86868B]">
-                  Empty script = always match. Use identifiers: subtotal, pincode, city,
-                  payment_method, fulfillment_type, product_category.
-                </p>
-              )}
-            </div>
-          ) : draft.conditions.length === 0 ? (
+          {draft.conditions.length === 0 ? (
             <p className="text-xs text-[#86868B]">No conditions — rule always matches.</p>
           ) : (
             <ul className="space-y-2">
@@ -398,17 +334,15 @@ export function CheckoutRuleBuilder({
               ))}
             </ul>
           )}
-          {(draft.conditionMode ?? "rows") === "rows" ? (
-            <button
-              type="button"
-              onClick={() =>
-                update({ conditions: [...draft.conditions, emptyCondition()] })
-              }
-              className="mt-2 h-8 rounded-lg border border-dashed border-black/[0.14] bg-white px-3 text-[11px] font-semibold"
-            >
-              Add condition
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={() =>
+              update({ conditions: [...draft.conditions, emptyCondition()] })
+            }
+            className="mt-2 h-8 rounded-lg border border-dashed border-black/[0.14] bg-white px-3 text-[11px] font-semibold"
+          >
+            Add condition
+          </button>
         </BuilderSection>
 
         <BuilderSection step={3} title="Actions" description="Applied when conditions match.">

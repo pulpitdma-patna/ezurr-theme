@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { AdminNotice } from "@/components/admin/AdminNotice";
 import { CheckoutRuleBuilder } from "@/components/admin/CheckoutRuleBuilder";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { ListToolbar } from "@/components/admin/ListToolbar";
@@ -103,20 +104,64 @@ export default function AdminCheckoutRulesPage() {
   });
 
   async function saveRule(rule: AdminCheckoutRule) {
-    const id = rule.id || `cr-${Date.now()}`;
-    const next = { ...rule, id };
-    upsertCheckoutRule(next);
+    const isNew = !rule.id;
     if (isApiEnabled()) {
       try {
-        const saved = await api.upsertCheckoutRule(next);
+        // New rules must NOT carry an id, so upsertCheckoutRule POSTs to store()
+        // instead of PUTting a non-existent public_id (which 404'd).
+        const saved = await api.upsertCheckoutRule(rule);
         upsertCheckoutRule(saved as AdminCheckoutRule);
         setApiSync("ok");
+        setEditing(null);
+        setToast(isNew ? "Rule created" : "Rule updated");
       } catch {
         setApiSync("err");
+        setToast("Could not save rule");
       }
+      return;
     }
+    // Mock mode: assign a local id for the localStorage store.
+    upsertCheckoutRule({ ...rule, id: rule.id || `cr-${Date.now()}` });
     setEditing(null);
-    setToast(rule.id ? "Rule updated" : "Rule created");
+    setToast(isNew ? "Rule created" : "Rule updated");
+  }
+
+  async function toggleRule(rule: AdminCheckoutRule) {
+    const next = !rule.enabled;
+    toggleCheckoutRule(rule.id, next); // optimistic local flip
+    if (isApiEnabled()) {
+      try {
+        const saved = await api.upsertCheckoutRule({ ...rule, enabled: next });
+        upsertCheckoutRule(saved as AdminCheckoutRule);
+        setApiSync("ok");
+        setToast(next ? "Enabled" : "Paused");
+      } catch {
+        toggleCheckoutRule(rule.id, rule.enabled); // revert on failure
+        setApiSync("err");
+        setToast("Could not update rule");
+      }
+      return;
+    }
+    setToast(next ? "Enabled" : "Paused");
+  }
+
+  async function deleteRule(id: string) {
+    const target = checkoutRules.find((r) => r.id === id);
+    deleteCheckoutRule(id); // optimistic local removal
+    setDeleteId(null);
+    if (isApiEnabled()) {
+      try {
+        await api.deleteCheckoutRule(id);
+        setApiSync("ok");
+        setToast("Rule deleted");
+      } catch {
+        if (target) upsertCheckoutRule(target); // restore on failure
+        setApiSync("err");
+        setToast("Could not delete rule");
+      }
+      return;
+    }
+    setToast("Rule deleted");
   }
 
   return (
@@ -155,6 +200,12 @@ export default function AdminCheckoutRulesPage() {
           </div>
         }
       />
+
+      {apiSync === "err" ? (
+        <AdminNotice tone="error">
+          Couldn&apos;t sync rules from the server — showing local data. Changes may not persist.
+        </AdminNotice>
+      ) : null}
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -282,10 +333,7 @@ export default function AdminCheckoutRulesPage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      toggleCheckoutRule(rule.id, !rule.enabled);
-                      setToast(rule.enabled ? "Paused" : "Enabled");
-                    }}
+                    onClick={() => void toggleRule(rule)}
                     className="h-8 rounded-lg border border-black/[0.1] px-2.5 text-[11px] font-semibold"
                   >
                     {rule.enabled ? "Pause" : "Enable"}
@@ -335,14 +383,8 @@ export default function AdminCheckoutRulesPage() {
         danger
         onCancel={() => setDeleteId(null)}
         onConfirm={() => {
-          if (deleteId) {
-            deleteCheckoutRule(deleteId);
-            if (isApiEnabled()) {
-              void api.deleteCheckoutRule(deleteId).catch(() => setApiSync("err"));
-            }
-            setToast("Rule deleted");
-          }
-          setDeleteId(null);
+          if (deleteId) void deleteRule(deleteId);
+          else setDeleteId(null);
         }}
       />
     </div>

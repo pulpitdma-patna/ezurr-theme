@@ -1,3 +1,6 @@
+/** A storefront ribbon (New, Pre-order, -24%, Best Price, Sold out). */
+export type ProductBadge = { kind: string; label: string };
+
 export type CatalogProduct = {
   /** Stable id when from API (product key/slug) */
   id?: string;
@@ -6,6 +9,7 @@ export type CatalogProduct = {
   name: string;
   price: string;
   strike: string;
+  badges?: ProductBadge[];
 };
 
 export type GameCardProduct = {

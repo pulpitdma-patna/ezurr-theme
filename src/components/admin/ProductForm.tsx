@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -11,6 +10,7 @@ import {
   type AdminProductStatus,
 } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
+import { ImageUploadField } from "@/components/admin/ImageUploadField";
 
 const platforms: AdminPlatform[] = [
   "PS5",
@@ -54,6 +54,8 @@ export function ProductForm({
   onSubmit,
   submitLabel,
   toastMessage,
+  toastTone = "success",
+  submitting = false,
   onCancel,
   embedded = false,
 }: {
@@ -62,6 +64,10 @@ export function ProductForm({
   onSubmit: (event: React.FormEvent) => void;
   submitLabel: string;
   toastMessage?: string;
+  /** Colour of the inline banner — success (green) or error (red) */
+  toastTone?: "success" | "error";
+  /** Disable the submit button and show a pending label while a save is in flight */
+  submitting?: boolean;
   onCancel?: () => void;
   /** Strip outer card chrome when used inside a drawer */
   embedded?: boolean;
@@ -128,7 +134,14 @@ export function ProductForm({
         {toastMessage}
       </div>
       {toastMessage ? (
-        <div className="rounded-md border border-[#A6D5B0] bg-[#EAF6ED] px-4 py-2.5 text-sm text-[#2D6B3C]">
+        <div
+          role={toastTone === "error" ? "alert" : undefined}
+          className={
+            toastTone === "error"
+              ? "rounded-md border border-[#F5C2C0] bg-[#FDECEC] px-4 py-2.5 text-sm text-[#B42318]"
+              : "rounded-md border border-[#A6D5B0] bg-[#EAF6ED] px-4 py-2.5 text-sm text-[#2D6B3C]"
+          }
+        >
           {toastMessage}
         </div>
       ) : null}
@@ -223,28 +236,12 @@ export function ProductForm({
       </Section>
 
       <Section title="Media">
-        <Field label="Image URL">
-          <input
-            value={form.image}
-            onChange={(e) => handleUpdate("image", e.target.value)}
-            className={inputClass}
-            placeholder="https://…"
-          />
-        </Field>
-        {form.image ? (
-          <div className="relative mt-1 h-36 w-36 overflow-hidden rounded-md border border-black/[0.08] bg-[#F7F7F8]">
-            <Image
-              src={form.image}
-              alt="Product preview"
-              fill
-              className="object-contain p-2"
-              sizes="144px"
-              unoptimized
-            />
-          </div>
-        ) : (
-          <p className="text-xs text-[#86868B]">Add an image URL to preview cover art.</p>
-        )}
+        <ImageUploadField
+          value={form.image}
+          onChange={(url) => handleUpdate("image", url)}
+          folder="products"
+          label="Product image"
+        />
       </Section>
 
       <Section title="Pricing">
@@ -306,9 +303,10 @@ export function ProductForm({
       <div className="flex flex-wrap gap-2 pt-1">
         <button
           type="submit"
-          className="inline-flex h-9 items-center rounded-md bg-[#1D1D1F] px-4 text-xs font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+          disabled={submitting}
+          className="inline-flex h-9 items-center rounded-md bg-[#1D1D1F] px-4 text-xs font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] disabled:cursor-wait disabled:opacity-50"
         >
-          {submitLabel}
+          {submitting ? "Saving…" : submitLabel}
         </button>
         {onCancel ? (
           <button

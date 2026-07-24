@@ -1,30 +1,62 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SectionHeading } from "@/components/home/SectionHeading";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { maskDigitalCode } from "@/data/admin";
 import { normalizeMobile } from "@/lib/auth";
+import { api, isApiEnabled, type ApiAccountDigitalCode } from "@/lib/apiClient";
+
+type CodeView = { key: string; productName: string; code: string; orderId: string; platform: string };
 
 export default function AccountDigitalPage() {
+  const apiOn = isApiEnabled();
   const { session } = useAuthSession();
   const store = useAdminStore();
   const [revealed, setRevealed] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [remote, setRemote] = useState<ApiAccountDigitalCode[]>([]);
 
-  const codes = useMemo(() => {
+  useEffect(() => {
+    if (!apiOn || !session) return;
+    let cancelled = false;
+    void api
+      .accountDigitalCodes()
+      .then((rows) => {
+        if (!cancelled) setRemote(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn, session]);
+
+  const codes: CodeView[] = useMemo(() => {
+    if (apiOn) {
+      return remote.map((c, i) => ({
+        key: `${c.product_key}-${i}`,
+        productName: c.title ?? c.product_key,
+        code: c.code,
+        orderId: c.order_public_id ?? "",
+        platform: "Digital",
+      }));
+    }
     const digits = normalizeMobile(session?.mobile ?? "");
     const myOrderIds = new Set(
-      store.orders
-        .filter((o) => normalizeMobile(o.customerMobile) === digits)
-        .map((o) => o.id),
+      store.orders.filter((o) => normalizeMobile(o.customerMobile) === digits).map((o) => o.id),
     );
-    return store.digitalCodes.filter(
-      (code) => code.assignedOrderId && myOrderIds.has(code.assignedOrderId),
-    );
-  }, [store.orders, store.digitalCodes, session?.mobile]);
+    return store.digitalCodes
+      .filter((code) => code.assignedOrderId && myOrderIds.has(code.assignedOrderId))
+      .map((code) => ({
+        key: code.id,
+        productName: code.productName,
+        code: code.code,
+        orderId: code.assignedOrderId ?? "",
+        platform: code.platform,
+      }));
+  }, [apiOn, remote, store.orders, store.digitalCodes, session?.mobile]);
 
   return (
     <div>
@@ -51,16 +83,16 @@ export default function AccountDigitalPage() {
       ) : (
         <ul className="mt-6 space-y-3">
           {codes.map((code) => {
-            const open = revealed === code.id;
+            const open = revealed === code.key;
             return (
               <li
-                key={code.id}
+                key={code.key}
                 className="rounded-2xl border border-black/[0.07] px-4 py-4 sm:flex sm:items-center sm:justify-between sm:gap-4"
               >
                 <div>
                   <div className="text-sm font-semibold">{code.productName}</div>
                   <div className="ez-mono mt-1 text-[11px] text-[#86868B]">
-                    {code.assignedOrderId} · {code.platform}
+                    {[code.orderId, code.platform].filter(Boolean).join(" · ")}
                   </div>
                   <div className="ez-mono mt-2 text-sm font-semibold tracking-wide">
                     {open ? code.code : maskDigitalCode(code.code)}
@@ -69,7 +101,7 @@ export default function AccountDigitalPage() {
                 <div className="mt-3 flex gap-2 sm:mt-0">
                   <button
                     type="button"
-                    onClick={() => setRevealed((prev) => (prev === code.id ? null : code.id))}
+                    onClick={() => setRevealed((prev) => (prev === code.key ? null : code.key))}
                     className="h-9 rounded-full border border-black/10 px-4 text-xs font-semibold"
                   >
                     {open ? "Hide" : "Reveal"}
@@ -79,7 +111,7 @@ export default function AccountDigitalPage() {
                     onClick={async () => {
                       try {
                         await navigator.clipboard.writeText(code.code);
-                        setCopied(code.id);
+                        setCopied(code.key);
                         window.setTimeout(() => setCopied(null), 2000);
                       } catch {
                         /* ignore */
@@ -87,7 +119,7 @@ export default function AccountDigitalPage() {
                     }}
                     className="h-9 rounded-full bg-[#1D1D1F] px-4 text-xs font-semibold text-white"
                   >
-                    {copied === code.id ? "Copied" : "Copy"}
+                    {copied === code.key ? "Copied" : "Copy"}
                   </button>
                 </div>
               </li>
