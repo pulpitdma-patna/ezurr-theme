@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AdminChart } from "@/components/admin/AdminChart";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminPanel } from "@/components/admin/AdminPanel";
 import { useApiSettings } from "@/hooks/useApiSettings";
 import { ReportDateFilter } from "@/components/admin/reports/ReportDateFilter";
 import { StatCard } from "@/components/admin/StatCard";
@@ -27,10 +29,39 @@ import {
 import { formatShortDate } from "@/lib/reports/format";
 
 const alertTones = {
-  warning: "border-[#F5C2C0] bg-[#FFF5F5] text-[#B42318]",
-  info: "border-black/[0.08] bg-white text-[#1D1D1F]",
-  success: "border-[#A6D5B0] bg-[#EAF6ED] text-[#2D6B3C]",
-};
+  warning: {
+    shell: "border-[#F5C2C0] bg-[#FFF5F5]",
+    dot: "bg-[#F04438]",
+    title: "text-[#B42318]",
+    detail: "text-[#912018]",
+    link: "text-[#B42318]",
+  },
+  info: {
+    shell: "border-black/[0.08] bg-white",
+    dot: "bg-[#6E6E73]",
+    title: "text-[#1D1D1F]",
+    detail: "text-[#6E6E73]",
+    link: "text-[#424245]",
+  },
+  success: {
+    shell: "border-[#A6D5B0] bg-[#EAF6ED]",
+    dot: "bg-[#17B26A]",
+    title: "text-[#2D6B3C]",
+    detail: "text-[#067647]",
+    link: "text-[#067647]",
+  },
+} as const;
+
+function PanelLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="ez-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[#6E6E73] transition hover:text-[var(--ez-accent-text)]"
+    >
+      {children}
+    </Link>
+  );
+}
 
 export default function AdminDashboardPage() {
   const store = useAdminStore();
@@ -124,10 +155,9 @@ export default function AdminDashboardPage() {
   const customerCount = apiOn
     ? new Set(orders.map((o) => o.customerMobile).filter(Boolean)).size
     : store.customers.length;
-  // In API mode the low-stock threshold comes from the server-persisted
-  // settings, not the local seed store.
   const threshold =
     (apiOn ? apiSettings.settings.lowStockThreshold : store.settings.lowStockThreshold) ?? 5;
+  const lowStockCount = products.filter((p) => p.stock > 0 && p.stock <= threshold).length;
   const lowStock = products
     .filter((p) => p.stock > 0 && p.stock <= threshold)
     .sort((a, b) => a.stock - b.stock)
@@ -137,70 +167,99 @@ export default function AdminDashboardPage() {
     .slice(0, 6);
 
   return (
-    <div>
+    <div className="space-y-4 sm:space-y-5">
       <AdminPageHeader
         title="Dashboard"
         description="What needs attention today — COD, stock, and release holds."
         actions={
-          <div className="flex flex-col items-stretch gap-2 sm:items-end">
-            <ReportDateFilter
-              preset={filters.preset}
-              onPresetChange={filters.setPreset}
-              customStart={filters.customStart}
-              customEnd={filters.customEnd}
-              onCustomStart={filters.setCustomStart}
-              onCustomEnd={filters.setCustomEnd}
-              range={filters.range}
-              presetOptions={filters.presetOptions}
-            />
-          </div>
+          <ReportDateFilter
+            preset={filters.preset}
+            onPresetChange={filters.setPreset}
+            customStart={filters.customStart}
+            customEnd={filters.customEnd}
+            onCustomStart={filters.setCustomStart}
+            onCustomEnd={filters.setCustomEnd}
+            range={filters.range}
+            presetOptions={filters.presetOptions}
+          />
         }
       />
 
       {dashError ? <AdminNotice tone="error">{dashError}</AdminNotice> : null}
 
-      <section className="mb-5">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold tracking-[-0.02em]">Needs attention</h2>
-          <span className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#AEAEB2]">
+      <AdminPanel
+        title="Needs attention"
+        action={
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.06] bg-white px-2 py-0.5 ez-mono text-[8px] font-medium uppercase tracking-[0.12em] text-[#86868B]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--ez-accent)]" aria-hidden />
             Live ops
           </span>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {alerts.length === 0 ? (
-            <div className="rounded-2xl border border-[#A6D5B0] bg-[#EAF6ED] px-4 py-3 text-sm text-[#2D6B3C] sm:col-span-2 xl:col-span-4">
-              All clear — no COD backlog, low stock, or release holds.
+        }
+        flush
+      >
+        {alerts.length === 0 ? (
+          <div className="flex items-center gap-3 px-3.5 py-3 sm:px-4">
+            <span
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#EAF6ED] text-[#067647]"
+              aria-hidden
+            >
+              ✓
+            </span>
+            <div>
+              <p className="text-sm font-semibold tracking-[-0.02em] text-[#2D6B3C]">All clear</p>
+              <p className="mt-0.5 text-xs text-[#067647]">
+                No COD backlog, low stock, or release holds.
+              </p>
             </div>
-          ) : (
-            alerts.map((alert) => (
-              <div
-                key={alert.id}
-                className={`rounded-2xl border px-4 py-3 shadow-[0_1px_2px_rgba(17,17,19,0.03)] ${alertTones[alert.tone]}`}
-              >
-                <div className="text-sm font-semibold tracking-[-0.02em]">{alert.title}</div>
-                <p className="mt-0.5 text-xs opacity-80">{alert.detail}</p>
-                {alert.href ? (
-                  <Link
-                    href={alert.href}
-                    className="mt-2 inline-flex text-xs font-semibold underline-offset-2 hover:underline"
-                  >
-                    Open →
-                  </Link>
-                ) : null}
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+          </div>
+        ) : (
+          <div className="grid divide-y divide-black/[0.05] sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+            {alerts.map((alert) => {
+              const tone = alertTones[alert.tone];
+              return (
+                <div
+                  key={alert.id}
+                  className={`flex min-h-[88px] flex-col justify-between px-3.5 py-3 sm:px-4 ${tone.shell}`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <span
+                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${tone.dot}`}
+                      aria-hidden
+                    />
+                    <div className="min-w-0">
+                      <div className={`text-sm font-semibold tracking-[-0.02em] ${tone.title}`}>
+                        {alert.title}
+                      </div>
+                      <p className={`mt-0.5 text-xs leading-snug ${tone.detail}`}>{alert.detail}</p>
+                    </div>
+                  </div>
+                  {alert.href ? (
+                    <Link
+                      href={alert.href}
+                      className={`mt-2 inline-flex text-[11px] font-semibold ${tone.link} hover:underline hover:underline-offset-2`}
+                    >
+                      Open →
+                    </Link>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </AdminPanel>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Booked sales"
           value={formatInr(bookedSales)}
           detail={formatRangeLabel(filters.range)}
           tone="dark"
           delta={formatDelta(bookedSales, priorBooked)}
-          deltaPositive={percentChange(bookedSales, priorBooked) === null ? null : (percentChange(bookedSales, priorBooked) ?? 0) >= 0}
+          deltaPositive={
+            percentChange(bookedSales, priorBooked) === null
+              ? null
+              : (percentChange(bookedSales, priorBooked) ?? 0) >= 0
+          }
         />
         <StatCard
           label="Orders in period"
@@ -225,33 +284,37 @@ export default function AdminDashboardPage() {
         <StatCard
           label="Catalog pulse"
           value={String(products.length)}
-          detail={`${products.filter((p) => p.stock > 0 && p.stock <= threshold).length} low stock SKUs`}
+          detail={`${lowStockCount} low stock SKUs`}
         />
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
-          <div className="mb-3 flex items-baseline justify-between gap-3">
-            <h2 className="text-sm font-semibold tracking-[-0.02em]">Booked sales</h2>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <AdminPanel
+          title="Booked sales"
+          action={
             <span className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#AEAEB2]">
               {formatRangeLabel(filters.range)}
             </span>
-          </div>
+          }
+        >
           <AdminChart
             values={series.map((d) => d.booked)}
             labels={series.map((d) => formatShortDate(d.date))}
             variant="bar"
+            color="var(--ez-accent-text)"
             ariaLabel="Booked sales for selected period"
             formatValue={(v) => formatInr(v)}
           />
-        </section>
-        <section className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
-          <div className="mb-3 flex items-baseline justify-between gap-3">
-            <h2 className="text-sm font-semibold tracking-[-0.02em]">Orders</h2>
+        </AdminPanel>
+
+        <AdminPanel
+          title="Orders"
+          action={
             <span className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#AEAEB2]">
               Count
             </span>
-          </div>
+          }
+        >
           <AdminChart
             values={series.map((d) => d.orders)}
             labels={series.map((d) => formatShortDate(d.date))}
@@ -259,53 +322,53 @@ export default function AdminDashboardPage() {
             color="#424245"
             ariaLabel="Orders for selected period"
           />
-        </section>
+        </AdminPanel>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-[-0.02em]">Low stock</h2>
-            <Link href="/admin/products" className="text-xs font-semibold text-[#424245]">
-              Inventory →
-            </Link>
-          </div>
-          <ul className="divide-y divide-black/[0.05] overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
-            {lowStock.length === 0 ? (
-              <li className="px-4 py-6 text-center text-sm text-[#86868B]">No low stock SKUs.</li>
-            ) : (
-              lowStock.map((row) => (
+      <div className="grid gap-3 lg:grid-cols-2">
+        <AdminPanel
+          title="Low stock"
+          action={<PanelLink href="/admin/products">Inventory →</PanelLink>}
+          flush
+        >
+          {lowStock.length === 0 ? (
+            <AdminEmptyState compact title="No low stock SKUs." />
+          ) : (
+            <ul className="divide-y divide-black/[0.05]">
+              {lowStock.map((row) => (
                 <li key={row.key}>
                   <Link
                     href={`/admin/products/${encodeURIComponent(row.key)}/edit`}
-                    className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[#F7F7F8]"
+                    className="flex items-center justify-between gap-3 px-3.5 py-2.5 transition hover:bg-[#F7F7F8] sm:px-4"
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{row.name}</div>
-                      <div className="ez-mono text-[10px] text-[#AEAEB2]">{row.sku}</div>
+                      <div className="truncate text-sm font-medium tracking-[-0.01em] text-[#1D1D1F]">
+                        {row.name}
+                      </div>
+                      <div className="ez-mono mt-0.5 text-[10px] text-[#AEAEB2]">{row.sku}</div>
                     </div>
                     <StockBadge stock={row.stock} />
                   </Link>
                 </li>
-              ))
-            )}
-          </ul>
-        </section>
+              ))}
+            </ul>
+          )}
+        </AdminPanel>
 
-        <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-[-0.02em]">Recent orders</h2>
-            <Link href="/admin/orders" className="text-xs font-semibold text-[#424245]">
-              View all →
-            </Link>
-          </div>
-          <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
+        <AdminPanel
+          title="Recent orders"
+          action={<PanelLink href="/admin/orders">View all →</PanelLink>}
+          flush
+        >
+          {recent.length === 0 ? (
+            <AdminEmptyState compact title="No orders yet." />
+          ) : (
             <ul className="divide-y divide-black/[0.05]">
               {recent.map((order) => (
                 <li key={order.id}>
                   <Link
                     href={`/admin/orders/${order.id}`}
-                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 transition hover:bg-[#F7F7F8]"
+                    className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 transition hover:bg-[#F7F7F8] sm:px-4"
                   >
                     <div className="min-w-0">
                       <div className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
@@ -314,20 +377,20 @@ export default function AdminDashboardPage() {
                       <div className="mt-0.5 truncate text-sm font-semibold tracking-[-0.02em]">
                         {order.customerName}
                       </div>
-                      <div className="mt-0.5 text-xs text-[#86868B]">
+                      <div className="mt-0.5 truncate text-xs text-[#6E6E73]">
                         {order.city} · {order.items[0]?.name}
                       </div>
                     </div>
                     <div className="flex items-center gap-2.5">
-                      <span className="ez-mono text-xs font-medium">{order.total}</span>
+                      <span className="ez-mono text-xs font-medium tabular-nums">{order.total}</span>
                       <StatusBadge kind="order" status={order.status} />
                     </div>
                   </Link>
                 </li>
               ))}
             </ul>
-          </div>
-        </section>
+          )}
+        </AdminPanel>
       </div>
     </div>
   );

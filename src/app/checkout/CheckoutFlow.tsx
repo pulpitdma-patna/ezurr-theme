@@ -136,6 +136,47 @@ function CheckoutInput({
   );
 }
 
+const CHECKOUT_SELECT_CHEVRON = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2386868B' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`;
+
+function CheckoutSelect({
+  id,
+  value,
+  onChange,
+  children,
+  className = "",
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`ez-checkout-input w-full cursor-pointer appearance-none rounded-[12px] px-4 py-3.5 pr-10 text-[15px] text-[var(--ez-fg)] outline-none ${className}`}
+      style={{
+        backgroundImage: CHECKOUT_SELECT_CHEVRON,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "right 1rem center",
+      }}
+    >
+      {children}
+    </select>
+  );
+}
+
+function formatCarrierOptionLabel(carrier: {
+  label: string;
+  amount: number;
+  eta: string;
+}) {
+  const price = carrier.amount === 0 ? "FREE" : fmt(carrier.amount);
+  return `${carrier.label} — ${price} · ${carrier.eta}`;
+}
+
 function CheckoutProgress({ step }: { step: number }) {
   return (
     <nav aria-label="Checkout progress" className="ez-checkout-progress">
@@ -1533,29 +1574,23 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
 
                     {policy.carriers.length > 1 ? (
                       <div className="flex flex-col gap-2">
-                        <FieldLabel>Shipping carrier</FieldLabel>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          {policy.carriers.map((carrier) => {
-                            const selected = carrierId === carrier.id;
-                            return (
-                              <button
-                                key={carrier.id}
-                                type="button"
-                                onClick={() => setCarrierId(carrier.id)}
-                                className={`rounded-[12px] border px-3 py-3 text-left ${
-                                  selected
-                                    ? "border-[var(--ez-ink)] bg-[#F7F7F8]"
-                                    : "border-[#E0E0E5] bg-white"
-                                }`}
-                              >
-                                <span className="block text-sm font-semibold">{carrier.label}</span>
-                                <span className="ez-mono mt-1 block text-[10px] text-[#86868B]">
-                                  {carrier.amount === 0 ? "FREE" : fmt(carrier.amount)} · {carrier.eta}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <FieldLabel htmlFor="shipping-carrier">Shipping carrier</FieldLabel>
+                        <CheckoutSelect
+                          id="shipping-carrier"
+                          value={
+                            carrierId ||
+                            policy.defaultCarrierId ||
+                            policy.carriers[0]?.id ||
+                            ""
+                          }
+                          onChange={(v) => setCarrierId(v as CheckoutCarrierId)}
+                        >
+                          {policy.carriers.map((carrier) => (
+                            <option key={carrier.id} value={carrier.id}>
+                              {formatCarrierOptionLabel(carrier)}
+                            </option>
+                          ))}
+                        </CheckoutSelect>
                       </div>
                     ) : null}
 

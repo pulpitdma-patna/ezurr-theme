@@ -593,7 +593,7 @@ function SidebarBrand({
             {name}
           </span>
           <span className="mt-0.5 flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#34C759] shadow-[0_0_6px_rgba(52,199,89,0.7)]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-[#34C759]" />
             <span className="ez-mono text-[8px] uppercase tracking-[0.16em] text-white/40">
               Live ops
             </span>
@@ -601,6 +601,16 @@ function SidebarBrand({
         </span>
       ) : null}
     </Link>
+  );
+}
+
+function NavSectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="px-2.5 pb-1.5 pt-1">
+      <span className="ez-mono text-[9px] font-medium uppercase tracking-[0.14em] text-white/28">
+        {children}
+      </span>
+    </div>
   );
 }
 
@@ -625,17 +635,24 @@ function NavLinkItem({
         onClick={onNavigate}
         title={item.label}
         aria-label={item.label}
-        className={`group relative flex items-center justify-center rounded-xl p-2 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+        aria-current={active ? "page" : undefined}
+        className={`group relative flex items-center justify-center rounded-[10px] p-1.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
           active
-            ? "bg-white text-[#111113] shadow-[0_8px_24px_rgba(0,0,0,0.28)]"
-            : "text-white/55 hover:bg-white/[0.06] hover:text-white"
+            ? "bg-white/[0.11] text-white ring-1 ring-inset ring-white/10"
+            : "text-white/50 hover:bg-white/[0.05] hover:text-white/90"
         }`}
       >
+        {active ? (
+          <span
+            className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-white/80"
+            aria-hidden
+          />
+        ) : null}
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] transition-colors ${
             active
-              ? "bg-[#111113] text-white"
-              : "bg-white/[0.06] text-white/45 group-hover:bg-white/10 group-hover:text-white/80"
+              ? "bg-white/10 text-white"
+              : "text-white/45 group-hover:text-white/75"
           }`}
         >
           {item.icon}
@@ -647,30 +664,37 @@ function NavLinkItem({
     <Link
       href={item.href}
       onClick={onNavigate}
-      className={`group relative flex items-center gap-3 rounded-xl py-2.5 text-[13px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
-        nested ? "px-2.5 pl-3" : "px-2.5"
+      aria-current={active ? "page" : undefined}
+      className={`group relative flex items-center gap-2.5 rounded-[10px] text-[13px] font-medium tracking-[-0.01em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+        nested ? "px-2 py-[7px]" : "px-2 py-2"
       } ${
         active
-          ? "bg-white text-[#111113] shadow-[0_8px_24px_rgba(0,0,0,0.28)]"
-          : "text-white/55 hover:bg-white/[0.06] hover:text-white"
+          ? "bg-white/[0.11] text-white ring-1 ring-inset ring-white/10"
+          : "text-white/50 hover:bg-white/[0.05] hover:text-white/90"
       }`}
     >
+      {active ? (
+        <span
+          className="absolute left-0 top-1/2 h-[18px] w-[2px] -translate-y-1/2 rounded-full bg-white/75"
+          aria-hidden
+        />
+      ) : null}
       <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
+        className={`flex shrink-0 items-center justify-center rounded-[7px] transition-colors ${
+          nested ? "h-6 w-6" : "h-7 w-7"
+        } ${
           active
-            ? "bg-[#111113] text-white"
-            : "bg-white/[0.06] text-white/45 group-hover:bg-white/10 group-hover:text-white/80"
+            ? nested
+              ? "text-white"
+              : "bg-white/10 text-white"
+            : nested
+              ? "text-white/35 group-hover:text-white/65"
+              : "text-white/45 group-hover:text-white/75"
         }`}
       >
         {item.icon}
       </span>
       <span className="truncate">{item.label}</span>
-      {active ? (
-        <span
-          className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-[#111113]/35"
-          aria-hidden
-        />
-      ) : null}
     </Link>
   );
 }
@@ -766,17 +790,17 @@ function NavSubmenu({
               openFlyout();
             }
           }}
-          className={`group flex w-full items-center justify-center rounded-xl p-2 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+          className={`group flex w-full items-center justify-center rounded-[10px] p-1.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
             routeActive || flyoutOpen
-              ? "bg-white/[0.08] text-white"
-              : "text-white/50 hover:bg-white/[0.06] hover:text-white"
+              ? "bg-white/[0.08] text-white ring-1 ring-inset ring-white/[0.08]"
+              : "text-white/45 hover:bg-white/[0.05] hover:text-white/85"
           }`}
         >
           <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] transition-colors ${
               routeActive
-                ? "bg-white/12 text-white"
-                : "bg-white/[0.05] text-white/40 group-hover:bg-white/10 group-hover:text-white/75"
+                ? "bg-white/10 text-white"
+                : "text-white/40 group-hover:text-white/70"
             }`}
           >
             {group.icon}
@@ -788,11 +812,11 @@ function NavSubmenu({
             role="menu"
             aria-label={group.label}
             style={{ top: flyoutPos.top, left: flyoutPos.left }}
-            className="fixed z-50 min-w-[200px] rounded-xl border border-white/10 bg-[#141416] py-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+            className="fixed z-50 min-w-[208px] rounded-xl border border-white/[0.08] bg-[#121214] py-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.42)]"
             onMouseEnter={openFlyout}
             onMouseLeave={scheduleCloseFlyout}
           >
-            <div className="border-b border-white/[0.06] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/45">
+            <div className="border-b border-white/[0.06] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/35">
               {group.label}
             </div>
             <ul className="flex flex-col gap-0.5 px-1.5 py-1.5">
@@ -804,19 +828,26 @@ function NavSubmenu({
                       href={item.href}
                       role="menuitem"
                       title={item.label}
+                      aria-current={active ? "page" : undefined}
                       onClick={() => {
                         setFlyoutOpen(false);
                         onNavigate?.();
                       }}
-                      className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+                      className={`relative flex items-center gap-2 rounded-[8px] px-2.5 py-2 text-[12.5px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
                         active
-                          ? "bg-white text-[#111113]"
-                          : "text-white/55 hover:bg-white/[0.06] hover:text-white"
+                          ? "bg-white/[0.11] text-white ring-1 ring-inset ring-white/10"
+                          : "text-white/50 hover:bg-white/[0.05] hover:text-white/90"
                       }`}
                     >
+                      {active ? (
+                        <span
+                          className="absolute left-0 top-1/2 h-3.5 w-[2px] -translate-y-1/2 rounded-full bg-white/75"
+                          aria-hidden
+                        />
+                      ) : null}
                       <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
-                          active ? "bg-[#111113] text-white" : "text-white/35"
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center ${
+                          active ? "text-white" : "text-white/35"
                         }`}
                       >
                         {item.icon}
@@ -834,23 +865,23 @@ function NavSubmenu({
   }
 
   return (
-    <div>
+    <div className="py-0.5">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={panelId}
-        className={`group flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+        className={`group flex w-full items-center gap-2 rounded-[10px] px-2 py-2 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
           routeActive
-            ? "bg-white/[0.08] text-white"
-            : "text-white/50 hover:bg-white/[0.06] hover:text-white"
+            ? "bg-white/[0.06] text-white/95"
+            : "text-white/45 hover:bg-white/[0.04] hover:text-white/85"
         }`}
       >
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] transition-colors ${
             routeActive
-              ? "bg-white/12 text-white"
-              : "bg-white/[0.05] text-white/40 group-hover:bg-white/10 group-hover:text-white/75"
+              ? "bg-white/10 text-white"
+              : "text-white/40 group-hover:text-white/70"
           }`}
         >
           {group.icon}
@@ -859,7 +890,7 @@ function NavSubmenu({
           {group.label}
         </span>
         <span
-          className={`shrink-0 text-white/35 transition-transform duration-200 group-hover:text-white/55 ${
+          className={`shrink-0 text-white/30 transition-transform duration-200 group-hover:text-white/50 ${
             open ? "rotate-0" : "-rotate-90"
           }`}
           aria-hidden
@@ -872,10 +903,10 @@ function NavSubmenu({
         role="region"
         aria-label={group.label}
         hidden={!open}
-        className={open ? "mt-1" : undefined}
+        className={open ? "mt-0.5" : undefined}
       >
         {open ? (
-          <ul className="flex flex-col gap-0.5 pl-[2.65rem] pr-0.5">
+          <ul className="relative ml-[1.15rem] flex flex-col gap-0.5 border-l border-white/[0.06] py-0.5 pl-3">
             {group.items.map((item) => {
               const active = isBestActive(pathname, item.href);
               return (
@@ -883,15 +914,22 @@ function NavSubmenu({
                   <Link
                     href={item.href}
                     onClick={onNavigate}
-                    className={`flex items-center gap-2 rounded-xl px-2.5 py-2 text-[12.5px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+                    aria-current={active ? "page" : undefined}
+                    className={`group relative flex items-center gap-2 rounded-[8px] px-2 py-[7px] text-[12.5px] font-medium tracking-[-0.01em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
                       active
-                        ? "bg-white text-[#111113] shadow-[0_6px_18px_rgba(0,0,0,0.22)]"
-                        : "text-white/45 hover:bg-white/[0.06] hover:text-white/85"
+                        ? "bg-white/[0.11] text-white ring-1 ring-inset ring-white/10"
+                        : "text-white/42 hover:bg-white/[0.05] hover:text-white/88"
                     }`}
                   >
+                    {active ? (
+                      <span
+                        className="absolute -left-3 top-1/2 h-3.5 w-[2px] -translate-y-1/2 rounded-full bg-white/75"
+                        aria-hidden
+                      />
+                    ) : null}
                     <span
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
-                        active ? "bg-[#111113] text-white" : "text-white/35"
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center ${
+                        active ? "text-white" : "text-white/32 group-hover:text-white/58"
                       }`}
                     >
                       {item.icon}
@@ -951,12 +989,13 @@ function SidebarNav({
 
   return (
     <nav
-      className={`flex flex-1 flex-col gap-2 overflow-y-auto overflow-x-visible py-5 ${
-        collapsed ? "px-2" : "px-3"
+      className={`ez-scrollbar-none flex flex-1 flex-col overflow-y-auto overflow-x-visible py-4 ${
+        collapsed ? "gap-3 px-2" : "gap-4 px-3"
       }`}
       aria-label="Admin"
     >
-      <ul className="flex flex-col gap-1">
+      {!collapsed ? <NavSectionLabel>Overview</NavSectionLabel> : null}
+      <ul className="flex flex-col gap-0.5">
         {topLevelNav.map((item) => (
           <li key={item.href}>
             <NavLinkItem
@@ -968,7 +1007,8 @@ function SidebarNav({
           </li>
         ))}
       </ul>
-      <div className="mt-2 flex flex-col gap-2">
+      <div className={`flex flex-col gap-1 ${collapsed ? "" : "border-t border-white/[0.05] pt-3"}`}>
+        {!collapsed ? <NavSectionLabel>Workspace</NavSectionLabel> : null}
         {navSubmenus.map((group) => (
           <NavSubmenu
             key={group.label}
@@ -988,46 +1028,28 @@ function SidebarNav({
 function SidebarFooter({
   onNavigate,
   collapsed = false,
-  onToggleCollapsed,
 }: {
   onNavigate?: () => void;
   collapsed?: boolean;
-  onToggleCollapsed?: () => void;
 }) {
   return (
-    <div className={`space-y-2 border-t border-white/[0.06] ${collapsed ? "p-2" : "p-3"}`}>
-      {onToggleCollapsed ? (
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className={`flex w-full items-center rounded-xl bg-white/[0.04] text-white/55 ring-1 ring-white/[0.06] transition hover:bg-white/[0.08] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
-            collapsed ? "justify-center p-2.5" : "gap-3 px-2.5 py-2.5 text-[13px] font-medium"
-          }`}
-        >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] text-white/50">
-            <IconSidebarToggle collapsed={collapsed} />
-          </span>
-          {!collapsed ? <span>Collapse</span> : null}
-        </button>
-      ) : null}
+    <div className={`border-t border-white/[0.06] ${collapsed ? "p-2" : "p-3"}`}>
       <Link
         href="/"
         onClick={onNavigate}
         title={collapsed ? "Storefront" : undefined}
         aria-label={collapsed ? "Storefront" : undefined}
-        className={`flex items-center rounded-xl bg-white/[0.04] text-[13px] font-medium text-white/65 ring-1 ring-white/[0.06] transition hover:bg-white/[0.08] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
-          collapsed ? "justify-center p-2.5" : "gap-3 px-2.5 py-2.5"
+        className={`flex items-center rounded-[10px] bg-white/[0.03] text-[13px] font-medium text-white/55 ring-1 ring-inset ring-white/[0.06] transition-colors hover:bg-white/[0.06] hover:text-white/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
+          collapsed ? "justify-center p-2" : "gap-2.5 px-2 py-2"
         }`}
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] text-white/50">
+        <span className="flex h-7 w-7 items-center justify-center rounded-[7px] text-white/45">
           <IconStore />
         </span>
         {!collapsed ? (
           <span className="min-w-0">
             <span className="block leading-tight">Storefront</span>
-            <span className="ez-mono text-[8px] uppercase tracking-[0.14em] text-white/30">
+            <span className="ez-mono text-[8px] uppercase tracking-[0.14em] text-white/28">
               Open shop
             </span>
           </span>
@@ -1049,12 +1071,12 @@ function SidebarShell({
 }) {
   return (
     <div
-      className={`relative flex h-full flex-col bg-[#0C0C0E] ${
+      className={`relative flex h-full flex-col bg-[#0A0A0C] ${
         allowFlyouts ? "overflow-visible" : "overflow-hidden"
       } ${className}`}
     >
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_-10%,rgba(255,255,255,0.09),transparent_50%),radial-gradient(ellipse_at_80%_110%,rgba(255,255,255,0.04),transparent_45%)]"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.045)_0%,transparent_28%),radial-gradient(ellipse_at_15%_0%,rgba(255,255,255,0.06),transparent_52%)]"
         aria-hidden
       />
       <div className="relative flex h-full min-h-0 flex-col">{children}</div>
@@ -1277,14 +1299,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           allowFlyouts={sidebarCollapsed}
           className="w-full border-r border-white/[0.06]"
         >
-          <div className={`pb-2 pt-5 ${sidebarCollapsed ? "px-2" : "px-4"}`}>
+          <div
+            className={`border-b border-white/[0.05] pb-3 pt-5 ${
+              sidebarCollapsed ? "px-2" : "px-4"
+            }`}
+          >
             <SidebarBrand collapsed={sidebarCollapsed} />
           </div>
           <SidebarNav pathname={pathname} collapsed={sidebarCollapsed} />
-          <SidebarFooter
-            collapsed={sidebarCollapsed}
-            onToggleCollapsed={toggleSidebarCollapsed}
-          />
+          <SidebarFooter collapsed={sidebarCollapsed} />
         </SidebarShell>
       </aside>
 
@@ -1334,6 +1357,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               aria-label="Open menu"
             >
               <IconMenu />
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleSidebarCollapsed}
+              className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/[0.07] bg-white text-[#424245] transition hover:bg-[#F5F5F7] hover:text-[#1D1D1F] lg:inline-flex focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <IconSidebarToggle collapsed={sidebarCollapsed} />
             </button>
 
             <div className="hidden min-w-0 shrink-0 sm:block">

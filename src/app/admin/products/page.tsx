@@ -16,12 +16,12 @@ import {
   PencilIcon,
   PlusIcon,
 } from "@/components/admin/IconButton";
-import { ListToolbar } from "@/components/admin/ListToolbar";
 import { ProductForm, type ProductFormValues } from "@/components/admin/ProductForm";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { StockBadge } from "@/components/admin/StockBadge";
 import {
   parsePrice,
+  stockLevel,
   type AdminCatalogRow,
   type AdminProductCategory,
 } from "@/data/admin";
@@ -116,18 +116,36 @@ function toForm(product: AdminCatalogRow): ProductFormValues {
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
+type StockFilter = "all" | "in_stock" | "low" | "out";
+
+const STOCK_FILTER_OPTIONS: { value: StockFilter; label: string }[] = [
+  { value: "all", label: "All stock" },
+  { value: "in_stock", label: "In stock" },
+  { value: "low", label: "Low stock" },
+  { value: "out", label: "Out of stock / Sold out" },
+];
+
+function matchesStockFilter(row: AdminCatalogRow, stockFilter: StockFilter): boolean {
+  if (stockFilter === "all") return true;
+  const level = stockLevel(row.stock);
+  if (stockFilter === "in_stock") return level === "in_stock";
+  if (stockFilter === "low") return level === "low";
+  return level === "out" || row.status === "sold_out";
+}
+
 export default function AdminProductsPage() {
   const store = useAdminStore();
   const searchParams = useSearchParams();
   const [category, setCategory] = useState<AdminProductCategory | "all">("all");
   const [brand, setBrand] = useState("all");
+  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [query, setQuery] = useSearchQueryParam();
   const [selected, setSelected] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = usePagedList(
-    `${category}|${brand}|${query}|${sortKey}|${sortDir}|${pageSize}`,
+    `${category}|${brand}|${stockFilter}|${query}|${sortKey}|${sortDir}|${pageSize}`,
   );
 
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
@@ -141,8 +159,7 @@ export default function AdminProductsPage() {
   const [listLoading, setListLoading] = useState(true);
   const [apiProducts, setApiProducts] = useState<AdminCatalogRow[]>([]);
   const [listError, setListError] = useState<string | null>(null);
-  const [viewName, setViewName] = useState("");
-  const { views, saveView, removeView } = useListSavedViews("products");
+  const { views, removeView } = useListSavedViews("products");
 
   const loadProducts = useCallback(async () => {
     if (!isApiEnabled()) {
@@ -223,6 +240,7 @@ export default function AdminProductsPage() {
     let list = productSource.filter((row) => {
       if (category !== "all" && row.category !== category) return false;
       if (brandFilter !== "all" && row.brand !== brandFilter) return false;
+      if (!matchesStockFilter(row, stockFilter)) return false;
       if (!q) return true;
       return (
         row.name.toLowerCase().includes(q) ||
@@ -240,7 +258,7 @@ export default function AdminProductsPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [productSource, category, brandFilter, query, sortKey, sortDir]);
+  }, [productSource, category, brandFilter, stockFilter, query, sortKey, sortDir]);
 
   function openView(row: AdminCatalogRow) {
     setActiveKey(row.key);
@@ -547,25 +565,50 @@ export default function AdminProductsPage() {
         : undefined;
 
   return (
-    <div>
+    <div className="space-y-4">
       <AdminPageHeader
         title="Products"
         description="Quick edit in the drawer · full editor for deep catalog fields and media."
+        breadcrumbs={[
+          { label: "Catalog", href: "/admin/products" },
+          { label: "Products" },
+        ]}
+        actions={
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-black/[0.06] bg-[#FAFAFB] px-2.5 py-1 ez-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--ez-accent)]" aria-hidden />
+            {productSource.length} SKUs
+          </span>
+        }
       />
 
       {listError ? (
         <AdminNotice tone="error">{listError}</AdminNotice>
       ) : null}
 
-      <ListToolbar
-        resultLabel={`${rows.length} products`}
-        search={{
-          value: query,
-          onChange: setQuery,
-          placeholder: "Search name, SKU, brand, platform…",
-        }}
-        filters={
-          <>
+      <section className="overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
+        <div className="flex flex-col gap-2.5 border-b border-black/[0.05] bg-[#FAFAFB] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <div className="relative min-w-0 flex-1 lg:max-w-sm">
+              <span
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#AEAEB2]"
+                aria-hidden
+              >
+                <SearchGlyph />
+              </span>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name, SKU, brand, platform…"
+                className="h-9 w-full rounded-lg border border-black/[0.07] bg-white pl-8 pr-3 text-sm shadow-[0_1px_2px_rgba(17,17,19,0.03)] outline-none placeholder:text-[#AEAEB2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+              />
+            </div>
+            <span className="hidden shrink-0 ez-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B] sm:inline">
+              {rows.length} products
+            </span>
+          </div>
+
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <AdminSelect
               label="Category"
               value={category}
@@ -591,10 +634,13 @@ export default function AdminProductsPage() {
                   .map((b) => ({ value: b.name, label: b.name })),
               ]}
             />
-          </>
-        }
-        actions={
-          <>
+            <AdminSelect
+              label="Stock"
+              value={stockFilter}
+              onChange={(value) => setStockFilter(value as StockFilter)}
+              options={STOCK_FILTER_OPTIONS}
+            />
+            <div className="hidden h-6 w-px bg-black/[0.08] sm:block" aria-hidden />
             <IconButton label="Export CSV" onClick={exportCsv} size="md">
               <ExportIcon />
             </IconButton>
@@ -606,53 +652,35 @@ export default function AdminProductsPage() {
               <PlusIcon />
               Add product
             </button>
-          </>
-        }
-      />
+          </div>
+        </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        {views.map((view) => (
-          <button
-            key={view.id}
-            type="button"
-            onClick={() => {
-              setQuery(view.query);
-              setCategory((view.filters.category as AdminProductCategory | "all") || "all");
-              setBrand(view.filters.brand || "all");
-            }}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              removeView(view.id);
-              setToast("View removed");
-            }}
-            className="rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#424245] hover:text-[#1D1D1F]"
-            title="Click to apply · right-click to remove"
-          >
-            {view.name}
-          </button>
-        ))}
-        <input
-          value={viewName}
-          onChange={(e) => setViewName(e.target.value)}
-          placeholder="Save view name"
-          className="h-8 rounded-lg border border-black/[0.08] bg-white px-2.5 text-xs outline-none focus:border-black/[0.14]"
-        />
-        <button
-          type="button"
-          onClick={() => {
-            saveView({
-              name: viewName.trim() || "Products view",
-              query,
-              filters: { category, brand: brandFilter },
-            });
-            setViewName("");
-            setToast("View saved");
-          }}
-          className="h-8 rounded-lg bg-[#1D1D1F] px-3 text-[11px] font-semibold text-white"
-        >
-          Save view
-        </button>
-      </div>
+        {views.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2 sm:px-4">
+            {views.map((view) => (
+              <button
+                key={view.id}
+                type="button"
+                onClick={() => {
+                  setQuery(view.query);
+                  setCategory((view.filters.category as AdminProductCategory | "all") || "all");
+                  setBrand(view.filters.brand || "all");
+                  setStockFilter((view.filters.stock as StockFilter) || "all");
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  removeView(view.id);
+                  setToast("View removed");
+                }}
+                className="rounded-full border border-black/[0.08] bg-white px-3 py-1 text-[11px] font-semibold text-[#424245] shadow-[0_1px_2px_rgba(17,17,19,0.03)] transition hover:border-black/[0.12] hover:text-[#1D1D1F]"
+                title="Click to apply · right-click to remove"
+              >
+                {view.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       <DataTable
         loading={listLoading}
@@ -660,6 +688,7 @@ export default function AdminProductsPage() {
         rows={rows}
         rowKey={(row) => row.key}
         emptyMessage="No products match this filter."
+        density="compact"
         emptyAction={
           <button
             type="button"
@@ -882,5 +911,14 @@ function ViewField({
         {value}
       </dd>
     </div>
+  );
+}
+
+function SearchGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="6" cy="6" r="4.25" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M9.2 9.2L12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
   );
 }

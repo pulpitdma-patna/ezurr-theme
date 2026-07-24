@@ -15,6 +15,10 @@ export function ProductGrid({ products, pageSize = 12 }: ProductGridProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setShown(pageSize);
+  }, [products, pageSize]);
+
+  useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
 

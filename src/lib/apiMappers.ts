@@ -66,6 +66,8 @@ function brandLabel(slug?: string | null, fallback?: string | null): string {
 
 export function mapApiProductToCatalog(p: ApiProduct): CatalogProduct {
   const id = p.key || p.slug || String(p.id);
+  const createdAt =
+    "created_at" in p && typeof p.created_at === "string" ? p.created_at : undefined;
   return {
     id,
     img: p.image_url || placeholderImgFor(id),
@@ -74,6 +76,9 @@ export function mapApiProductToCatalog(p: ApiProduct): CatalogProduct {
     price: formatInr(p.price),
     strike: p.mrp && p.mrp > p.price ? formatInr(p.mrp) : "",
     badges: p.badges ?? [],
+    priceNum: p.price,
+    stock: p.stock,
+    createdAt,
   };
 }
 

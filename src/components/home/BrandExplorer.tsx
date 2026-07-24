@@ -39,36 +39,36 @@ const brandNotes: Record<BrandName, string> = {
 
 const brandStage: Record<
   BrandName,
-  { tone: string; glow: string; label: string }
+  { tone: string; accent: string; label: string }
 > = {
   PlayStation: {
-    tone: "from-[#0B1C4A] via-[#163A7A] to-[#2B6AE0]",
-    glow: "bg-[#7EB6FF]/30",
+    tone: "from-[#040E24] via-[#0B1C4A] to-[#174DA8]",
+    accent: "#4A90FF",
     label: "Blue universe",
   },
   Nintendo: {
-    tone: "from-[#7A1020] via-[#C41E3A] to-[#F25C6E]",
-    glow: "bg-[#FFB3BE]/35",
+    tone: "from-[#4A0814] via-[#9E1828] to-[#D42E44]",
+    accent: "#FF6B7A",
     label: "Play anywhere",
   },
   Xbox: {
-    tone: "from-[#0D3B1E] via-[#107C10] to-[#3DDB65]",
-    glow: "bg-[#9CFFB8]/30",
+    tone: "from-[#061A0D] via-[#0C5C18] to-[#1A9E32]",
+    accent: "#52D46A",
     label: "Power house",
   },
   Logitech: {
-    tone: "from-[#1A1A1C] via-[#2E2E32] to-[#5A5A62]",
-    glow: "bg-white/20",
+    tone: "from-[#0C0C0E] via-[#1E1E22] to-[#3A3A42]",
+    accent: "#A8A8B0",
     label: "Pro controls",
   },
   Meta: {
-    tone: "from-[#1B1035] via-[#4A2AD9] to-[#8B6CFF]",
-    glow: "bg-[#C7B8FF]/30",
+    tone: "from-[#0A0A0C] via-[#18181C] to-[#2C2C34]",
+    accent: "#8E8E96",
     label: "Step inside",
   },
   Valve: {
-    tone: "from-[#1C1208] via-[#3D2A12] to-[#C47A28]",
-    glow: "bg-[#FFD39A]/28",
+    tone: "from-[#120C06] via-[#2E1E0C] to-[#9A6018]",
+    accent: "#E8A44A",
     label: "PC on the go",
   },
 };
@@ -85,6 +85,35 @@ function Arrow({ direction }: { direction: "left" | "right" }) {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+function ShelfControls({
+  brand,
+  onScroll,
+}: {
+  brand: BrandName;
+  onScroll: (direction: -1 | 1) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => onScroll(-1)}
+        aria-label={`Scroll ${brand} products left`}
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-black/[0.08] bg-white text-[#424245] transition hover:border-black/[0.14] hover:bg-[#F7F7F8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] sm:h-10 sm:w-10"
+      >
+        <Arrow direction="left" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onScroll(1)}
+        aria-label={`Scroll ${brand} products right`}
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#1D1D1F] bg-[#1D1D1F] text-white transition hover:bg-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] sm:h-10 sm:w-10"
+      >
+        <Arrow direction="right" />
+      </button>
+    </div>
   );
 }
 
@@ -108,7 +137,6 @@ export function BrandExplorer() {
         setApiPool(rows.map(mapApiProductToCatalog));
       })
       .catch(() => {
-        // Fall back to static brand collections.
         if (!cancelled) setApiPool(null);
       });
     return () => {
@@ -146,24 +174,23 @@ export function BrandExplorer() {
   }
 
   return (
-    <section aria-label="Shop by brand">
-      <div className="relative overflow-hidden bg-[#F5F5F7] py-10 sm:py-12 lg:py-14">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white to-transparent" />
+    <section className="border-t border-black/[0.05] bg-white" aria-label="Shop by brand">
+      <div className="ez-page ez-section pb-10 sm:pb-12 lg:pb-14">
+        <SectionHeading
+          eyebrow="Brand discovery"
+          title="Shop by brand."
+          description="One tap switches the entire shelf—hardware, games, and gear curated for each ecosystem."
+        />
 
-        <div className="ez-page relative">
-          <SectionHeading
-            eyebrow="Brand discovery"
-            title="Shop by brand."
-            description="One tap switches the entire shelf—hardware, games, and gear curated for each ecosystem."
-          />
-
-          <div
-            className="ez-scrollbar-none mb-6 flex gap-2 overflow-x-auto pb-1 sm:mb-8 sm:flex-wrap sm:overflow-visible"
-            role="tablist"
-            aria-label="Gaming brands"
-          >
+        <div
+          className="ez-scrollbar-none -mx-4 mb-7 overflow-x-auto border-b border-black/[0.06] px-4 sm:-mx-6 sm:mb-8 sm:px-6 lg:mx-0 lg:px-0"
+          role="tablist"
+          aria-label="Gaming brands"
+        >
+          <div className="flex min-w-max gap-0">
             {brandNames.map((brand) => {
               const active = brand === activeBrand;
+              const accent = brandStage[brand].accent;
               return (
                 <button
                   key={brand}
@@ -172,125 +199,167 @@ export function BrandExplorer() {
                   aria-selected={active}
                   aria-controls="brand-products"
                   onClick={() => setActiveBrand(brand)}
-                  className={`flex min-h-11 shrink-0 items-center gap-2.5 rounded-full border px-4 text-sm font-semibold transition ${
+                  className={`group relative flex min-h-11 shrink-0 items-center gap-2.5 px-4 pb-3.5 pt-1 text-sm font-semibold transition sm:min-h-12 sm:px-5 sm:pb-4 ${
                     active
-                      ? "border-[#1D1D1F] bg-[#1D1D1F] text-white shadow-[0_10px_28px_rgba(17,17,19,0.16)]"
-                      : "border-black/[0.08] bg-white text-[#424245] hover:border-black/20 hover:bg-white hover:text-[#1D1D1F]"
-                  } focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]`}
+                      ? "text-[#1D1D1F]"
+                      : "text-[#86868B] hover:text-[#424245]"
+                  } focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1D1D1F]`}
                 >
                   <span
                     aria-hidden="true"
-                    className={`ez-mono flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold ${
-                      active ? "bg-white text-black" : "bg-[#F0F0F2] text-[#1D1D1F]"
+                    className={`ez-mono flex h-7 w-7 items-center justify-center rounded-md text-[9px] font-bold transition ${
+                      active
+                        ? "bg-[#1D1D1F] text-white"
+                        : "bg-[#F0F0F2] text-[#6E6E73] group-hover:bg-[#E8E8ED] group-hover:text-[#424245]"
                     }`}
                   >
                     {brandMarks[brand]}
                   </span>
-                  {brand}
+                  <span className="whitespace-nowrap tracking-[-0.01em]">{brand}</span>
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-3 bottom-0 h-[2px] rounded-full transition-opacity duration-300 sm:inset-x-4"
+                    style={{
+                      backgroundColor: accent,
+                      opacity: active ? 1 : 0,
+                    }}
+                  />
                 </button>
               );
             })}
           </div>
+        </div>
 
-          <div
-            id="brand-products"
-            role="tabpanel"
-            aria-label={`${activeBrand} products`}
-            className="overflow-hidden rounded-[28px] border border-black/[0.06] bg-white shadow-[0_24px_70px_rgba(17,17,19,0.08)] lg:rounded-[34px]"
-          >
-            <div className="grid lg:grid-cols-[0.92fr_1.08fr]">
+        <div
+          id="brand-products"
+          role="tabpanel"
+          aria-label={`${activeBrand} products`}
+          className="overflow-hidden rounded-[22px] border border-black/[0.07] bg-white shadow-[0_1px_0_rgba(17,17,19,0.04),0_24px_64px_rgba(17,17,19,0.08)] sm:rounded-[28px] lg:rounded-[32px]"
+        >
+          <div className="grid lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
+            <div
+              className={`relative isolate min-h-[300px] overflow-hidden bg-gradient-to-br sm:min-h-[360px] lg:min-h-full ${stage.tone}`}
+            >
               <div
-                className={`relative isolate min-h-[320px] overflow-hidden bg-gradient-to-br p-7 text-white sm:min-h-[380px] sm:p-9 lg:min-h-full lg:p-10 ${stage.tone}`}
-              >
-                <div
-                  className={`absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl ${stage.glow}`}
-                />
-                <div className="relative z-10 flex h-full min-h-[280px] flex-col justify-between gap-8 lg:min-h-[460px]">
-                  <div>
-                    <span className="ez-mono inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-white/75 backdrop-blur">
-                      {stage.label}
-                    </span>
-                    <div className="mt-8 flex items-end gap-4">
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_70%_at_100%_100%,rgba(255,255,255,0.12),transparent_55%)]"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_0%_0%,rgba(0,0,0,0.35),transparent_60%)]"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 opacity-[0.04]"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+                  backgroundSize: "48px 48px",
+                }}
+              />
+
+              <div className="relative z-10 flex h-full min-h-[300px] flex-col justify-between gap-6 p-6 sm:min-h-[360px] sm:gap-8 sm:p-8 lg:min-h-[480px] lg:p-10">
+                <div>
+                  <span
+                    className="ez-mono inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.18em] text-white/50"
+                  >
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: stage.accent }}
+                    />
+                    {stage.label}
+                  </span>
+
+                  <div className="mt-6 sm:mt-8">
+                    <p className="ez-mono text-[9px] uppercase tracking-[0.16em] text-white/40">
+                      Now browsing
+                    </p>
+                    <div className="mt-2 flex items-end gap-3.5 sm:gap-4">
                       <span
                         aria-hidden="true"
-                        className="ez-mono flex h-14 w-14 items-center justify-center rounded-[18px] bg-white text-lg font-bold text-black sm:h-16 sm:w-16 sm:text-xl"
+                        className="ez-mono flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.08] text-base font-bold text-white backdrop-blur-sm sm:h-14 sm:w-14 sm:rounded-2xl sm:text-lg"
                       >
                         {brandMarks[activeBrand]}
                       </span>
-                      <div>
-                        <p className="ez-mono text-[10px] uppercase tracking-[0.16em] text-white/50">
-                          Now browsing
-                        </p>
-                        <h3 className="mt-1 text-[clamp(2rem,4vw,3.25rem)] font-semibold leading-none tracking-[-0.05em]">
-                          {activeBrand}
-                        </h3>
-                      </div>
+                      <h3 className="text-[clamp(1.85rem,4.5vw,3rem)] font-semibold leading-[0.95] tracking-[-0.05em] text-white">
+                        {activeBrand}
+                      </h3>
                     </div>
-                    <p className="mt-5 max-w-[340px] text-sm leading-relaxed text-white/70 sm:text-[15px]">
-                      {brandNotes[activeBrand]}
-                    </p>
                   </div>
 
-                  <div className="flex items-end justify-between gap-4">
+                  <p className="mt-4 max-w-[320px] text-sm leading-relaxed text-white/60 sm:mt-5 sm:text-[15px] sm:leading-relaxed">
+                    {brandNotes[activeBrand]}
+                  </p>
+                </div>
+
+                <div className="flex items-end justify-between gap-4">
+                  <div className="flex items-end gap-5">
                     <div>
-                      <div className="text-3xl font-semibold tracking-[-0.04em]">
+                      <div className="text-[2rem] font-semibold leading-none tracking-[-0.04em] text-white sm:text-[2.25rem]">
                         {String(products.length).padStart(2, "0")}
                       </div>
-                      <div className="ez-mono mt-1 text-[9px] uppercase tracking-[0.14em] text-white/45">
+                      <div className="ez-mono mt-1.5 text-[8px] uppercase tracking-[0.16em] text-white/35">
                         curated picks
                       </div>
                     </div>
                     {featured && (
-                      <div
-                        className="relative h-28 w-28 shrink-0 sm:h-36 sm:w-36"
-                        style={{ position: "relative" }}
-                      >
-                        <Image
-                          src={featured.img}
-                          alt={featured.name}
-                          fill
-                          className="object-contain drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)]"
-                          sizes="144px"
-                        />
+                      <div className="hidden min-w-0 sm:block">
+                        <p className="ez-mono text-[8px] uppercase tracking-[0.14em] text-white/35">
+                          Spotlight
+                        </p>
+                        <p className="mt-1 max-w-[140px] truncate text-xs font-medium text-white/70">
+                          {featured.name}
+                        </p>
                       </div>
                     )}
                   </div>
+
+                  {featured && (
+                    <div className="relative h-24 w-24 shrink-0 sm:h-32 sm:w-32 lg:h-36 lg:w-36">
+                      <div
+                        aria-hidden="true"
+                        className="absolute inset-[12%] rounded-full blur-2xl"
+                        style={{ backgroundColor: `${stage.accent}33` }}
+                      />
+                      <Image
+                        src={featured.img}
+                        alt={featured.name}
+                        fill
+                        className="relative z-10 object-contain drop-shadow-[0_20px_48px_rgba(0,0,0,0.5)]"
+                        sizes="(max-width: 640px) 96px, 144px"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
+            </div>
 
-              <div className="flex min-w-0 flex-col bg-[#FAFAFB] p-5 sm:p-7 lg:p-8">
-                <div className="mb-5 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="ez-mono text-[9px] font-bold uppercase tracking-[0.16em] text-[#86868B]">
-                      Featured shelf
-                    </p>
-                    <p className="mt-1 text-base font-semibold tracking-[-0.02em] text-[#1D1D1F]">
-                      {activeBrand} picks
-                    </p>
-                  </div>
-                  <div className="hidden items-center gap-2 sm:flex">
-                    <button
-                      type="button"
-                      onClick={() => scroll(-1)}
-                      aria-label={`Scroll ${activeBrand} products left`}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E8E8ED] text-[#424245] transition hover:bg-[#D2D2D7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-                    >
-                      <Arrow direction="left" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => scroll(1)}
-                      aria-label={`Scroll ${activeBrand} products right`}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1D1D1F] text-white transition hover:bg-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-                    >
-                      <Arrow direction="right" />
-                    </button>
-                  </div>
+            <div className="flex min-w-0 flex-col border-t border-black/[0.05] bg-[#FAFAFB] lg:border-l lg:border-t-0">
+              <div className="flex items-center justify-between gap-3 border-b border-black/[0.04] px-5 py-4 sm:px-7 sm:py-5 lg:px-8">
+                <div className="min-w-0">
+                  <p className="ez-mono text-[8px] font-bold uppercase tracking-[0.16em] text-[#86868B]">
+                    Featured shelf
+                  </p>
+                  <p className="mt-0.5 truncate text-[15px] font-semibold tracking-[-0.02em] text-[#1D1D1F] sm:text-base">
+                    {activeBrand} picks
+                  </p>
                 </div>
+                <ShelfControls brand={activeBrand} onScroll={scroll} />
+              </div>
+
+              <div className="relative flex-1 px-5 py-4 sm:px-7 sm:py-5 lg:px-8 lg:py-6">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute bottom-4 left-5 top-4 z-10 w-6 bg-gradient-to-r from-[#FAFAFB] to-transparent sm:bottom-5 sm:left-7 sm:top-5 lg:left-8"
+                />
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute bottom-4 right-5 top-4 z-10 w-10 bg-gradient-to-l from-[#FAFAFB] to-transparent sm:bottom-5 sm:right-7 sm:top-5 lg:right-8"
+                />
 
                 <div
                   ref={scrollerRef}
-                  className="ez-scrollbar-none -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-2"
+                  className="ez-scrollbar-none -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-1 sm:gap-3.5"
                   tabIndex={0}
                   role="region"
                   aria-label={`${activeBrand} products`}
@@ -300,8 +369,8 @@ export function BrandExplorer() {
                       key={getCatalogProductKey(product, index)}
                       className={`min-w-0 shrink-0 snap-start ${
                         useSquare
-                          ? "w-[70vw] max-w-[240px] sm:w-[240px]"
-                          : "w-[62vw] max-w-[210px] sm:w-[210px] lg:w-[224px]"
+                          ? "w-[68vw] max-w-[236px] sm:w-[236px]"
+                          : "w-[60vw] max-w-[208px] sm:w-[208px] lg:w-[220px]"
                       }`}
                     >
                       {useSquare ? (

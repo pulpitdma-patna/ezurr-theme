@@ -49,8 +49,9 @@ export function StorefrontCmsPage({
     if (!isApiEnabled()) return;
     let cancelled = false;
     setApiLoading(true);
+    const cmsPath = pathForPageId(pageId);
     void api
-      .publicCmsPage(pathForPageId(pageId))
+      .publicCmsPage(cmsPath)
       .then((res) => {
         if (cancelled) return;
         setApiLoading(false);
@@ -66,7 +67,7 @@ export function StorefrontCmsPage({
           revisions: [],
         });
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
         setApiLoading(false);
         setApiPage(null); // unpublished/missing → local fallback

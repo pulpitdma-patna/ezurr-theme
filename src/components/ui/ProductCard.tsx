@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { CatalogProduct, ProductBadge } from "@/lib/types";
+import type { CatalogProduct } from "@/lib/types";
+import { ProductRibbons } from "@/components/product/ProductRibbons";
 import { useAccountStore } from "@/hooks/useAccountStore";
 import { catalogKeyForProduct, toggleWishlistKey } from "@/lib/accountStore";
 import { productDetailHref } from "@/lib/productKey";
@@ -16,32 +17,8 @@ type ProductCardProps = CatalogProduct & {
   showWishlist?: boolean;
 };
 
-const RIBBON_STYLES: Record<string, string> = {
-  discount: "bg-[#E5484D] text-white",
-  new: "bg-[#0B8A4B] text-white",
-  preorder: "bg-[#111113] text-white",
-  bestprice: "bg-[#C98A16] text-white",
-  soldout: "bg-[#8A8A8E] text-white",
-};
-
-/** Corner ribbons (New, Pre-order, -24%, Best Price, Sold out) over the media. */
-function ProductRibbons({ badges }: { badges?: ProductBadge[] }) {
-  if (!badges || badges.length === 0) return null;
-  return (
-    <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-col items-start gap-1.5">
-      {badges.map((b, i) => (
-        <span
-          key={`${b.kind}-${i}`}
-          className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase leading-none tracking-[0.12em] shadow-[0_4px_12px_rgba(17,17,19,0.18)] ${
-            RIBBON_STYLES[b.kind] ?? "bg-[#111113] text-white"
-          }`}
-        >
-          {b.label}
-        </span>
-      ))}
-    </div>
-  );
-}
+const CARD_SHELL =
+  "ez-product-card group flex h-full flex-col overflow-hidden rounded-[20px] border border-black/[0.07] bg-white shadow-[0_1px_0_rgba(17,17,19,0.05),0_12px_32px_rgba(17,17,19,0.05)] transition-[transform,box-shadow,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1 hover:border-black/[0.11] hover:shadow-[0_1px_0_rgba(17,17,19,0.05),0_24px_48px_rgba(17,17,19,0.1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1D1D1F] sm:rounded-[24px]";
 
 function WishlistButton({
   productKey,
@@ -71,10 +48,10 @@ function WishlistButton({
           void call.catch(() => {});
         }
       }}
-      className={`absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border transition duration-300 ${
+      className={`absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border transition duration-300 ${
         active
           ? "border-[#1D1D1F] bg-[#1D1D1F] text-white shadow-[0_8px_20px_rgba(17,17,19,0.25)]"
-          : "border-black/[0.06] bg-white/80 text-[#86868B] shadow-[0_4px_16px_rgba(17,17,19,0.08)] backdrop-blur-md hover:border-black/[0.12] hover:text-[#1D1D1F]"
+          : "border-black/[0.08] bg-white/90 text-[#86868B] shadow-[0_4px_16px_rgba(17,17,19,0.1)] backdrop-blur-md hover:border-black/[0.14] hover:text-[#1D1D1F]"
       }`}
     >
       <svg width="15" height="15" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} aria-hidden>
@@ -102,23 +79,23 @@ function CardMedia({
     <div
       className={`relative overflow-hidden ${
         tall ? "aspect-[3/4]" : "aspect-[3/4]"
-      } bg-[linear-gradient(165deg,#F4F4F6_0%,#EBEBED_48%,#F8F8FA_100%)]`}
+      } bg-[linear-gradient(168deg,#F6F6F8_0%,#EBEBEE_52%,#F4F4F7_100%)]`}
       style={{ position: "relative" }}
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-6 bottom-4 h-8 rounded-[100%] bg-black/[0.06] blur-xl transition duration-500 group-hover:bg-black/[0.1]"
+        className="pointer-events-none absolute inset-x-7 bottom-4 h-7 rounded-[100%] bg-black/[0.05] blur-xl transition duration-500 group-hover:bg-black/[0.08]"
       />
       <Image
         src={img}
         alt={name}
         fill
-        className="object-contain p-4 transition duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.04] sm:p-5"
+        className="object-contain p-4 transition duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.03] sm:p-5"
         sizes="(max-width: 640px) 66vw, 286px"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.18)_0%,transparent_28%,transparent_72%,rgba(17,17,19,0.03)_100%)]"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22)_0%,transparent_24%,transparent_76%,rgba(17,17,19,0.04)_100%)]"
       />
     </div>
   );
@@ -147,31 +124,28 @@ export function ProductCard({
     return (
       <div className="relative h-full">
         {showWishlist ? <WishlistButton productKey={key} name={name} /> : null}
-        <ProductRibbons badges={badges} />
-        <Link
-          href={resolvedHref}
-          className="ez-product-card group flex h-full flex-col overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_0_rgba(17,17,19,0.04),0_20px_48px_rgba(17,17,19,0.06)] transition-[transform,box-shadow,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-black/[0.1] hover:shadow-[0_1px_0_rgba(17,17,19,0.04),0_32px_64px_rgba(17,17,19,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1D1D1F] sm:rounded-[28px]"
-        >
+        <ProductRibbons badges={badges} size="sm" />
+        <Link href={resolvedHref} className={CARD_SHELL}>
           <CardMedia img={img} name={name} tall />
 
-          <div className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-3.5 sm:gap-3.5 sm:px-5 sm:pb-5 sm:pt-4">
+          <div className="flex flex-1 flex-col gap-2.5 px-4 pb-4 pt-3 sm:gap-3 sm:px-5 sm:pb-5 sm:pt-3.5">
             <div className="flex items-center gap-2">
-              <span className="ez-mono text-[9px] font-bold uppercase tracking-[0.18em] text-[#86868B]">
+              <span className="ez-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#6E6E73]">
                 {platform}
               </span>
               <span aria-hidden className="h-0.5 w-0.5 rounded-full bg-[#C7C7CC]" />
-              <span className="ez-mono text-[9px] font-bold uppercase tracking-[0.18em] text-[#1D1D1F]">
+              <span className="ez-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#1D1D1F]">
                 Pre-order
               </span>
             </div>
 
-            <h3 className="line-clamp-2 min-h-[2.6em] text-[15px] font-semibold leading-[1.25] tracking-[-0.035em] text-[#111113] sm:text-[17px]">
+            <h3 className="line-clamp-2 min-h-[2.55em] text-[15px] font-semibold leading-[1.28] tracking-[-0.03em] text-[#111113] sm:text-[16px]">
               {name}
             </h3>
 
-            <div className="mt-auto flex items-end justify-between gap-3 border-t border-black/[0.05] pt-3.5">
+            <div className="mt-auto flex items-end justify-between gap-3 border-t border-black/[0.06] pt-3">
               <div className="min-w-0">
-                <p className="ez-mono text-[8px] font-bold uppercase tracking-[0.16em] text-[#A1A1A6]">
+                <p className="ez-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[#A1A1A6]">
                   From
                 </p>
                 <p className="mt-0.5 text-[17px] font-semibold tracking-[-0.03em] text-[#111113] sm:text-[18px]">
@@ -197,34 +171,31 @@ export function ProductCard({
   return (
     <div className="relative h-full">
       {showWishlist ? <WishlistButton productKey={key} name={name} /> : null}
-      <ProductRibbons badges={badges} />
-      <Link
-        href={resolvedHref}
-        className="ez-product-card group flex h-full flex-col overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_0_rgba(17,17,19,0.04),0_20px_48px_rgba(17,17,19,0.06)] transition-[transform,box-shadow,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-black/[0.1] hover:shadow-[0_1px_0_rgba(17,17,19,0.04),0_32px_64px_rgba(17,17,19,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1D1D1F] sm:rounded-[28px]"
-      >
+      <ProductRibbons badges={badges} size="sm" />
+      <Link href={resolvedHref} className={CARD_SHELL}>
         <CardMedia img={img} name={name} />
 
-        <div className="flex flex-1 flex-col gap-2.5 px-4 pb-4 pt-3.5 sm:gap-3 sm:px-5 sm:pb-5 sm:pt-4">
-          <span className="ez-mono truncate text-[9px] font-bold uppercase tracking-[0.18em] text-[#86868B]">
+        <div className="flex flex-1 flex-col gap-2 px-4 pb-4 pt-3 sm:gap-2.5 sm:px-5 sm:pb-5 sm:pt-3.5">
+          <span className="ez-mono truncate text-[10px] font-bold uppercase tracking-[0.16em] text-[#6E6E73]">
             {brand}
           </span>
 
-          <h3 className="line-clamp-2 min-h-[2.5em] text-[15px] font-semibold leading-[1.25] tracking-[-0.035em] text-[#111113] sm:text-[16px]">
+          <h3 className="line-clamp-2 min-h-[2.55em] text-[15px] font-semibold leading-[1.28] tracking-[-0.03em] text-[#111113] sm:text-[16px]">
             {name}
           </h3>
 
-          <div className="mt-auto flex items-end justify-between gap-3 border-t border-black/[0.05] pt-3.5">
-            <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-              <span className="text-[16px] font-semibold tracking-[-0.03em] text-[#111113]">
+          <div className="mt-auto flex items-end justify-between gap-3 border-t border-black/[0.06] pt-3">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="text-[17px] font-semibold tracking-[-0.03em] text-[#111113] sm:text-[18px]">
                 {price}
               </span>
               {strike ? (
-                <span className="ez-mono text-[11px] text-[#AEAEB2] line-through">
+                <span className="ez-mono text-[12px] text-[#AEAEB2] line-through">
                   {strike}
                 </span>
               ) : null}
             </div>
-            <span className="inline-flex items-center gap-1 text-[12px] font-semibold tracking-[-0.01em] text-[#111113] transition group-hover:gap-1.5">
+            <span className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold tracking-[-0.01em] text-[#48484A] transition group-hover:gap-1.5 group-hover:text-[#111113]">
               View
               <span aria-hidden>→</span>
             </span>
@@ -246,45 +217,42 @@ export function ConsoleCard({
 }: CatalogProduct & { href?: string }) {
   const resolvedHref = href ?? productDetailHref({ id, name });
   return (
-    <Link
-      href={resolvedHref}
-      className="ez-product-card group flex h-full flex-col overflow-hidden rounded-[24px] border border-black/[0.06] bg-white shadow-[0_1px_0_rgba(17,17,19,0.04),0_20px_48px_rgba(17,17,19,0.06)] transition-[transform,box-shadow,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:border-black/[0.1] hover:shadow-[0_1px_0_rgba(17,17,19,0.04),0_32px_64px_rgba(17,17,19,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1D1D1F] sm:rounded-[28px]"
-    >
+    <Link href={resolvedHref} className={CARD_SHELL}>
       <div
-        className="relative aspect-square overflow-hidden bg-[linear-gradient(165deg,#F4F4F6_0%,#EBEBED_48%,#F8F8FA_100%)]"
+        className="relative aspect-square overflow-hidden bg-[linear-gradient(168deg,#F6F6F8_0%,#EBEBEE_52%,#F4F4F7_100%)]"
         style={{ position: "relative" }}
       >
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-8 bottom-5 h-10 rounded-[100%] bg-black/[0.06] blur-xl transition duration-500 group-hover:bg-black/[0.1]"
+          className="pointer-events-none absolute inset-x-8 bottom-5 h-10 rounded-[100%] bg-black/[0.05] blur-xl transition duration-500 group-hover:bg-black/[0.08]"
         />
         <Image
           src={img}
           alt={name}
           fill
-          className="object-contain p-6 transition duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.04] sm:p-7"
+          className="object-contain p-6 transition duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.03] sm:p-7"
           sizes="(max-width: 640px) 50vw, 25vw"
         />
       </div>
-      <div className="flex flex-1 flex-col gap-2.5 px-4 pb-4 pt-3.5 sm:gap-3 sm:px-5 sm:pb-5 sm:pt-4">
-        <span className="ez-mono text-[9px] font-bold uppercase tracking-[0.18em] text-[#86868B]">
+      <div className="flex flex-1 flex-col gap-2 px-4 pb-4 pt-3 sm:gap-2.5 sm:px-5 sm:pb-5 sm:pt-3.5">
+        <span className="ez-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#6E6E73]">
           {brand}
         </span>
-        <h3 className="line-clamp-2 min-h-[2.5em] text-[15px] font-semibold leading-[1.25] tracking-[-0.035em] text-[#111113] sm:text-[16px]">
+        <h3 className="line-clamp-2 min-h-[2.55em] text-[15px] font-semibold leading-[1.28] tracking-[-0.03em] text-[#111113] sm:text-[16px]">
           {name}
         </h3>
-        <div className="mt-auto flex items-end justify-between gap-3 border-t border-black/[0.05] pt-3.5">
+        <div className="mt-auto flex items-end justify-between gap-3 border-t border-black/[0.06] pt-3">
           <div className="flex items-baseline gap-2">
-            <span className="text-[16px] font-semibold tracking-[-0.03em] text-[#111113]">
+            <span className="text-[17px] font-semibold tracking-[-0.03em] text-[#111113] sm:text-[18px]">
               {price}
             </span>
             {strike ? (
-              <span className="ez-mono text-[11px] text-[#AEAEB2] line-through">
+              <span className="ez-mono text-[12px] text-[#AEAEB2] line-through">
                 {strike}
               </span>
             ) : null}
           </div>
-          <span className="inline-flex items-center gap-1 text-[12px] font-semibold tracking-[-0.01em] text-[#111113] transition group-hover:gap-1.5">
+          <span className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold tracking-[-0.01em] text-[#48484A] transition group-hover:gap-1.5 group-hover:text-[#111113]">
             View
             <span aria-hidden>→</span>
           </span>

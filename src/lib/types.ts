@@ -10,6 +10,12 @@ export type CatalogProduct = {
   price: string;
   strike: string;
   badges?: ProductBadge[];
+  /** Numeric price (INR) for sort/filter — set by API mapper when available */
+  priceNum?: number;
+  /** Stock count when known (API) */
+  stock?: number;
+  /** ISO date for newest sort when API provides it */
+  createdAt?: string;
 };
 
 export type GameCardProduct = {

@@ -7,6 +7,12 @@ type StatCardProps = {
   deltaPositive?: boolean | null;
 };
 
+function deltaTone(positive: boolean | null | undefined) {
+  if (positive === false) return "bg-[#FEE4E2] text-[#B42318]";
+  if (positive === true) return "bg-[#EAF6ED] text-[#067647]";
+  return "bg-[#F0F0F2] text-[#6E6E73]";
+}
+
 export function StatCard({
   label,
   value,
@@ -15,40 +21,42 @@ export function StatCard({
   delta,
   deltaPositive,
 }: StatCardProps) {
-  const dark = tone === "dark";
+  const primary = tone === "dark";
+
   return (
     <article
-      className={`rounded-2xl p-4 ${
-        dark ? "bg-[#1D1D1F] text-white" : "border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]"
+      className={`relative overflow-hidden rounded-xl border p-3.5 sm:p-4 ${
+        primary
+          ? "border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)]"
+          : "border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]"
       }`}
     >
-      <span
-        className={`ez-mono text-[9px] uppercase tracking-[0.14em] ${
-          dark ? "text-white/45" : "text-[#86868B]"
-        }`}
-      >
-        {label}
-      </span>
-      <div className="mt-2 text-xl font-semibold tracking-[-0.04em] sm:text-2xl">{value}</div>
-      {delta ? (
-        <p
-          className={`mt-1.5 text-xs font-medium ${
-            dark
-              ? deltaPositive === false
-                ? "text-[#F97066]"
-                : "text-[#6CE9A6]"
-              : deltaPositive === false
-                ? "text-[#B42318]"
-                : deltaPositive === true
-                  ? "text-[#067647]"
-                  : "text-[#86868B]"
-          }`}
-        >
-          {delta}
-        </p>
+      {primary ? (
+        <div
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-[3px] bg-[var(--ez-accent)]"
+        />
       ) : null}
+
+      <div className="flex items-start justify-between gap-2">
+        <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+          {label}
+        </span>
+        {delta ? (
+          <span
+            className={`ez-mono shrink-0 rounded px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.06em] ${deltaTone(deltaPositive)}`}
+          >
+            {delta}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-1.5 text-[22px] font-semibold tabular-nums leading-none tracking-[-0.04em] text-[#1D1D1F] sm:text-[26px]">
+        {value}
+      </div>
+
       {detail ? (
-        <p className={`mt-1 text-xs ${dark ? "text-white/55" : "text-[#86868B]"}`}>{detail}</p>
+        <p className="mt-2 text-[11px] leading-snug text-[#6E6E73]">{detail}</p>
       ) : null}
     </article>
   );

@@ -222,13 +222,6 @@ export default function AdminTeamPage() {
         { label: "System", href: "/admin/settings" },
         { label: "Team" },
       ]}
-      bannerTitle="Staff directory preview"
-      bannerDescription="Invites never send email. Demo role below still gates mutations across HQ."
-      planned={[
-        "Server-enforced authZ / SSO",
-        "Invite email delivery",
-        "Seat billing & audit export",
-      ]}
       actions={
         <button
           type="button"

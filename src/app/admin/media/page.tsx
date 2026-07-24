@@ -84,13 +84,6 @@ export default function AdminMediaPage() {
         { label: "Catalog", href: "/admin/products" },
         { label: "Media" },
       ]}
-      bannerTitle={apiOn ? "Live media library" : "CDN pipeline preview"}
-      bannerDescription={
-        apiOn
-          ? "Uploads are optimised (auto-orient, strip metadata, downscale, re-encode) and served from the public storage disk."
-          : "Uploads use object URLs in this browser only. Enable the store API for server-backed media."
-      }
-      planned={apiOn ? [] : ["Signed CDN uploads & variants", "Crop studio & focal points"]}
       actions={
         <label className="inline-flex h-9 cursor-pointer items-center rounded-xl bg-[#1D1D1F] px-3.5 text-xs font-semibold text-white">
           Upload

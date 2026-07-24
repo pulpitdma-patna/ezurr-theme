@@ -931,6 +931,7 @@ export type ApiProduct = {
   active: boolean;
   badges?: { kind: string; label: string }[];
   gallery?: string[];
+  created_at?: string | null;
 };
 
 export type ApiCheckoutRule = {

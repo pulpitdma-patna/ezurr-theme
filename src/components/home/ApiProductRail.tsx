@@ -109,7 +109,7 @@ export function ApiProductRail({
               : staticProducts,
           );
         }
-      } catch {
+      } catch (err: unknown) {
         // Keep CMS/static shelf visible when API/CORS is unavailable.
         if (!cancelled) setProducts(staticProducts);
       } finally {
