@@ -3,10 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { navItems, type NavKey } from "@/lib/theme";
+import { type NavKey } from "@/lib/theme";
 import { clearSession } from "@/lib/auth";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { useCart } from "@/lib/cart";
+import { MegaMenu } from "@/components/nav/MegaMenu";
+import { SearchPalette } from "@/components/nav/SearchPalette";
+import { MobileNavDrawer } from "@/components/nav/MobileNavDrawer";
+import { FALLBACK_NAV, loadNavigation, type Navigation } from "@/lib/navigation";
 
 function BagIcon() {
   return (
@@ -114,6 +118,47 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
   const accountHref = session ? "/account" : "/auth";
   const accountLabel = session ? "Account" : "Sign in";
 
+  // Menu structure comes from the API (live counts). Starts on the static
+  // fallback so the bar renders immediately and never blanks if the API is slow
+  // or unreachable — a nav that disappears is worse than one without counts.
+  const [nav, setNav] = useState<Navigation>(FALLBACK_NAV);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadNavigation().then((n) => {
+      if (!cancelled) setNav(n);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Cmd/Ctrl-K anywhere, and "/" when not already typing in a field.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const k = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && k === "k") {
+        e.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
+      if (e.key === "/" && !e.metaKey && !e.ctrlKey) {
+        const el = document.activeElement;
+        const typing =
+          el instanceof HTMLInputElement ||
+          el instanceof HTMLTextAreaElement ||
+          (el instanceof HTMLElement && el.isContentEditable);
+        if (!typing) {
+          e.preventDefault();
+          setPaletteOpen(true);
+        }
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
     return () => {
@@ -153,26 +198,28 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
       >
         <Logo onClick={closeMenu} />
 
-        {!compact && (
-          <div className="hidden shrink-0 gap-7 text-[13px] font-medium text-[#424245] lg:flex xl:gap-8">
-            {navItems.map((item) => (
-              <Link
-                key={item.key}
-                href={item.href}
-                className={
-                  active === item.key
-                    ? "font-semibold text-[#1D1D1F]"
-                    : "text-[#424245] hover:text-[#1D1D1F]"
-                }
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        )}
+        {!compact && <MegaMenu categories={nav.categories} activeKey={active} />}
 
         <div className="ml-auto flex items-center gap-3 sm:gap-[22px]">
-          {showSearch && (
+          {!compact && (
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Search products"
+              aria-keyshortcuts="Meta+K Control+K"
+              className="hidden items-center gap-2 rounded-full border border-black/[0.06] bg-[#F5F5F7] px-3.5 py-2 text-[13px] text-[#86868B] transition hover:border-black/[0.12] hover:text-[#424245] md:flex"
+            >
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
+                <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.8" />
+                <path d="m13.5 13.5 3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              <span>Search</span>
+              <kbd className="ez-mono rounded border border-black/[0.08] bg-white px-1.5 py-0.5 text-[10px]">
+                ⌘K
+              </kbd>
+            </button>
+          )}
+          {showSearch && compact && (
             <HeaderSearch className="hidden w-[174px] min-w-[90px] shrink items-center gap-2 rounded-full border border-black/[0.04] bg-[#F5F5F7] px-4 py-2.5 md:flex" />
           )}
           {!compact && session?.role === "admin" && (
@@ -280,56 +327,18 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
         </div>
       </nav>
 
-      {!compact && menuOpen && (
-        <>
-          <button
-            type="button"
-            aria-label="Close menu overlay"
-            className="fixed inset-0 top-14 z-40 bg-black/20 sm:top-[68px] lg:hidden"
-            onClick={closeMenu}
-          />
-          <div className="absolute left-0 right-0 top-full z-50 border-b border-[#E8E8ED] bg-white px-4 py-4 shadow-lg lg:hidden">
-            <div className="flex flex-col gap-1">
-              {navItems.map((item) => (
-                <Link
-                  key={item.key}
-                  href={item.href}
-                  onClick={closeMenu}
-                  className={`rounded-xl px-4 py-3.5 text-[15px] font-medium ${
-                    active === item.key
-                      ? "bg-[#F5F5F7] font-semibold text-[#1D1D1F]"
-                      : "text-[#424245]"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-              {session?.role === "admin" && (
-                <Link
-                  href="/admin"
-                  onClick={closeMenu}
-                  className="rounded-xl px-4 py-3.5 text-[15px] font-semibold text-[#1D1D1F]"
-                >
-                  Admin
-                </Link>
-              )}
-              <Link
-                href={accountHref}
-                onClick={closeMenu}
-                className="rounded-xl px-4 py-3.5 text-[15px] font-medium text-[#424245] sm:hidden"
-              >
-                {accountLabel}
-              </Link>
-              {showSearch && (
-                <HeaderSearch
-                  className="mt-2 flex items-center gap-2 rounded-full bg-[#F5F5F7] px-4 py-3 md:hidden"
-                  onSubmitted={closeMenu}
-                />
-              )}
-            </div>
-          </div>
-        </>
+      {!compact && (
+        <MobileNavDrawer
+          open={menuOpen}
+          onClose={closeMenu}
+          nav={nav}
+          onOpenSearch={() => setPaletteOpen(true)}
+        />
       )}
+
+      {paletteOpen ? (
+        <SearchPalette onClose={() => setPaletteOpen(false)} nav={nav} />
+      ) : null}
     </header>
   );
 }

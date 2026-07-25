@@ -15,6 +15,7 @@ const STATIC_PATHS = [
   "/accessories",
   "/game-cards",
   "/preorders",
+  "/price-guarantee",
   "/brands",
 ];
 

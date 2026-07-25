@@ -473,9 +473,13 @@ export const api = {
     }),
   categories: () => apiFetch<{ data: ApiCategory[] }>("/categories"),
   brands: () => apiFetch<{ data: ApiBrand[] }>("/brands"),
+  /** Mega-menu payload: categories x brands with live counts. See lib/navigation.ts. */
+  navigation: () => apiFetch<unknown>("/navigation"),
   products: (params?: {
     category?: string;
     brand?: string;
+    /** Promotional Shopify collection, e.g. "lowest-price-guarantee". */
+    collection?: string;
     q?: string;
     page?: number;
     per_page?: number;
@@ -483,6 +487,7 @@ export const api = {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.collection) qs.set("collection", params.collection);
     if (params?.q) qs.set("q", params.q);
     if (params?.page) qs.set("page", String(params.page));
     if (params?.per_page) qs.set("per_page", String(params.per_page));

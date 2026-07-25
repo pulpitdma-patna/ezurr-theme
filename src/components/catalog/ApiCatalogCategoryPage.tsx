@@ -7,7 +7,7 @@ import { MicroBar } from "@/components/layout/MicroBar";
 import { Header } from "@/components/layout/Header";
 import { FooterFull } from "@/components/layout/Footer";
 import Link from "next/link";
-import { api, isApiEnabled } from "@/lib/apiClient";
+import { api, isApiEnabled, type ApiProduct } from "@/lib/apiClient";
 import {
   mapApiProductToCatalog,
   mapApiProductToGameCard,
@@ -23,6 +23,7 @@ export function ApiCatalogCategoryPage({
   fallbackProducts,
   categorySlug,
   brandSlug,
+  collection,
 }: {
   active: NavKey;
   breadcrumb: string;
@@ -32,6 +33,8 @@ export function ApiCatalogCategoryPage({
   categorySlug?: string;
   /** Brand landing pages (/brands/<slug>) reuse this same catalog shell. */
   brandSlug?: string;
+  /** Promotional Shopify collection, e.g. the price-guarantee landing page. */
+  collection?: string;
 }) {
   const apiOn = isApiEnabled();
   // SSR the static fallback so the page has content on first paint; the effect
@@ -51,32 +54,52 @@ export function ApiCatalogCategoryPage({
     setLoading(true);
     setError(null);
 
-    void api
-      .products({
-        ...(categorySlug ? { category: categorySlug } : {}),
-        ...(brandSlug ? { brand: brandSlug } : {}),
-        // A brand can span the whole catalog (PlayStation is ~200 titles), so
-        // don't leave it on the default page size.
-        ...(brandSlug ? { per_page: 100 } : {}),
-      })
-      .then((res) => {
-        if (cancelled) return;
-        const rows = Array.isArray(res.data) ? res.data : [];
-        setProducts(rows.map(mapApiProductToCatalog));
-      })
-      .catch((err: Error) => {
+    const filters = {
+      ...(categorySlug ? { category: categorySlug } : {}),
+      ...(brandSlug ? { brand: brandSlug } : {}),
+      ...(collection ? { collection } : {}),
+    };
+    // A brand or promotional collection can span most of the catalog
+    // (PlayStation is ~190 titles, the price guarantee 164), and the API caps
+    // per_page at 100 — so page through rather than silently truncating. The
+    // header count is derived from what we hold, so a short read would make the
+    // page contradict the menu.
+    const wide = Boolean(brandSlug || collection);
+
+    void (async () => {
+      try {
+        if (!wide) {
+          const res = await api.products(filters);
+          if (cancelled) return;
+          setProducts((Array.isArray(res.data) ? res.data : []).map(mapApiProductToCatalog));
+          return;
+        }
+
+        const perPage = 100;
+        const rows: ApiProduct[] = [];
+        // Hard page ceiling so a pathological total can never spin forever.
+        for (let page = 1; page <= 5; page += 1) {
+          const res = await api.products({ ...filters, page, per_page: perPage });
+          if (cancelled) return;
+          const batch = Array.isArray(res.data) ? res.data : [];
+          rows.push(...batch);
+          const lastPage = res.last_page ?? page;
+          if (page >= lastPage || batch.length < perPage) break;
+        }
+        if (!cancelled) setProducts(rows.map(mapApiProductToCatalog));
+      } catch (err) {
         if (cancelled) return;
         setProducts([]);
-        setError(err.message || "Could not load catalog");
-      })
-      .finally(() => {
+        setError(err instanceof Error ? err.message : "Could not load catalog");
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [apiOn, categorySlug, brandSlug, fallbackProducts]);
+  }, [apiOn, categorySlug, brandSlug, collection, fallbackProducts]);
 
   return (
     <>
