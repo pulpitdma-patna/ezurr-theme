@@ -38,6 +38,7 @@ function toForm(product: {
   digital: boolean;
   status: ProductFormValues["status"];
   image: string;
+  taxInclusive?: boolean;
   releaseDate?: string;
 }): ProductFormValues {
   return {
@@ -49,6 +50,8 @@ function toForm(product: {
     edition: product.edition,
     price: product.price,
     strike: product.strike,
+    // undefined = inherit the store default, which is inclusive.
+    taxInclusive: product.taxInclusive ?? true,
     stock: String(product.stock),
     digital: product.digital,
     status: product.status,
@@ -160,6 +163,7 @@ export default function AdminEditProductPage({
           brand: form.brand,
           price: form.price,
           strike: form.strike,
+          taxInclusive: form.taxInclusive,
           stock: Number(form.stock) || 0,
           digital: form.digital,
           status: form.status,
@@ -191,6 +195,7 @@ export default function AdminEditProductPage({
       edition: form.edition,
       price: form.price,
       strike: form.strike,
+      taxInclusive: form.taxInclusive,
       stock: localProduct.stock,
       digital: fulfilment.type === "digital",
       status: form.status,

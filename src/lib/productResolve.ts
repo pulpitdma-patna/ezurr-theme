@@ -1,5 +1,5 @@
 import { formatInr } from "@/data/admin";
-import type { ApiProduct } from "@/lib/apiClient";
+import { payableMrp, payablePrice, type ApiProduct } from "@/lib/apiClient";
 import type { CatalogProduct, ProductBadge } from "@/lib/types";
 
 export const DEFAULT_IMG =
@@ -36,13 +36,16 @@ export function fromApi(product: ApiProduct): ResolvedProduct {
     key: product.key || product.slug || String(product.id),
     title: product.title,
     brand: product.brand_slug || product.category_slug || "Ezurr",
-    price: formatInr(product.price),
-    priceValue: product.price,
+    price: formatInr(payablePrice(product)),
+    priceValue: payablePrice(product),
     stock: typeof product.stock === "number" ? product.stock : undefined,
     description: product.description || "Available on Ezurr.",
     imageSrc: images[0],
     images,
-    strike: product.mrp && product.mrp > product.price ? formatInr(product.mrp) : undefined,
+    strike:
+      (payableMrp(product) ?? 0) > payablePrice(product)
+        ? formatInr(payableMrp(product)!)
+        : undefined,
     badges: product.badges ?? [],
     categorySlug: product.category_slug ?? undefined,
     fulfillmentType: product.fulfillment_type,
@@ -56,6 +59,8 @@ export function fromStatic(product: CatalogProduct, key: string): ResolvedProduc
     key: product.id || key,
     title: product.name,
     brand: product.brand || "Ezurr",
+    // Static fallback catalogue — already a formatted display string, and never
+    // carries a tax basis, so it is used as-is.
     price: product.price,
     description: "Available on Ezurr.",
     imageSrc: img,

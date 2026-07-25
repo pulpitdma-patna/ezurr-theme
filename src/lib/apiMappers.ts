@@ -8,7 +8,7 @@ import {
   type AdminOrderItem,
   type AdminOrderStatus,
 } from "@/data/admin";
-import type { ApiProduct } from "@/lib/apiClient";
+import { payableMrp, payablePrice, type ApiProduct } from "@/lib/apiClient";
 import type { CatalogProduct, GameCardProduct } from "@/lib/types";
 
 const DEFAULT_IMG =
@@ -73,10 +73,10 @@ export function mapApiProductToCatalog(p: ApiProduct): CatalogProduct {
     img: p.image_url || placeholderImgFor(id),
     brand: brandLabel(p.brand_slug, p.category_slug) || p.fulfillment_type,
     name: p.title,
-    price: formatInr(p.price),
-    strike: p.mrp && p.mrp > p.price ? formatInr(p.mrp) : "",
+    price: formatInr(payablePrice(p)),
+    strike: (payableMrp(p) ?? 0) > payablePrice(p) ? formatInr(payableMrp(p)!) : "",
     badges: p.badges ?? [],
-    priceNum: p.price,
+    priceNum: payablePrice(p),
     stock: p.stock,
     createdAt,
   };
@@ -93,7 +93,7 @@ export function toPlainSnippet(html: string | null | undefined, max = 90): strin
 }
 
 export function mapApiProductToGameCard(p: ApiProduct, index: number): GameCardProduct {
-  const value = formatInr(p.price);
+  const value = formatInr(payablePrice(p));
   const id = p.key || p.slug || String(p.id);
   return {
     id,
@@ -122,8 +122,9 @@ export function mapApiProductToAdminRow(p: ApiProduct, index = 0): AdminCatalogR
     sku: p.key,
     platform: p.fulfillment_type === "digital" ? "Digital" : "PS5",
     edition: "Standard",
-    price: formatInr(p.price),
-    strike: p.mrp && p.mrp > p.price ? formatInr(p.mrp) : "",
+    price: formatInr(payablePrice(p)),
+    strike: (payableMrp(p) ?? 0) > payablePrice(p) ? formatInr(payableMrp(p)!) : "",
+    taxInclusive: p.tax_inclusive ?? true,
     stock: p.stock,
     digital: p.fulfillment_type === "digital",
     status,

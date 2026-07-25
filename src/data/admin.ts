@@ -190,6 +190,8 @@ export type AdminCatalogRow = {
   brand: string;
   price: string;
   strike: string;
+  /** Does the entered price include GST? undefined = store default. */
+  taxInclusive?: boolean;
   image: string;
   sku: string;
   platform: AdminPlatform;

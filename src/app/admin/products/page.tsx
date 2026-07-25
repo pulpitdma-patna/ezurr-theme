@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { priceToNumber } from "@/lib/productPayload";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
@@ -64,10 +65,9 @@ type ApiProductFulfilment = ApiProduct & {
   reservation_amount?: number | null;
 };
 
-function priceToNumber(value: string): number {
-  const n = Number(String(value).replace(/[^\d.]/g, ""));
-  return Number.isFinite(n) ? Math.round(n) : 0;
-}
+// Deliberately NOT a local copy. This was duplicated from lib/productPayload,
+// so the negative-price bug had to be fixed in two places — and the create
+// drawer kept accepting "-500" as 500 after the edit form was fixed.
 
 function productApiPayload(input: {
   key: string;
@@ -109,6 +109,7 @@ const emptyForm: ProductFormValues = {
   edition: "Standard",
   price: "",
   strike: "",
+  taxInclusive: true,
   stock: "10",
   digital: false,
   status: "draft",
@@ -125,6 +126,7 @@ function toForm(product: AdminCatalogRow): ProductFormValues {
     edition: product.edition,
     price: product.price,
     strike: product.strike,
+    taxInclusive: product.taxInclusive ?? true,
     stock: String(product.stock),
     digital: product.digital,
     status: product.status,

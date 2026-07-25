@@ -1020,8 +1020,18 @@ export type ApiProduct = {
   description?: string | null;
   category_slug?: string | null;
   brand_slug?: string | null;
+  /** As the merchant entered it — may be net of GST. Not for display. */
   price: number;
   mrp?: number | null;
+  /** null = inherit the store default. */
+  tax_inclusive?: boolean | null;
+  /**
+   * What the customer actually pays, GST included. Always display this: in
+   * India the advertised price must be the all-inclusive amount payable.
+   * Falls back to `price` on older payloads.
+   */
+  payable_price?: number;
+  payable_mrp?: number | null;
   stock: number;
   fulfillment_type: string;
   image_url?: string | null;
@@ -1030,6 +1040,18 @@ export type ApiProduct = {
   gallery?: string[];
   created_at?: string | null;
 };
+
+/** The figure to advertise for a product — never the raw `price` column. */
+export function payablePrice(p: Pick<ApiProduct, "price" | "payable_price">): number {
+  return p.payable_price ?? p.price;
+}
+
+/** Compare-at price on the same basis, so any discount badge reads true. */
+export function payableMrp(
+  p: Pick<ApiProduct, "mrp" | "payable_mrp">,
+): number | null | undefined {
+  return p.payable_mrp ?? p.mrp;
+}
 
 export type ApiCheckoutRule = {
   id: string;

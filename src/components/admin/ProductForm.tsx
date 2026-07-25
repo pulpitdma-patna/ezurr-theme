@@ -32,6 +32,8 @@ export type ProductFormValues = {
   edition: string;
   price: string;
   strike: string;
+  /** Does the entered price already contain GST? Defaults to true. */
+  taxInclusive: boolean;
   stock: string;
   digital: boolean;
   status: AdminProductStatus;
@@ -246,24 +248,53 @@ export function ProductForm({
 
       <Section title="Pricing">
         <div className="grid gap-4 sm:grid-cols-2">
+          {/* type="number" min=0: these were plain text inputs, and the digit
+              filter at submit STRIPPED a minus sign — so "-500" saved silently
+              as 500, turning a ₹3,499 product into a ₹500 one with a green
+              "Product saved" banner. Reject rather than coerce. */}
           <Field label="Price" error={errors.price}>
             <input
               required
+              type="number"
+              min={0}
+              step="1"
+              inputMode="numeric"
               value={form.price}
               onChange={(e) => handleUpdate("price", e.target.value)}
               className={inputClass}
-              placeholder="₹4,999"
+              placeholder="4999"
             />
           </Field>
           <Field label="Compare-at" error={errors.strike}>
             <input
+              type="number"
+              min={0}
+              step="1"
+              inputMode="numeric"
               value={form.strike}
               onChange={(e) => handleUpdate("strike", e.target.value)}
               className={inputClass}
-              placeholder="₹5,999"
+              placeholder="5999"
             />
           </Field>
         </div>
+
+        <label className="mt-3 flex items-start gap-2.5 text-[13px] leading-snug text-[#424245]">
+          <input
+            type="checkbox"
+            checked={form.taxInclusive}
+            onChange={(e) => handleUpdate("taxInclusive", e.target.checked)}
+            className="mt-0.5 accent-[#1D1D1F]"
+          />
+          <span>
+            Price includes GST
+            <span className="mt-0.5 block text-[11px] text-[#86868B]">
+              {form.taxInclusive
+                ? "Customers pay exactly this price."
+                : "GST is added on top — the storefront advertises the higher, payable figure."}
+            </span>
+          </span>
+        </label>
       </Section>
 
       <Section title="Inventory & status">
