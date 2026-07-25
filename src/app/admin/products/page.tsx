@@ -16,12 +16,23 @@ import {
   PencilIcon,
   PlusIcon,
 } from "@/components/admin/IconButton";
+import {
+  PreorderFields,
+  applyDigitalToggle,
+  emptyFulfilment,
+  fulfilmentFromApi,
+  fulfilmentLabels,
+  fulfilmentToPayload,
+  isFulfilmentType,
+  type FulfilmentType,
+  type FulfilmentValues,
+} from "@/components/admin/PreorderFields";
 import { ProductForm, type ProductFormValues } from "@/components/admin/ProductForm";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { StockBadge } from "@/components/admin/StockBadge";
+import { StockEditor } from "@/components/admin/StockEditor";
 import {
   parsePrice,
-  stockLevel,
   type AdminCatalogRow,
   type AdminProductCategory,
 } from "@/data/admin";
@@ -42,9 +53,16 @@ import {
   apiUpdateProduct,
   api,
   isApiEnabled,
+  type ApiProduct,
 } from "@/lib/apiClient";
 import { mapApiProductToAdminRow } from "@/lib/apiMappers";
 import { useSearchParams } from "next/navigation";
+
+/** The three fulfilment columns the API sends but `ApiProduct` doesn't declare. */
+type ApiProductFulfilment = ApiProduct & {
+  release_at?: string | null;
+  reservation_amount?: number | null;
+};
 
 function priceToNumber(value: string): number {
   const n = Number(String(value).replace(/[^\d.]/g, ""));
@@ -59,9 +77,9 @@ function productApiPayload(input: {
   price: string;
   strike: string;
   stock: number;
-  digital: boolean;
   status: string;
   image: string;
+  fulfilment: FulfilmentValues;
 }) {
   const key = input.key.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80);
   return {
@@ -73,9 +91,10 @@ function productApiPayload(input: {
     price: priceToNumber(input.price),
     mrp: priceToNumber(input.strike) || null,
     stock: input.stock,
-    fulfillment_type: input.digital ? "digital" : "physical",
     image_url: input.image || null,
     active: input.status === "active" || input.status === "published",
+    // Fulfilment owns `fulfillment_type` now — spread last so it wins.
+    ...fulfilmentToPayload(input.fulfilment),
   };
 }
 
@@ -125,12 +144,38 @@ const STOCK_FILTER_OPTIONS: { value: StockFilter; label: string }[] = [
   { value: "out", label: "Out of stock / Sold out" },
 ];
 
-function matchesStockFilter(row: AdminCatalogRow, stockFilter: StockFilter): boolean {
+function isStockFilter(value: unknown): value is StockFilter {
+  return value === "all" || value === "in_stock" || value === "low" || value === "out";
+}
+
+/**
+ * Low/out use the store's configured threshold (the retired Inventory page's
+ * behaviour) rather than a fixed 5.
+ */
+function matchesStockFilter(
+  row: AdminCatalogRow,
+  stockFilter: StockFilter,
+  lowThreshold: number,
+): boolean {
   if (stockFilter === "all") return true;
-  const level = stockLevel(row.stock);
-  if (stockFilter === "in_stock") return level === "in_stock";
-  if (stockFilter === "low") return level === "low";
-  return level === "out" || row.status === "sold_out";
+  if (stockFilter === "in_stock") return row.stock > lowThreshold;
+  if (stockFilter === "low") return row.stock > 0 && row.stock <= lowThreshold;
+  return row.stock <= 0 || row.status === "sold_out";
+}
+
+type FulfilmentFilter = "all" | FulfilmentType;
+
+const FULFILMENT_TABS: { value: FulfilmentFilter; label: string }[] = [
+  { value: "all", label: "All products" },
+  { value: "physical", label: "Physical" },
+  { value: "digital", label: "Digital" },
+  { value: "preorder", label: "Pre-orders" },
+];
+
+function formatReleaseDate(iso: string): string {
+  const date = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
 export default function AdminProductsPage() {
@@ -138,19 +183,41 @@ export default function AdminProductsPage() {
   const searchParams = useSearchParams();
   const [category, setCategory] = useState<AdminProductCategory | "all">("all");
   const [brand, setBrand] = useState("all");
-  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [query, setQuery] = useSearchQueryParam();
   const [selected, setSelected] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [pageSize, setPageSize] = useState(25);
+
+  // `?stock=` (and the retired Inventory page's legacy `?filter=`) and
+  // `?fulfilment=` seed the two folded-in views without an effect.
+  const urlStock = searchParams.get("stock") ?? searchParams.get("filter");
+  const [stockLocal, setStockLocal] = useState<StockFilter | null>(null);
+  const [seenStockParam, setSeenStockParam] = useState(urlStock);
+  if (urlStock !== seenStockParam) {
+    setSeenStockParam(urlStock);
+    setStockLocal(null);
+  }
+  const stockFilter: StockFilter = stockLocal ?? (isStockFilter(urlStock) ? urlStock : "all");
+
+  const urlFulfilment = searchParams.get("fulfilment") ?? searchParams.get("fulfillment");
+  const [fulfilmentLocal, setFulfilmentLocal] = useState<FulfilmentFilter | null>(null);
+  const [seenFulfilmentParam, setSeenFulfilmentParam] = useState(urlFulfilment);
+  if (urlFulfilment !== seenFulfilmentParam) {
+    setSeenFulfilmentParam(urlFulfilment);
+    setFulfilmentLocal(null);
+  }
+  const fulfilmentFilter: FulfilmentFilter =
+    fulfilmentLocal ?? (isFulfilmentType(urlFulfilment) ? urlFulfilment : "all");
+
   const [page, setPage] = usePagedList(
-    `${category}|${brand}|${stockFilter}|${query}|${sortKey}|${sortDir}|${pageSize}`,
+    `${category}|${brand}|${stockFilter}|${fulfilmentFilter}|${query}|${sortKey}|${sortDir}|${pageSize}`,
   );
 
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [form, setForm] = useState<ProductFormValues>(emptyForm);
+  const [fulfilment, setFulfilment] = useState<FulfilmentValues>(emptyFulfilment);
   const [toast, setToast] = useAutoBanner();
   const [saving, setSaving] = useState(false);
   const [saveTone, setSaveTone] = useState<"success" | "error">("success");
@@ -158,8 +225,11 @@ export default function AdminProductsPage() {
   const [openedFromNewParam, setOpenedFromNewParam] = useState(false);
   const [listLoading, setListLoading] = useState(true);
   const [apiProducts, setApiProducts] = useState<AdminCatalogRow[]>([]);
+  const [apiRaw, setApiRaw] = useState<Record<string, ApiProductFulfilment>>({});
   const [listError, setListError] = useState<string | null>(null);
   const { views, removeView } = useListSavedViews("products");
+
+  const lowThreshold = store.settings.lowStockThreshold ?? 5;
 
   const loadProducts = useCallback(async () => {
     if (!isApiEnabled()) {
@@ -179,9 +249,15 @@ export default function AdminProductsPage() {
         if (Array.isArray(res.data)) all = all.concat(res.data);
       }
       setApiProducts(all.map((p, i) => mapApiProductToAdminRow(p, i)));
+      // Keep the raw records: the admin row mapper drops release_at,
+      // reservation_amount and the preorder fulfilment type.
+      const raw: Record<string, ApiProductFulfilment> = {};
+      for (const p of all) raw[p.key] = p as ApiProductFulfilment;
+      setApiRaw(raw);
       setListError(null);
     } catch (err) {
       setApiProducts([]);
+      setApiRaw({});
       setListError(err instanceof Error ? err.message : "Could not load products");
     } finally {
       setListLoading(false);
@@ -207,10 +283,15 @@ export default function AdminProductsPage() {
     setOpenedFromNewParam(true);
     setActiveKey(null);
     setForm({ ...emptyForm });
+    setFulfilment({ ...emptyFulfilment });
     setDrawerMode("add");
     setToast("");
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", "/admin/products");
+      // Drop only `new` so a `?fulfilment=`/`?stock=` deep link survives.
+      const next = new URLSearchParams(window.location.search);
+      next.delete("new");
+      const qs = next.toString();
+      window.history.replaceState(null, "", `/admin/products${qs ? `?${qs}` : ""}`);
     }
   }
 
@@ -235,12 +316,38 @@ export default function AdminProductsPage() {
 
   const productSource = isApiEnabled() ? apiProducts : store.products;
 
+  /** Fulfilment for a row: from the API record, else inferred from mock data. */
+  const rowFulfilment = useCallback(
+    (row: AdminCatalogRow): FulfilmentValues => {
+      const raw = apiRaw[row.key];
+      if (raw) return fulfilmentFromApi(raw);
+      return {
+        type: row.digital ? "digital" : row.category === "preorders" ? "preorder" : "physical",
+        releaseAt: row.releaseDate ?? "",
+        reservationAmount: "",
+      };
+    },
+    [apiRaw],
+  );
+
+  const fulfilmentCounts = useMemo(() => {
+    const counts: Record<FulfilmentFilter, number> = {
+      all: productSource.length,
+      physical: 0,
+      digital: 0,
+      preorder: 0,
+    };
+    for (const row of productSource) counts[rowFulfilment(row).type] += 1;
+    return counts;
+  }, [productSource, rowFulfilment]);
+
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = productSource.filter((row) => {
       if (category !== "all" && row.category !== category) return false;
       if (brandFilter !== "all" && row.brand !== brandFilter) return false;
-      if (!matchesStockFilter(row, stockFilter)) return false;
+      if (!matchesStockFilter(row, stockFilter, lowThreshold)) return false;
+      if (fulfilmentFilter !== "all" && rowFulfilment(row).type !== fulfilmentFilter) return false;
       if (!q) return true;
       return (
         row.name.toLowerCase().includes(q) ||
@@ -258,11 +365,23 @@ export default function AdminProductsPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [productSource, category, brandFilter, stockFilter, query, sortKey, sortDir]);
+  }, [
+    productSource,
+    category,
+    brandFilter,
+    stockFilter,
+    lowThreshold,
+    fulfilmentFilter,
+    rowFulfilment,
+    query,
+    sortKey,
+    sortDir,
+  ]);
 
   function openView(row: AdminCatalogRow) {
     setActiveKey(row.key);
     setForm(toForm(row));
+    setFulfilment(rowFulfilment(row));
     setDrawerMode("view");
     setToast("");
   }
@@ -270,6 +389,7 @@ export default function AdminProductsPage() {
   function openEdit(row: AdminCatalogRow) {
     setActiveKey(row.key);
     setForm(toForm(row));
+    setFulfilment(rowFulfilment(row));
     setDrawerMode("edit");
     setToast("");
   }
@@ -277,6 +397,7 @@ export default function AdminProductsPage() {
   function openAdd() {
     setActiveKey(null);
     setForm({ ...emptyForm });
+    setFulfilment({ ...emptyFulfilment });
     setDrawerMode("add");
     setToast("");
   }
@@ -289,7 +410,34 @@ export default function AdminProductsPage() {
 
   function updateForm<K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+    // ProductForm's legacy "Digital product" checkbox writes the same column.
+    if (key === "digital") {
+      setFulfilment((prev) => applyDigitalToggle(prev, Boolean(value)));
+    }
   }
+
+  function updateFulfilment(next: FulfilmentValues) {
+    setFulfilment(next);
+    setForm((prev) =>
+      prev.digital === (next.type === "digital") ? prev : { ...prev, digital: next.type === "digital" },
+    );
+  }
+
+  /** Inline stock save landed — patch the row instead of refetching the catalog. */
+  const handleStockSaved = useCallback((key: string, nextStock: number) => {
+    setApiProducts((prev) =>
+      prev.map((row) =>
+        row.key === key
+          ? {
+              ...row,
+              stock: nextStock,
+              status: row.status === "draft" ? "draft" : nextStock <= 0 ? "sold_out" : "published",
+            }
+          : row,
+      ),
+    );
+    setApiRaw((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], stock: nextStock } } : prev));
+  }, []);
 
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();
@@ -317,9 +465,9 @@ export default function AdminProductsPage() {
               price: form.price,
               strike: form.strike,
               stock: Number(form.stock) || 0,
-              digital: form.digital,
               status: form.status,
               image: form.image,
+              fulfilment,
             }),
           );
           setToast("Product created");
@@ -344,10 +492,10 @@ export default function AdminProductsPage() {
         price: form.price,
         strike: form.strike,
         stock: Number(form.stock) || 0,
-        digital: form.digital,
+        digital: fulfilment.type === "digital",
         status: form.status,
         image: form.image,
-        releaseDate: form.releaseDate,
+        releaseDate: fulfilment.type === "preorder" ? fulfilment.releaseAt || undefined : undefined,
       });
       setToast("Product created");
       window.setTimeout(closeDrawer, 500);
@@ -368,9 +516,9 @@ export default function AdminProductsPage() {
             price: form.price,
             strike: form.strike,
             stock: nextStock,
-            digital: form.digital,
             status: form.status,
             image: form.image,
+            fulfilment,
           }),
         );
         setToast("Product saved");
@@ -396,10 +544,10 @@ export default function AdminProductsPage() {
       price: form.price,
       strike: form.strike,
       stock: activeProduct.stock,
-      digital: form.digital,
+      digital: fulfilment.type === "digital",
       status: form.status,
       image: form.image,
-      releaseDate: form.releaseDate,
+      releaseDate: fulfilment.type === "preorder" ? fulfilment.releaseAt || undefined : undefined,
     });
     if (delta !== 0) {
       adjustStock(activeProduct.key, delta, "Product edit stock");
@@ -463,13 +611,13 @@ export default function AdminProductsPage() {
   }
 
   function exportCsv() {
-    const header = "sku,name,brand,platform,stock,status,price\n";
+    const header = "sku,name,brand,platform,stock,status,price,fulfilment,release_at\n";
     const body = rows
       .filter((r) => selected.length === 0 || selected.includes(r.key))
-      .map(
-        (r) =>
-          `${r.sku},"${r.name.replace(/"/g, '""')}",${r.brand},${r.platform},${r.stock},${r.status},${r.price}`,
-      )
+      .map((r) => {
+        const f = rowFulfilment(r);
+        return `${r.sku},"${r.name.replace(/"/g, '""')}",${r.brand},${r.platform},${r.stock},${r.status},${r.price},${f.type},${f.releaseAt}`;
+      })
       .join("\n");
     const blob = new Blob([header + body], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -485,23 +633,34 @@ export default function AdminProductsPage() {
       key: "name",
       header: "Product",
       sortable: true,
-      render: (row) => (
-        <div className="flex items-center gap-3">
-          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#F5F5F7] ring-1 ring-black/[0.04]">
-            {row.image ? (
-              <Image src={row.image} alt="" fill className="object-contain p-0.5" sizes="40px" />
-            ) : (
-              <div className="flex h-full items-center justify-center ez-mono text-[7px] text-[#AEAEB2]">
-                DIG
+      render: (row) => {
+        const f = rowFulfilment(row);
+        return (
+          <div className="flex items-center gap-3">
+            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#F5F5F7] ring-1 ring-black/[0.04]">
+              {row.image ? (
+                <Image src={row.image} alt="" fill className="object-contain p-0.5" sizes="40px" />
+              ) : (
+                <div className="flex h-full items-center justify-center ez-mono text-[7px] text-[#AEAEB2]">
+                  DIG
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-sm font-semibold tracking-[-0.02em]">{row.name}</span>
+                {f.type === "preorder" ? <PreorderBadge /> : null}
               </div>
-            )}
+              <div className="mt-0.5 text-[11px] text-[#86868B]">
+                {row.brand}
+                {f.type === "preorder" && f.releaseAt
+                  ? ` · releases ${formatReleaseDate(f.releaseAt)}`
+                  : ""}
+              </div>
+            </div>
           </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold tracking-[-0.02em]">{row.name}</div>
-            <div className="mt-0.5 text-[11px] text-[#86868B]">{row.brand}</div>
-          </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "sku",
@@ -520,7 +679,17 @@ export default function AdminProductsPage() {
       key: "stock",
       header: "Stock",
       sortable: true,
-      render: (row) => <StockBadge stock={row.stock} />,
+      render: (row) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StockBadge stock={row.stock} />
+          <StockEditor
+            productKey={row.key}
+            name={row.name}
+            stock={row.stock}
+            onSaved={handleStockSaved}
+          />
+        </div>
+      ),
     },
     {
       key: "status",
@@ -568,7 +737,7 @@ export default function AdminProductsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Products"
-        description="Quick edit in the drawer · full editor for deep catalog fields and media."
+        description="Stock, fulfilment and pre-orders all live here — edit stock inline, or open the drawer for the rest."
         breadcrumbs={[
           { label: "Catalog", href: "/admin/products" },
           { label: "Products" },
@@ -586,6 +755,32 @@ export default function AdminProductsPage() {
       ) : null}
 
       <section className="overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
+        <div className="flex flex-wrap items-center gap-1 border-b border-black/[0.05] px-2 py-2 sm:px-3">
+          {FULFILMENT_TABS.map((tab) => {
+            const active = fulfilmentFilter === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setFulfilmentLocal(tab.value)}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${
+                  active
+                    ? "bg-[#1D1D1F] text-white"
+                    : "text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
+                }`}
+              >
+                {tab.label}
+                <span
+                  className={`ez-mono text-[10px] ${active ? "text-white/60" : "text-[#AEAEB2]"}`}
+                >
+                  {fulfilmentCounts[tab.value]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex flex-col gap-2.5 border-b border-black/[0.05] bg-[#FAFAFB] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <div className="relative min-w-0 flex-1 lg:max-w-sm">
@@ -637,7 +832,7 @@ export default function AdminProductsPage() {
             <AdminSelect
               label="Stock"
               value={stockFilter}
-              onChange={(value) => setStockFilter(value as StockFilter)}
+              onChange={(value) => setStockLocal(value as StockFilter)}
               options={STOCK_FILTER_OPTIONS}
             />
             <div className="hidden h-6 w-px bg-black/[0.08] sm:block" aria-hidden />
@@ -665,7 +860,7 @@ export default function AdminProductsPage() {
                   setQuery(view.query);
                   setCategory((view.filters.category as AdminProductCategory | "all") || "all");
                   setBrand(view.filters.brand || "all");
-                  setStockFilter((view.filters.stock as StockFilter) || "all");
+                  setStockLocal((view.filters.stock as StockFilter) || "all");
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault();
@@ -681,6 +876,18 @@ export default function AdminProductsPage() {
           </div>
         ) : null}
       </section>
+
+      {fulfilmentFilter === "preorder" ? (
+        <AdminNotice tone="info">
+          Pre-order is a product setting — open a product and pick{" "}
+          <strong>Fulfilment → Pre-order</strong> to set its release date and reservation amount.
+          Customer release <em>holds</em> are orders:{" "}
+          <Link href="/admin/orders" className="font-semibold underline">
+            Orders
+          </Link>{" "}
+          → filter status <strong>Pre-order</strong>.
+        </AdminNotice>
+      ) : null}
 
       <DataTable
         loading={listLoading}
@@ -756,6 +963,32 @@ export default function AdminProductsPage() {
         }
       />
 
+      {store.ledger.length > 0 ? (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold tracking-[-0.02em]">Recent stock ledger</h2>
+          <ul className="divide-y divide-black/[0.05] overflow-hidden rounded-lg border border-black/[0.08] bg-white">
+            {store.ledger.slice(0, 8).map((entry) => (
+              <li
+                key={entry.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-xs"
+              >
+                <Link
+                  href={`/admin/products/${encodeURIComponent(entry.productKey)}/edit`}
+                  className="ez-mono font-medium hover:underline"
+                >
+                  {entry.sku}
+                </Link>
+                <span className={entry.delta >= 0 ? "text-[#2D6B3C]" : "text-[#B42318]"}>
+                  {entry.delta >= 0 ? "+" : ""}
+                  {entry.delta}
+                </span>
+                <span className="text-[#86868B]">{entry.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <AdminDrawer
         open={drawerMode !== null}
         title={drawerTitle}
@@ -791,22 +1024,25 @@ export default function AdminProductsPage() {
         }
       >
         {drawerMode === "view" && activeProduct ? (
-          <ProductViewPanel product={activeProduct} />
+          <ProductViewPanel product={activeProduct} fulfilment={fulfilment} />
         ) : null}
 
         {(drawerMode === "edit" || drawerMode === "add") && (
-          <ProductForm
-            key={drawerMode === "add" ? "add" : (activeKey ?? "edit")}
-            form={form}
-            update={updateForm}
-            onSubmit={handleSave}
-            submitLabel={drawerMode === "add" ? "Create product" : "Save changes"}
-            onCancel={closeDrawer}
-            embedded
-            toastMessage={toast || undefined}
-            toastTone={saveTone}
-            submitting={saving}
-          />
+          <div className="space-y-5">
+            <PreorderFields value={fulfilment} onChange={updateFulfilment} embedded />
+            <ProductForm
+              key={drawerMode === "add" ? "add" : (activeKey ?? "edit")}
+              form={form}
+              update={updateForm}
+              onSubmit={handleSave}
+              submitLabel={drawerMode === "add" ? "Create product" : "Save changes"}
+              onCancel={closeDrawer}
+              embedded
+              toastMessage={toast || undefined}
+              toastTone={saveTone}
+              submitting={saving}
+            />
+          </div>
         )}
 
         {drawerMode === "edit" && activeProduct ? (
@@ -841,7 +1077,21 @@ export default function AdminProductsPage() {
   );
 }
 
-function ProductViewPanel({ product }: { product: AdminCatalogRow }) {
+function PreorderBadge() {
+  return (
+    <span className="shrink-0 rounded bg-[#EEF2FF] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-[#3730A3]">
+      Pre-order
+    </span>
+  );
+}
+
+function ProductViewPanel({
+  product,
+  fulfilment,
+}: {
+  product: AdminCatalogRow;
+  fulfilment: FulfilmentValues;
+}) {
   const store = useAdminStore();
   return (
     <div className="space-y-6">
@@ -859,7 +1109,8 @@ function ProductViewPanel({ product }: { product: AdminCatalogRow }) {
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge kind="product" status={product.status} />
             <StockBadge stock={product.stock} />
-            {product.digital ? (
+            {fulfilment.type === "preorder" ? <PreorderBadge /> : null}
+            {fulfilment.type === "digital" ? (
               <span className="rounded-full bg-[#F0F0F2] px-2.5 py-1 text-[10px] font-semibold text-[#6E6E73]">
                 Digital
               </span>
@@ -885,11 +1136,26 @@ function ProductViewPanel({ product }: { product: AdminCatalogRow }) {
           }
         />
         <ViewField label="Stock qty" value={String(product.stock)} mono />
-        <ViewField
-          label="Release"
-          value={product.releaseDate ?? "—"}
-          mono={Boolean(product.releaseDate)}
-        />
+        <ViewField label="Fulfilment" value={fulfilmentLabels[fulfilment.type]} />
+        {fulfilment.type === "preorder" ? (
+          <>
+            <ViewField
+              label="Release"
+              value={fulfilment.releaseAt ? formatReleaseDate(fulfilment.releaseAt) : "Not set"}
+            />
+            <ViewField
+              label="Reservation"
+              value={
+                fulfilment.reservationAmount === ""
+                  ? "Not set"
+                  : Number(fulfilment.reservationAmount) === 0
+                    ? "Free to reserve"
+                    : `₹${fulfilment.reservationAmount}`
+              }
+              mono={fulfilment.reservationAmount !== "" && Number(fulfilment.reservationAmount) > 0}
+            />
+          </>
+        ) : null}
       </dl>
     </div>
   );

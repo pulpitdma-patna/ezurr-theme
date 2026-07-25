@@ -35,6 +35,8 @@ export type CheckoutActionType =
   | "set_rate_table"
   | "hide_carrier"
   | "set_deposit_pct"
+  | "set_cod_advance"
+  | "set_reservation_amount"
   | "enable_pay_later"
   | "split_payment";
 
@@ -109,6 +111,13 @@ export type CheckoutPolicy = {
   hiddenCarriers: CheckoutCarrierId[];
   defaultCarrierId: CheckoutCarrierId | null;
   depositPct: number | null;
+  /** Flat ₹ paid online to confirm COD; deducted from the door collection. */
+  codAdvance: number;
+  codAdvanceLabel: string | null;
+  /** When true the advance replaces the codMax ceiling entirely. */
+  codAdvanceUnlocksCap: boolean;
+  /** Default flat ₹ to reserve a pre-order (product value takes precedence). */
+  reservationAmount: number;
   payLaterEnabled: boolean;
   splitPayments: CheckoutSplitOption[];
   activeExperiment: { experimentId: string; variant: string } | null;
@@ -335,6 +344,10 @@ export function baseCheckoutPolicy(settings: AdminSettings): CheckoutPolicy {
     hiddenCarriers: [],
     defaultCarrierId: "bluedart",
     depositPct: null,
+    codAdvance: 0,
+    codAdvanceLabel: null,
+    codAdvanceUnlocksCap: false,
+    reservationAmount: 0,
     payLaterEnabled: false,
     splitPayments: [],
     activeExperiment: null,
@@ -570,6 +583,25 @@ export function resolveCheckoutPolicy(
           policy = {
             ...policy,
             depositPct: Math.min(100, Math.max(0, Number(action.value) || 0)),
+          };
+          break;
+        }
+        // "100" | "100!" (also lifts the COD cap) | "100:Custom label"
+        case "set_cod_advance": {
+          const [amountRaw, label] = String(action.value ?? "").split(":");
+          const trimmed = (amountRaw ?? "").trim();
+          policy = {
+            ...policy,
+            codAdvance: Math.max(0, Number(trimmed.replace(/!$/, "")) || 0),
+            codAdvanceLabel: label?.trim() || null,
+            codAdvanceUnlocksCap: trimmed.endsWith("!"),
+          };
+          break;
+        }
+        case "set_reservation_amount": {
+          policy = {
+            ...policy,
+            reservationAmount: Math.max(0, Number(action.value) || 0),
           };
           break;
         }

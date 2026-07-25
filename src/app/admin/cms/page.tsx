@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -8,12 +8,14 @@ import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import { useCmsPages } from "@/hooks/useCmsStore";
+import type { CmsPageDocument, PageRevisionSnapshot } from "@/lib/cms/types";
 import {
   createCmsPage,
   deleteCmsPage,
   duplicateCmsPage,
   getCmsPage,
   publishCmsPage,
+  setAdminState,
   unpublishCmsPage,
 } from "@/lib/adminStore";
 
@@ -34,12 +36,81 @@ function syncCmsPageToApi(id: string) {
     .catch(() => {});
 }
 
+function isSnapshot(value: unknown): value is PageRevisionSnapshot {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as PageRevisionSnapshot).variants)
+  );
+}
+
+/**
+ * Coerce a stored server document into the editor's shape. The server persists
+ * whatever the client sent, so anything without a usable draft snapshot is
+ * skipped rather than imported as a broken page.
+ */
+function toPageDocument(raw: Record<string, unknown>): CmsPageDocument | null {
+  const draft = raw.draft;
+  if (!isSnapshot(draft)) return null;
+  const status = raw.status === "published" ? "published" : "draft";
+  return {
+    id: String(raw.id ?? ""),
+    title: String(raw.title ?? "Untitled page"),
+    path: String(raw.path ?? ""),
+    status,
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date().toISOString(),
+    draft,
+    published: isSnapshot(raw.published) ? raw.published : null,
+    revisions: Array.isArray(raw.revisions) ? (raw.revisions as CmsPageDocument["revisions"]) : [],
+  };
+}
+
 export default function AdminCmsPagesPage() {
   const pages = useCmsPages();
   const toast = useAdminToast();
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [deletePage, setDeletePage] = useState<{ id: string; title: string } | null>(null);
+  const [syncState, setSyncState] = useState<"idle" | "loading" | "synced" | "error">(
+    isApiEnabled() ? "loading" : "idle",
+  );
+
+  /**
+   * The server is the source of truth once the API is on: pull every stored
+   * document into the editor store so seeded pages are editable, and so
+   * publishing pushes the server copy back instead of a stale local draft.
+   */
+  const hydrateFromApi = useCallback(async () => {
+    if (!isApiEnabled()) return;
+    setSyncState("loading");
+    try {
+      const summaries = await api.adminCmsPages();
+      const documents = await Promise.all(
+        summaries.map(async (summary) => {
+          try {
+            return toPageDocument(await api.adminCmsPage(summary.id));
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const fetched = documents.filter((doc): doc is CmsPageDocument => doc !== null);
+      if (fetched.length > 0) {
+        setAdminState((prev) => {
+          const byId = new Map(prev.cmsPages.map((page) => [page.id, page]));
+          for (const doc of fetched) byId.set(doc.id, doc);
+          return { ...prev, cmsPages: [...byId.values()] };
+        });
+      }
+      setSyncState("synced");
+    } catch {
+      setSyncState("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void hydrateFromApi();
+  }, [hydrateFromApi]);
 
   return (
     <div className="space-y-6">
@@ -49,10 +120,28 @@ export default function AdminCmsPagesPage() {
       />
 
       {isApiEnabled() ? (
-        <AdminNotice tone="info">
-          Publishing a page saves its structured content to the server. Custom
-          JS/CSS is kept for editing but is not served to the storefront yet
-          (pending a security sandbox).
+        <AdminNotice tone={syncState === "error" ? "error" : "info"}>
+          {syncState === "error" ? (
+            <>
+              Could not load pages from the server — you are editing local drafts.
+              Publishing now would overwrite the server copy.{" "}
+              <button
+                type="button"
+                onClick={() => void hydrateFromApi()}
+                className="font-semibold underline"
+              >
+                Retry
+              </button>
+            </>
+          ) : (
+            <>
+              {syncState === "loading"
+                ? "Loading pages from the server…"
+                : "Pages are loaded from the server."}{" "}
+              Publishing saves the structured content back. Custom JS/CSS is kept
+              for editing but only runs inside the storefront sandbox.
+            </>
+          )}
         </AdminNotice>
       ) : null}
 

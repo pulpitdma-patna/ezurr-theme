@@ -22,6 +22,7 @@ export function ApiCatalogCategoryPage({
   description,
   fallbackProducts,
   categorySlug,
+  brandSlug,
 }: {
   active: NavKey;
   breadcrumb: string;
@@ -29,6 +30,8 @@ export function ApiCatalogCategoryPage({
   description: string;
   fallbackProducts: CatalogProduct[];
   categorySlug?: string;
+  /** Brand landing pages (/brands/<slug>) reuse this same catalog shell. */
+  brandSlug?: string;
 }) {
   const apiOn = isApiEnabled();
   // SSR the static fallback so the page has content on first paint; the effect
@@ -49,7 +52,13 @@ export function ApiCatalogCategoryPage({
     setError(null);
 
     void api
-      .products(categorySlug ? { category: categorySlug } : undefined)
+      .products({
+        ...(categorySlug ? { category: categorySlug } : {}),
+        ...(brandSlug ? { brand: brandSlug } : {}),
+        // A brand can span the whole catalog (PlayStation is ~200 titles), so
+        // don't leave it on the default page size.
+        ...(brandSlug ? { per_page: 100 } : {}),
+      })
       .then((res) => {
         if (cancelled) return;
         const rows = Array.isArray(res.data) ? res.data : [];
@@ -67,7 +76,7 @@ export function ApiCatalogCategoryPage({
     return () => {
       cancelled = true;
     };
-  }, [apiOn, categorySlug, fallbackProducts]);
+  }, [apiOn, categorySlug, brandSlug, fallbackProducts]);
 
   return (
     <>

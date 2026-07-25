@@ -243,6 +243,36 @@ export type AdminIntegrationCategory =
 
 export type AdminIntegrationStatus = "connected" | "not_connected" | "needs_attention";
 
+/** 'log' = the provider client builds the request but never calls anyone. */
+export type AdminIntegrationDriver = "log" | "live";
+
+export type AdminIntegrationFieldType = "text" | "password" | "url" | "select";
+
+/**
+ * One configurable input, declared by the API. The schema lives server-side
+ * because only the server knows which credential key each provider client
+ * reads — a client-side copy is exactly the drift this replaces.
+ */
+export type AdminIntegrationField = {
+  key: string;
+  label: string;
+  type: AdminIntegrationFieldType;
+  scope: "config" | "credential";
+  required: boolean;
+  /** Never round-tripped to the browser; write-only. */
+  secret: boolean;
+  /** Resolved from env or another admin page — editing it here would be a no-op. */
+  readOnly: boolean;
+  envVar: string | null;
+  help: string | null;
+  configured: boolean;
+  /** Present for non-secret fields only. */
+  value: string | null;
+  /** Last-4 marker for non-password secrets. */
+  hint?: string;
+  options?: { value: string; label: string }[];
+};
+
 export type AdminIntegration = {
   id: string;
   name: string;
@@ -252,8 +282,11 @@ export type AdminIntegration = {
   enabled: boolean;
   lastSync?: string;
   accountLabel?: string;
-  apiKeyMasked?: string;
   webhookUrl?: string;
+  driver?: AdminIntegrationDriver;
+  /** Undefined in demo mode — the schema only exists on the server. */
+  fields?: AdminIntegrationField[];
+  missingRequired?: string[];
 };
 
 export type AdminAnalyticsDay = {
@@ -274,6 +307,16 @@ export type AdminSettings = {
   prepaidDiscount: number;
   codEnabled: boolean;
   codLimit: number;
+  /** Flat ₹ collected online to confirm a COD order (0 = none). */
+  codAdvance: number;
+  codAdvanceLabel: string;
+  /** When true, paying the advance lifts the codLimit ceiling entirely. */
+  codAdvanceUnlocksCap: boolean;
+  /** Default ₹ to reserve a pre-order when the product sets no amount. */
+  reservationAmount: number;
+  whatsappWidgetEnabled: boolean;
+  whatsappNumber: string;
+  whatsappGreeting: string;
   freeShippingMin: number;
   orderIdPrefix: string;
   lowStockThreshold: number;
@@ -285,6 +328,21 @@ export type AdminSettings = {
   notifyPreorderRelease: boolean;
   gaMeasurementId: string;
   metaPixelId: string;
+  /** Printable invoice / packing slip template. */
+  docBusinessName: string;
+  docAddressLine1: string;
+  docAddressLine2: string;
+  docCity: string;
+  /** Seller's place of supply — decides CGST+SGST vs IGST on the invoice. */
+  docState: string;
+  docPincode: string;
+  docGstin: string;
+  docPan: string;
+  docLogoUrl: string;
+  docInvoicePrefix: string;
+  docDeclaration: string;
+  docFooterNote: string;
+  docSignatureLine: boolean;
 };
 
 export function parsePrice(value: string): number {
@@ -850,6 +908,12 @@ export const adminInventoryLedger: AdminInventoryLedgerEntry[] = [
   },
 ];
 
+/**
+ * Demo fallback rows. They deliberately carry NO credential/webhook values: the
+ * drawer's config UI is driven by the API's `fields` schema, and hardcoding
+ * masked keys here is what hid the "nothing is configurable" bug — demo mode
+ * looked fully wired while every real row had NULL credentials.
+ */
 export const adminIntegrations: AdminIntegration[] = [
   {
     id: "razorpay",
@@ -860,8 +924,6 @@ export const adminIntegrations: AdminIntegration[] = [
     enabled: true,
     lastSync: "2026-07-18T08:42:00",
     accountLabel: "Ezurr Play HQ · Live",
-    apiKeyMasked: "rzp_live_••••••••H2K9",
-    webhookUrl: "https://ezurr.demo/webhooks/razorpay",
   },
   {
     id: "cash-on-delivery",
@@ -882,8 +944,6 @@ export const adminIntegrations: AdminIntegration[] = [
     enabled: true,
     lastSync: "2026-07-18T07:55:00",
     accountLabel: "BLR-01 warehouse",
-    apiKeyMasked: "sr_••••••••7N4Q",
-    webhookUrl: "https://ezurr.demo/webhooks/shiprocket",
   },
   {
     id: "whatsapp",
@@ -894,7 +954,6 @@ export const adminIntegrations: AdminIntegration[] = [
     enabled: true,
     lastSync: "2026-07-17T18:10:00",
     accountLabel: "Ezurr Play HQ",
-    apiKeyMasked: "wa_••••••••9C1M",
   },
   {
     id: "google-analytics",
@@ -931,7 +990,6 @@ export const adminIntegrations: AdminIntegration[] = [
     enabled: true,
     lastSync: "2026-07-18T08:40:00",
     accountLabel: "3 event subscriptions",
-    webhookUrl: "https://ezurr.demo/webhooks/orders",
   },
 ];
 
@@ -1107,6 +1165,13 @@ export const defaultAdminSettings: AdminSettings = {
   prepaidDiscount: theme.prepaidDiscount,
   codEnabled: true,
   codLimit: 10000,
+  codAdvance: 0,
+  codAdvanceLabel: "",
+  codAdvanceUnlocksCap: false,
+  reservationAmount: 0,
+  whatsappWidgetEnabled: false,
+  whatsappNumber: "",
+  whatsappGreeting: "",
   freeShippingMin: 2999,
   orderIdPrefix: "EZX",
   lowStockThreshold: 5,
@@ -1118,6 +1183,20 @@ export const defaultAdminSettings: AdminSettings = {
   notifyPreorderRelease: true,
   gaMeasurementId: "",
   metaPixelId: "",
+  docBusinessName: "",
+  docAddressLine1: "",
+  docAddressLine2: "",
+  docCity: "",
+  docState: "",
+  docPincode: "",
+  docGstin: "",
+  docPan: "",
+  docLogoUrl: "",
+  docInvoicePrefix: "INV-",
+  docDeclaration:
+    "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.",
+  docFooterNote: "Thank you for shopping with us.",
+  docSignatureLine: true,
 };
 
 export const adminProductTabs: { key: AdminProductCategory; label: string }[] = [

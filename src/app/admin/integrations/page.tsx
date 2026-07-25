@@ -5,11 +5,16 @@ import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSelect } from "@/components/admin/AdminSelect";
+import {
+  IntegrationConfigForm,
+  type IntegrationConfigSubmit,
+} from "@/components/admin/IntegrationConfigForm";
 import { api, isApiEnabled, type ApiIntegration } from "@/lib/apiClient";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import {
   type AdminIntegration,
   type AdminIntegrationCategory,
+  type AdminIntegrationField,
   type AdminIntegrationStatus,
 } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
@@ -59,8 +64,10 @@ function apiToIntegration(i: ApiIntegration): AdminIntegration {
     enabled: i.enabled,
     lastSync: i.lastSync ?? undefined,
     accountLabel: i.accountLabel ?? undefined,
-    apiKeyMasked: i.apiKeyMasked ?? undefined,
     webhookUrl: i.webhookUrl ?? undefined,
+    driver: i.driver,
+    fields: (i.fields ?? []) as AdminIntegrationField[],
+    missingRequired: i.missingRequired ?? [],
   };
 }
 
@@ -88,8 +95,8 @@ export default function AdminIntegrationsPage() {
   const [status, setStatus] = useState<AdminIntegrationStatus | "all">("all");
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [credentialDraft, setCredentialDraft] = useState("");
-  const [toast, setToast] = useAutoBanner(2800);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useAutoBanner(4200);
 
   const active = integrations.find((integration) => integration.id === activeId) ?? null;
   const rows = useMemo(() => {
@@ -110,21 +117,29 @@ export default function AdminIntegrationsPage() {
   const attentionCount = integrations.filter(
     (integration) => integration.status === "needs_attention",
   ).length;
+  const simulatedCount = integrations.filter((integration) => integration.driver === "log").length;
 
   function openManage(integration: AdminIntegration) {
     setActiveId(integration.id);
-    setCredentialDraft("");
     setToast("");
   }
 
   async function connect(integration: AdminIntegration) {
     if (apiOn) {
+      // Connecting means the provider can actually be called — so send the admin
+      // to the config form rather than POSTing {} and flipping to "connected".
+      if (integration.missingRequired?.length) {
+        openManage(integration);
+        setToast(`${integration.name} needs ${integration.missingRequired.join(", ")} first`);
+        return;
+      }
       try {
         await api.connectIntegration(integration.id, {});
         await loadIntegrations();
         setToast(`${integration.name} connected`);
-      } catch {
-        setToast("Could not connect");
+      } catch (error) {
+        openManage(integration);
+        setToast(errorMessage(error, "Could not connect"));
       }
       return;
     }
@@ -141,8 +156,9 @@ export default function AdminIntegrationsPage() {
       try {
         await api.updateIntegration(integration.id, { enabled });
         await loadIntegrations();
-      } catch {
-        setToast("Could not update");
+      } catch (error) {
+        setToast(errorMessage(error, "Could not update"));
+        return;
       }
     } else {
       updateIntegration(integration.id, { enabled });
@@ -150,53 +166,51 @@ export default function AdminIntegrationsPage() {
     setToast(`${integration.name} ${enabled ? "enabled" : "paused"}`);
   }
 
+  async function saveConfig(patch: IntegrationConfigSubmit) {
+    if (!active) return;
+    if (!apiOn) {
+      setToast("Configuration needs a running API");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.updateIntegration(active.id, patch);
+      await loadIntegrations();
+      setToast(`${active.name} configuration saved (secrets encrypted server-side)`);
+    } catch (error) {
+      setToast(errorMessage(error, "Could not save configuration"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveAccountLabel(accountLabel: string) {
+    if (!active || (active.accountLabel ?? "") === accountLabel) return;
+    if (apiOn) {
+      try {
+        await api.updateIntegration(active.id, { accountLabel });
+        await loadIntegrations();
+      } catch (error) {
+        setToast(errorMessage(error, "Could not save the label"));
+      }
+      return;
+    }
+    updateIntegration(active.id, { accountLabel });
+  }
+
   async function testConnection() {
     if (!active) return;
     if (apiOn) {
       try {
         const res = await api.testIntegration(active.id);
-        setToast(`${active.name}: ${res.message}`);
-      } catch {
-        setToast("Test failed");
-      }
-      return;
-    }
-    updateIntegration(active.id, {
-      status: "connected",
-      lastSync: new Date().toISOString(),
-      enabled: true,
-    });
-    setToast(`${active.name} test connection successful`);
-  }
-
-  async function copyWebhook() {
-    if (!active?.webhookUrl) return;
-    try {
-      await navigator.clipboard.writeText(active.webhookUrl);
-      setToast("Webhook URL copied");
-    } catch {
-      setToast("Copy unavailable — select the URL manually");
-    }
-  }
-
-  async function saveCredentialAlias() {
-    if (!active || !credentialDraft.trim()) return;
-    if (apiOn) {
-      try {
-        await api.updateIntegration(active.id, {
-          credentials: { api_key: credentialDraft.trim() },
-        });
         await loadIntegrations();
-        setCredentialDraft("");
-        setToast("Credential saved (encrypted server-side)");
-      } catch {
-        setToast("Could not save credential");
+        setToast(`${active.name}: ${res.message}`);
+      } catch (error) {
+        setToast(errorMessage(error, "Test failed"));
       }
       return;
     }
-    updateIntegration(active.id, { apiKeyMasked: "••••••••••••••••" });
-    setCredentialDraft("");
-    setToast("Masked credential saved");
+    setToast(`${active.name}: simulated locally — no provider was contacted`);
   }
 
   return (
@@ -215,8 +229,11 @@ export default function AdminIntegrationsPage() {
 
       {apiOn ? (
         <AdminNotice tone="info">
-          Connections and credentials are saved to the server (secrets are stored
-          encrypted and shown masked). Provider test-calls report the connected state.
+          Credentials are stored encrypted and are write-only — they are never sent
+          back to this page.
+          {simulatedCount
+            ? ` ${simulatedCount} provider${simulatedCount === 1 ? " is" : "s are"} in simulated (log) mode: requests are built and logged, but nothing is sent.`
+            : ""}
         </AdminNotice>
       ) : null}
 
@@ -292,20 +309,13 @@ export default function AdminIntegrationsPage() {
       >
         {active ? (
           <IntegrationDrawer
+            key={active.id}
             integration={active}
-            credentialDraft={credentialDraft}
+            saving={saving}
             toastMessage={toast}
-            onCredentialDraft={setCredentialDraft}
-            onSaveCredential={saveCredentialAlias}
-            onPatch={(patch) => {
-              if (apiOn) {
-                void api.updateIntegration(active.id, patch).then(loadIntegrations);
-              } else {
-                updateIntegration(active.id, patch);
-              }
-            }}
+            onSaveConfig={saveConfig}
+            onSaveAccountLabel={saveAccountLabel}
             onTest={testConnection}
-            onCopyWebhook={copyWebhook}
             onToggle={(enabled) => toggle(active, enabled)}
           />
         ) : null}
@@ -337,9 +347,12 @@ function IntegrationCard({
             .join("")
             .slice(0, 2)}
         </div>
-        <span className={`inline-flex rounded px-2 py-0.5 text-[10px] font-semibold ${status.className}`}>
-          {status.label}
-        </span>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <DriverBadge driver={integration.driver} />
+          <span className={`inline-flex rounded px-2 py-0.5 text-[10px] font-semibold ${status.className}`}>
+            {status.label}
+          </span>
+        </div>
       </div>
       <div className="mt-4">
         <div className="flex items-center gap-2">
@@ -347,6 +360,11 @@ function IntegrationCard({
           <span className="ez-mono text-[8px] uppercase tracking-[0.12em] text-[#AEAEB2]">{meta.label}</span>
         </div>
         <p className="mt-1.5 text-xs leading-relaxed text-[#6E6E73]">{integration.description}</p>
+        {integration.missingRequired?.length ? (
+          <p className="mt-2 text-[11px] font-medium leading-relaxed text-[#9A3412]">
+            Needs {integration.missingRequired.join(", ")}
+          </p>
+        ) : null}
       </div>
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3.5">
         <div className="min-w-0">
@@ -374,27 +392,25 @@ function IntegrationCard({
 
 function IntegrationDrawer({
   integration,
-  credentialDraft,
+  saving,
   toastMessage,
-  onCredentialDraft,
-  onSaveCredential,
-  onPatch,
+  onSaveConfig,
+  onSaveAccountLabel,
   onTest,
-  onCopyWebhook,
   onToggle,
 }: {
   integration: AdminIntegration;
-  credentialDraft: string;
+  saving: boolean;
   toastMessage: string;
-  onCredentialDraft: (value: string) => void;
-  onSaveCredential: () => void;
-  onPatch: (patch: Partial<AdminIntegration>) => void;
+  onSaveConfig: (patch: IntegrationConfigSubmit) => void;
+  onSaveAccountLabel: (value: string) => void;
   onTest: () => void;
-  onCopyWebhook: () => void;
   onToggle: (enabled: boolean) => void;
 }) {
   const meta = categoryMeta[integration.category];
   const status = statusMeta[integration.status];
+  const [label, setLabel] = useState(integration.accountLabel ?? "");
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-black/[0.06] bg-[#FAFAFB] p-4">
@@ -405,9 +421,17 @@ function IntegrationDrawer({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`inline-flex rounded px-2 py-0.5 text-[10px] font-semibold ${status.className}`}>{status.label}</span>
+              <DriverBadge driver={integration.driver} />
               <span className="ez-mono text-[8px] uppercase tracking-[0.12em] text-[#86868B]">{meta.label}</span>
             </div>
             <p className="mt-2 text-xs leading-relaxed text-[#6E6E73]">{integration.description}</p>
+            {integration.driver === "log" ? (
+              <p className="mt-2 text-[11px] leading-relaxed text-[#9A3412]">
+                This provider is in log mode: its client builds and logs every
+                request but contacts nobody. Flip its driver to live on the server
+                before relying on it.
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="mt-4 flex items-center justify-between border-t border-black/[0.06] pt-3">
@@ -417,47 +441,45 @@ function IntegrationDrawer({
       </div>
 
       <Field label="Account label">
-        <input value={integration.accountLabel ?? ""} onChange={(event) => onPatch({ accountLabel: event.target.value })} className={fieldClass} placeholder="Live workspace" />
+        <input
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          onBlur={() => onSaveAccountLabel(label.trim())}
+          className={fieldClass}
+          placeholder="Live workspace"
+        />
       </Field>
 
-      {integration.apiKeyMasked ? (
-        <Field label="API key · demo masked">
-          <div className="flex gap-2">
-            <input value={credentialDraft || integration.apiKeyMasked} onChange={(event) => onCredentialDraft(event.target.value)} className={`${fieldClass} ez-mono`} placeholder="Paste a test key" />
-            <button type="button" onClick={onSaveCredential} disabled={!credentialDraft.trim()} className="h-10 shrink-0 rounded-xl bg-[#1D1D1F] px-3 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
-              Mask
-            </button>
-          </div>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-[#86868B]">Credentials are never retained in this demo; only a masked marker is stored locally.</p>
-        </Field>
-      ) : null}
-
-      {integration.webhookUrl ? (
-        <Field label="Webhook URL">
-          <div className="flex gap-2">
-            <input value={integration.webhookUrl} onChange={(event) => onPatch({ webhookUrl: event.target.value })} className={`${fieldClass} ez-mono text-xs`} />
-            <button type="button" onClick={onCopyWebhook} className="h-10 shrink-0 rounded-xl border border-black/[0.1] bg-white px-3 text-xs font-semibold text-[#1D1D1F]">
-              Copy
-            </button>
-          </div>
-        </Field>
-      ) : null}
+      <IntegrationConfigForm integration={integration} saving={saving} onSave={onSaveConfig} />
 
       <div className="rounded-xl border border-dashed border-black/[0.12] bg-[#FAFAFB] p-4">
         <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">Connection health</div>
         <p className="mt-1.5 text-xs leading-relaxed text-[#6E6E73]">
-          Last verified {formatSync(integration.lastSync)}. Test calls are simulated locally and do not contact a provider.
+          Last verified {formatSync(integration.lastSync)}.{" "}
+          {integration.driver === "log"
+            ? "A test in log mode is simulated and proves nothing about the provider."
+            : "The test calls the provider for real."}
         </p>
         <button type="button" onClick={onTest} className="mt-3 h-9 rounded-lg border border-black/[0.1] bg-white px-3.5 text-xs font-semibold text-[#1D1D1F]">
           Test connection
         </button>
         {toastMessage ? (
-          <div role="status" aria-live="polite" className="mt-3 rounded-lg bg-[#EAF6ED] px-3 py-2 text-[11px] font-semibold text-[#2D6B3C]">
+          <div role="status" aria-live="polite" className="mt-3 rounded-lg bg-[#F0F0F2] px-3 py-2 text-[11px] font-semibold text-[#424245]">
             {toastMessage}
           </div>
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** The card used to say "Connected" while the client was silently simulating. */
+function DriverBadge({ driver }: { driver?: AdminIntegration["driver"] }) {
+  if (driver !== "log") return null;
+  return (
+    <span className="inline-flex rounded bg-[#FFF7E6] px-2 py-0.5 text-[10px] font-semibold text-[#8A5A00]">
+      Simulated
+    </span>
   );
 }
 
@@ -476,6 +498,12 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (che
       <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${checked ? "left-5" : "left-1"}`} />
     </button>
   );
+}
+
+/** Surfaces the API's 422 reason (e.g. the SSRF rejection) instead of a generic toast. */
+function errorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message.trim() : "";
+  return message || fallback;
 }
 
 function formatSync(value?: string) {

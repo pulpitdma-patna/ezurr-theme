@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { brandCollections, brandNames, type BrandName } from "@/data/home";
 import { getCatalogProductKey } from "@/lib/productKey";
@@ -176,11 +177,21 @@ export function BrandExplorer() {
   return (
     <section className="border-t border-black/[0.05] bg-white" aria-label="Shop by brand">
       <div className="ez-page ez-section pb-10 sm:pb-12 lg:pb-14">
-        <SectionHeading
-          eyebrow="Brand discovery"
-          title="Shop by brand."
-          description="One tap switches the entire shelf—hardware, games, and gear curated for each ecosystem."
-        />
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <SectionHeading
+            eyebrow="Brand discovery"
+            title="Shop by brand."
+            description="One tap switches the entire shelf—hardware, games, and gear curated for each ecosystem."
+          />
+          {/* The tabs filter this shelf in place; this is the way through to the
+              brand's own crawlable landing page. */}
+          <Link
+            href="/brands"
+            className="shrink-0 pb-1 text-[13px] font-semibold text-[#6E6E73] no-underline transition hover:text-[var(--ez-fg)]"
+          >
+            All brands →
+          </Link>
+        </div>
 
         <div
           className="ez-scrollbar-none -mx-4 mb-7 overflow-x-auto border-b border-black/[0.06] px-4 sm:-mx-6 sm:mb-8 sm:px-6 lg:mx-0 lg:px-0"

@@ -103,15 +103,6 @@ function IconOrders() {
   );
 }
 
-function IconCalendar() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.75" />
-      <path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function IconKey() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -303,10 +294,12 @@ const pageTitles: { match: (path: string) => boolean; title: string; crumb?: str
   { match: (p) => p.startsWith("/admin/products"), title: "Products", crumb: "Catalog", crumbHref: "/admin/products" },
   { match: (p) => p.startsWith("/admin/categories"), title: "Categories", crumb: "Catalog", crumbHref: "/admin/products" },
   { match: (p) => p.startsWith("/admin/brands"), title: "Brands", crumb: "Catalog", crumbHref: "/admin/products" },
+  // Retired routes that now redirect into Products — kept so a bookmarked URL
+  // still shows the right chrome for the frame before the redirect lands.
   { match: (p) => p.startsWith("/admin/inventory"), title: "Inventory", crumb: "Catalog", crumbHref: "/admin/products" },
+  { match: (p) => p.startsWith("/admin/preorders"), title: "Pre-orders", crumb: "Catalog", crumbHref: "/admin/products" },
   { match: (p) => p.startsWith("/admin/media"), title: "Media", crumb: "Catalog", crumbHref: "/admin/products" },
   { match: (p) => p.startsWith("/admin/orders"), title: "Orders", crumb: "Fulfillment", crumbHref: "/admin/orders" },
-  { match: (p) => p.startsWith("/admin/preorders"), title: "Pre-orders", crumb: "Fulfillment", crumbHref: "/admin/orders" },
   { match: (p) => p.startsWith("/admin/digital-codes"), title: "Digital codes", crumb: "Fulfillment", crumbHref: "/admin/orders" },
   { match: (p) => p.startsWith("/admin/customers"), title: "Customers", crumb: "Grow", crumbHref: "/admin/customers" },
   { match: (p) => p.startsWith("/admin/coupons"), title: "Coupons", crumb: "Grow", crumbHref: "/admin/coupons" },
@@ -334,20 +327,6 @@ function resolvePageMeta(pathname: string) {
       crumb: "Ezurr HQ",
       crumbHref: "/admin" as string | undefined,
     }
-  );
-}
-
-function IconInventory() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 7h16v3H4V7Zm0 5h16v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7Z"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinejoin="round"
-      />
-      <path d="M8 15h3M8 9h8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-    </svg>
   );
 }
 
@@ -402,10 +381,12 @@ const navSubmenus: NavGroup[] = [
     label: "Catalog",
     icon: <IconBox />,
     items: [
+      // Inventory and Pre-orders are Products views now (stock is edited inline
+      // on the row; pre-order is the `fulfillment_type` tab), so they no longer
+      // get their own nav entries.
       { href: "/admin/products", label: "Products", icon: <IconBox /> },
       { href: "/admin/categories", label: "Categories", icon: <IconTags /> },
       { href: "/admin/brands", label: "Brands", icon: <IconBrand /> },
-      { href: "/admin/inventory", label: "Inventory", icon: <IconInventory /> },
       { href: "/admin/media", label: "Media", icon: <IconMedia /> },
     ],
   },
@@ -414,7 +395,6 @@ const navSubmenus: NavGroup[] = [
     icon: <IconOrders />,
     items: [
       { href: "/admin/orders", label: "Orders", icon: <IconOrders /> },
-      { href: "/admin/preorders", label: "Pre-orders", icon: <IconCalendar /> },
       { href: "/admin/digital-codes", label: "Digital codes", icon: <IconKey /> },
     ],
   },

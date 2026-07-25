@@ -56,6 +56,11 @@ const SETTING_KEYS: (keyof AdminSettings)[] = [
   "codLimit", "freeShippingMin", "orderIdPrefix", "lowStockThreshold", "hideOutOfStock",
   "timezone", "currencyLabel", "notifyNewOrder", "notifyLowStock", "notifyPreorderRelease",
   "gaMeasurementId", "metaPixelId",
+  "codAdvance", "codAdvanceLabel", "codAdvanceUnlocksCap", "reservationAmount",
+  "whatsappWidgetEnabled", "whatsappNumber", "whatsappGreeting",
+  "docBusinessName", "docAddressLine1", "docAddressLine2", "docCity", "docState",
+  "docPincode", "docGstin", "docPan", "docLogoUrl", "docInvoicePrefix",
+  "docDeclaration", "docFooterNote", "docSignatureLine",
 ];
 
 export default function AdminSettingsPage() {
@@ -302,6 +307,28 @@ export default function AdminSettingsPage() {
                   inputMode="numeric"
                 />
               </Field>
+              <Field label="WhatsApp number">
+                <input
+                  value={settings.whatsappNumber}
+                  onChange={(e) =>
+                    patch({ whatsappNumber: e.target.value.replace(/\D/g, "").slice(0, 12) })
+                  }
+                  className={fieldClass}
+                  placeholder="9876500000"
+                  inputMode="numeric"
+                />
+                <p className="mt-1.5 text-[11px] text-[#86868B]">
+                  Powers the floating chat button on the storefront.
+                </p>
+              </Field>
+              <Field label="WhatsApp greeting">
+                <input
+                  value={settings.whatsappGreeting}
+                  onChange={(e) => patch({ whatsappGreeting: e.target.value.slice(0, 200) })}
+                  className={fieldClass}
+                  placeholder="Hi! I have a question about my order."
+                />
+              </Field>
               <Field label="GSTIN" className="sm:col-span-2">
                 <input
                   value={settings.gstin}
@@ -464,6 +491,28 @@ export default function AdminSettingsPage() {
               onChange={(checked) => patch({ codEnabled: checked })}
             />
 
+            <SettingsToggle
+              label="WhatsApp chat widget"
+              description={
+                settings.whatsappNumber
+                  ? `Floating chat button → +91 ${settings.whatsappNumber}`
+                  : "Add a WhatsApp number above to enable"
+              }
+              checked={settings.whatsappWidgetEnabled}
+              onChange={(checked) => patch({ whatsappWidgetEnabled: checked })}
+            />
+
+            <SettingsToggle
+              label="COD advance lifts the limit"
+              description={
+                settings.codAdvance > 0
+                  ? `Paying ${formatInr(settings.codAdvance)} makes COD available at any order value`
+                  : "Set a COD advance above to use this"
+              }
+              checked={settings.codAdvanceUnlocksCap}
+              onChange={(checked) => patch({ codAdvanceUnlocksCap: checked })}
+            />
+
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="COD limit">
                 <div className="relative">
@@ -482,7 +531,30 @@ export default function AdminSettingsPage() {
                   />
                 </div>
                 <p className="mt-1.5 text-[11px] text-[#86868B]">
-                  Orders above this must be prepaid.
+                  {settings.codAdvanceUnlocksCap && settings.codAdvance > 0
+                    ? "Ignored while the COD advance lifts the cap."
+                    : "Orders above this must be prepaid."}
+                </p>
+              </Field>
+              <Field label="COD advance">
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#86868B]">
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    disabled={!settings.codEnabled}
+                    value={settings.codAdvance}
+                    onChange={(e) =>
+                      patch({ codAdvance: Math.max(0, Number(e.target.value) || 0) })
+                    }
+                    className={`${fieldClass} pl-7 disabled:opacity-50`}
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] text-[#86868B]">
+                  Paid online to confirm COD; deducted from the amount collected
+                  at the door. 0 = nothing up front.
                 </p>
               </Field>
               <Field label="Free shipping minimum">
@@ -667,6 +739,138 @@ export default function AdminSettingsPage() {
               </Field>
               <div className={`${calloutClass} border-dashed text-[#6E6E73]`}>
                 CGST / SGST / IGST splits and HSN codes are not captured on orders yet. Use Reports → Tax / GST for readiness exports.
+              </div>
+            </div>
+
+            <div className="border-t border-black/[0.06] pt-3.5">
+              <h3 className="text-xs font-semibold tracking-[-0.01em] text-[#1D1D1F]">
+                Documents
+              </h3>
+              <p className="mt-0.5 max-w-xl text-[11px] leading-relaxed text-[#6E6E73]">
+                Header, tax identity, and footer used on printed invoices and packing
+                slips. State is the seller&rsquo;s place of supply — without it an invoice
+                falls back to IGST instead of a CGST/SGST split.
+              </p>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label="Legal business name" className="sm:col-span-2">
+                  <input
+                    value={settings.docBusinessName}
+                    onChange={(e) => patch({ docBusinessName: e.target.value })}
+                    placeholder={settings.storeName || "Registered entity name"}
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field label="Address line 1">
+                  <input
+                    value={settings.docAddressLine1}
+                    onChange={(e) => patch({ docAddressLine1: e.target.value })}
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field label="Address line 2">
+                  <input
+                    value={settings.docAddressLine2}
+                    onChange={(e) => patch({ docAddressLine2: e.target.value })}
+                    placeholder="Optional"
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field label="City">
+                  <input
+                    value={settings.docCity}
+                    onChange={(e) => patch({ docCity: e.target.value })}
+                    placeholder={settings.city || "Bengaluru"}
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field label="State (place of supply)">
+                  <input
+                    value={settings.docState}
+                    onChange={(e) => patch({ docState: e.target.value })}
+                    placeholder="Karnataka"
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field label="Pincode">
+                  <input
+                    value={settings.docPincode}
+                    onChange={(e) => patch({ docPincode: e.target.value })}
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field label="Invoice GSTIN">
+                  <input
+                    value={settings.docGstin}
+                    onChange={(e) => patch({ docGstin: e.target.value })}
+                    placeholder={settings.gstin || "29AABCE1234F1Z5"}
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field label="PAN">
+                  <input
+                    value={settings.docPan}
+                    onChange={(e) => patch({ docPan: e.target.value })}
+                    placeholder="Optional"
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field label="Logo URL">
+                  <input
+                    value={settings.docLogoUrl}
+                    onChange={(e) => patch({ docLogoUrl: e.target.value })}
+                    placeholder="https://…"
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field label="Invoice number prefix" className="sm:col-span-2">
+                  <input
+                    value={settings.docInvoicePrefix}
+                    onChange={(e) => patch({ docInvoicePrefix: e.target.value })}
+                    placeholder="INV-"
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field label="Declaration / terms" className="sm:col-span-2">
+                  <textarea
+                    value={settings.docDeclaration}
+                    onChange={(e) => patch({ docDeclaration: e.target.value })}
+                    rows={3}
+                    className={`${fieldClass} h-auto py-2 leading-relaxed`}
+                  />
+                </Field>
+                <Field label="Footer note" className="sm:col-span-2">
+                  <input
+                    value={settings.docFooterNote}
+                    onChange={(e) => patch({ docFooterNote: e.target.value })}
+                    className={fieldClass}
+                  />
+                </Field>
+              </div>
+
+              <div className={`${insetPanelClass} mt-3 bg-white`}>
+                <div className="ez-mono text-[8px] uppercase tracking-[0.14em] text-[#AEAEB2]">
+                  Invoice number preview
+                </div>
+                <div className="ez-mono mt-0.5 text-xs font-semibold text-[#1D1D1F]">
+                  {`${settings.docInvoicePrefix || "INV-"}EZ-A1B2C3D4`}
+                </div>
+                <p className="mt-1 text-[11px] text-[#86868B]">
+                  Derived from the order id, so re-printing never renumbers an invoice.
+                </p>
+              </div>
+
+              <div className="mt-3">
+                <SettingsToggle
+                  label="Signature line"
+                  description={
+                    settings.docSignatureLine
+                      ? "Invoice prints a customer / seller signature line; packing slip prints packed-by and checked-by"
+                      : "No signature lines on printed documents"
+                  }
+                  checked={settings.docSignatureLine}
+                  onChange={(checked) => patch({ docSignatureLine: checked })}
+                />
               </div>
             </div>
           </SettingsSection>

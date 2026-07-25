@@ -4,12 +4,26 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import {
+  PreorderFields,
+  applyDigitalToggle,
+  emptyFulfilment,
+  fulfilmentFromApi,
+  fulfilmentToPayload,
+  type FulfilmentValues,
+} from "@/components/admin/PreorderFields";
 import { ProductForm, type ProductFormValues } from "@/components/admin/ProductForm";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAutoBanner } from "@/hooks/useAutoBanner";
 import { adjustStock, upsertProduct } from "@/lib/adminStore";
 import { api, apiUpdateProduct, isApiEnabled, type ApiProduct } from "@/lib/apiClient";
 import { apiProductToForm, productFormToApiPayload } from "@/lib/productPayload";
+
+/** The fulfilment columns the API sends but `ApiProduct` doesn't declare. */
+type ApiProductFulfilment = ApiProduct & {
+  release_at?: string | null;
+  reservation_amount?: number | null;
+};
 
 function toForm(product: {
   category: ProductFormValues["category"];
@@ -43,6 +57,18 @@ function toForm(product: {
   };
 }
 
+function localFulfilment(product: {
+  digital: boolean;
+  category: string;
+  releaseDate?: string;
+}): FulfilmentValues {
+  return {
+    type: product.digital ? "digital" : product.category === "preorders" ? "preorder" : "physical",
+    releaseAt: product.releaseDate ?? "",
+    reservationAmount: "",
+  };
+}
+
 export default function AdminEditProductPage({
   params,
 }: {
@@ -63,6 +89,9 @@ export default function AdminEditProductPage({
   const [form, setForm] = useState<ProductFormValues | null>(() =>
     !apiOn && localProduct ? toForm(localProduct) : null,
   );
+  const [fulfilment, setFulfilment] = useState<FulfilmentValues>(() =>
+    !apiOn && localProduct ? localFulfilment(localProduct) : emptyFulfilment,
+  );
   const [apiProduct, setApiProduct] = useState<ApiProduct | null>(null);
   const [loading, setLoading] = useState(apiOn);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -77,6 +106,7 @@ export default function AdminEditProductPage({
       const p = await api.product(key);
       setApiProduct(p);
       setForm(apiProductToForm(p));
+      setFulfilment(fulfilmentFromApi(p as ApiProductFulfilment));
       setLoadError(null);
     } catch (err) {
       setApiProduct(null);
@@ -95,10 +125,25 @@ export default function AdminEditProductPage({
   if (!apiOn && localProduct && localProduct.key !== formKey) {
     setFormKey(localProduct.key);
     setForm(toForm(localProduct));
+    setFulfilment(localFulfilment(localProduct));
   }
 
   function update<K extends keyof ProductFormValues>(field: K, value: ProductFormValues[K]) {
     setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+    // ProductForm's "Digital product" checkbox writes the same column as the
+    // Fulfilment selector — mirror it so the two can't disagree.
+    if (field === "digital") {
+      setFulfilment((prev) => applyDigitalToggle(prev, Boolean(value)));
+    }
+  }
+
+  function updateFulfilment(next: FulfilmentValues) {
+    setFulfilment(next);
+    setForm((prev) =>
+      !prev || prev.digital === (next.type === "digital")
+        ? prev
+        : { ...prev, digital: next.type === "digital" },
+    );
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -107,9 +152,8 @@ export default function AdminEditProductPage({
     if (apiOn) {
       setSaving(true);
       setTone("success");
-      void apiUpdateProduct(
-        key.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80),
-        productFormToApiPayload({
+      void apiUpdateProduct(key.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80), {
+        ...productFormToApiPayload({
           key,
           name: form.name,
           category: form.category,
@@ -121,7 +165,8 @@ export default function AdminEditProductPage({
           status: form.status,
           image: form.image,
         }),
-      )
+        ...fulfilmentToPayload(fulfilment),
+      })
         .then(() => {
           setToast("Product saved");
           window.setTimeout(() => router.push("/admin/products"), 600);
@@ -147,10 +192,10 @@ export default function AdminEditProductPage({
       price: form.price,
       strike: form.strike,
       stock: localProduct.stock,
-      digital: form.digital,
+      digital: fulfilment.type === "digital",
       status: form.status,
       image: form.image,
-      releaseDate: form.releaseDate,
+      releaseDate: fulfilment.type === "preorder" ? fulfilment.releaseAt || undefined : undefined,
     });
     if (delta !== 0) {
       adjustStock(key, delta, "Product edit stock");
@@ -210,6 +255,8 @@ export default function AdminEditProductPage({
           </Link>
         }
       />
+
+      <PreorderFields value={fulfilment} onChange={updateFulfilment} />
 
       <ProductForm
         form={form}

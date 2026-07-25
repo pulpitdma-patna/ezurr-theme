@@ -11,6 +11,7 @@ import {
   scopeBlockCss,
 } from "@/lib/cms/resolveSectionProps";
 import { sanitizeHtml } from "@/lib/cms/sanitizeHtml";
+import { buildLegalDocument } from "@/lib/cms/legalDoc";
 import { getSectionEntry } from "@/lib/cms/sectionRegistry";
 import { HeroSlider } from "@/components/home/HeroSlider";
 import { AssuranceStrip } from "@/components/home/AssuranceStrip";
@@ -389,14 +390,62 @@ function RenderBlock({
       );
     case "rich_text":
       return shell(
-        <section className="ez-page ez-section prose prose-neutral max-w-none">
+        <section className="ez-page ez-section">
           <div
+            className="ez-prose"
             dangerouslySetInnerHTML={{
               __html: sanitizeHtml(String(block.props.html ?? "")),
             }}
           />
         </section>,
       );
+    case "legal_doc": {
+      const doc = buildLegalDocument(String(block.props.html ?? ""));
+      const eyebrow = String(block.props.eyebrow ?? "");
+      const title = String(block.props.title ?? "");
+      const lastUpdated = String(block.props.lastUpdated ?? "");
+      const notice = String(block.props.notice ?? "");
+      const showToc = block.props.showToc !== false && doc.headings.length > 1;
+      return shell(
+        <section className="ez-page ez-legal">
+          <div className="ez-legal-inner">
+            <header className="ez-legal-head">
+              {eyebrow ? <p className="ez-section-kicker">{eyebrow}</p> : null}
+              {title ? <h1 className="ez-legal-title">{title}</h1> : null}
+              {lastUpdated ? (
+                <p className="ez-legal-chip ez-mono">Last updated {lastUpdated}</p>
+              ) : null}
+            </header>
+
+            {notice ? (
+              <div className="ez-legal-notice" role="note">
+                <span className="ez-legal-notice-tag">Notice</span>
+                <p>{notice}</p>
+              </div>
+            ) : null}
+
+            <div className={`ez-legal-body${showToc ? " has-toc" : ""}`}>
+              {showToc ? (
+                <nav className="ez-legal-toc" aria-label="On this page">
+                  <p className="ez-section-kicker">On this page</p>
+                  <ol>
+                    {doc.headings.map((heading) => (
+                      <li key={heading.id}>
+                        <a href={`#${heading.id}`}>{heading.text}</a>
+                      </li>
+                    ))}
+                  </ol>
+                </nav>
+              ) : null}
+              <div
+                className={`ez-prose${showToc ? "" : " ez-measure"}`}
+                dangerouslySetInnerHTML={{ __html: doc.html }}
+              />
+            </div>
+          </div>
+        </section>,
+      );
+    }
     case "custom_html":
       // A published block that carried code ships no raw HTML/JS — only a
       // sandboxRef. Render it in the cross-origin, opaque-origin sandbox iframe

@@ -71,6 +71,9 @@ type FormState = {
   lastName: string;
   address: string;
   city: string;
+  // Load-bearing for GST: an invoice can only claim an intra-state CGST/SGST
+  // split when the buyer's state is known. Autofilled from the PIN lookup.
+  state: string;
   pincode: string;
   upiId: string;
 };
@@ -81,6 +84,7 @@ const EMPTY_FORM: FormState = {
   lastName: "",
   address: "",
   city: "",
+  state: "",
   pincode: "",
   upiId: "",
 };
@@ -559,6 +563,15 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   const [placed, setPlaced] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
+  // Snapshot of what was actually bought, captured before cart.clear(). Without
+  // it the success screen recomputes from an emptied cart, flips out of cart
+  // mode, and shows the single-product fallback title/price instead of the
+  // real order.
+  const [placedSummary, setPlacedSummary] = useState<{
+    title: string;
+    total: string;
+    preorder: boolean;
+  } | null>(null);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [checkoutProduct, setCheckoutProduct] = useState<ApiProduct | null>(null);
   const [method, setMethod] = useState<"prepaid" | "cod">("prepaid");
@@ -579,6 +592,13 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   const [quote, setQuote] = useState<Awaited<ReturnType<typeof api.checkoutQuote>> | null>(null);
   const [whatsappConsent, setWhatsappConsent] = useState(true);
   const [placing, setPlacing] = useState(false);
+  // Idempotency key for the CURRENT place-order attempt. Must be a ref (not
+  // derived from the cart): the old `web-<session>-cart-<every product key>`
+  // form grew past the API's max:120 on any 2+ item cart (instant 422) and,
+  // being permanent per browser, silently replayed the first order on a repeat
+  // purchase. Minted once per attempt, cleared on success so a genuine second
+  // purchase creates a genuine second order.
+  const attemptKeyRef = useRef<string | null>(null);
 
   const liveTheme = useLiveThemeSettings();
   const { checkoutRules } = useAdminStore();
@@ -759,18 +779,30 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
     [policy?.splitPayments, splitId],
   );
   const depositPct = activeSplit?.depositPct ?? policy?.depositPct ?? 0;
-  // Pre-orders take a deposit (often ₹0 today, balance on release). In-stock
-  // orders are paid in full now (prepaid) or on delivery (COD).
-  const dueTodayNum = !isPreorder
-    ? isPrepaid
-      ? effTotalNum
-      : 0
-    : useQuote
-      ? quote.deposit ?? 0
-      : depositPct > 0
-        ? Math.round((isPrepaid ? prepaidTotalNum : codTotalNum) * (depositPct / 100))
-        : 0;
+  // The server is authoritative about split payments. Whenever it returns a
+  // deposit — a COD advance ("pay ₹100 to confirm") or a pre-order reservation
+  // — that IS what's due now, regardless of fulfilment type or method. Only
+  // when there is no deposit do we fall back to the simple rules: prepaid pays
+  // in full now, COD pays nothing now, a pre-order may take a % deposit.
+  const serverDeposit = useQuote ? Number(quote.deposit ?? 0) : 0;
+  const dueTodayNum =
+    serverDeposit > 0
+      ? serverDeposit
+      : !isPreorder
+        ? isPrepaid
+          ? effTotalNum
+          : 0
+        : useQuote
+          ? 0
+          : depositPct > 0
+            ? Math.round((isPrepaid ? prepaidTotalNum : codTotalNum) * (depositPct / 100))
+            : 0;
   const dueToday = fmt(dueTodayNum);
+  // Amount still owed after the advance (at the door / on release).
+  const balanceDueNum = Math.max(0, effTotalNum - dueTodayNum);
+  const depositNote = useQuote ? (quote.depositLabel ?? null) : null;
+  // Flat COD advance offered by the policy (0 = pay nothing up front).
+  const codAdvanceNum = Math.max(0, Number(policy?.codAdvance ?? 0));
 
   const prepaidGateways = (policy?.gateways ?? []).filter((g) => g !== "cod");
 
@@ -884,7 +916,9 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   const patch = (partial: Partial<FormState>) => setForm((prev) => ({ ...prev, ...partial }));
 
   const fullName = [form.firstName, form.lastName].filter(Boolean).join(" ").trim();
-  const shipLine = [form.address, form.city, form.pincode].filter(Boolean).join(", ");
+  const shipLine = [form.address, form.city, form.state, form.pincode]
+    .filter(Boolean)
+    .join(", ");
 
   const goto = (s: number) => {
     setStep(s);
@@ -956,7 +990,9 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
       }>;
       const po = data?.[0]?.PostOffice?.[0];
       if (data?.[0]?.Status === "Success" && po?.District) {
-        patch({ city: po.District });
+        // Capture the state, not just display it — it decides CGST/SGST vs IGST
+        // on the invoice. Don't blank an existing value if the API omits it.
+        patch({ city: po.District, ...(po.State ? { state: po.State } : {}) });
         setGeoMsg(`${po.District}${po.State ? `, ${po.State}` : ""} · ${pin}`);
         return true;
       }
@@ -1050,10 +1086,14 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
           return;
         }
         try {
+          if (!attemptKeyRef.current) {
+            const rand =
+              globalThis.crypto?.randomUUID?.() ??
+              `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+            attemptKeyRef.current = `web-${rand}`; // fixed length, always < 120
+          }
           const order = await api.createOrder({
-            idempotencyKey: `web-${sessionKey}-${
-              isCart ? `cart-${itemsKey}` : checkoutProduct?.key ?? productKey
-            }`,
+            idempotencyKey: attemptKeyRef.current,
             items: orderLineItems,
             paymentMethod: isPrepaid ? "prepaid" : "cod",
             gateway: isPrepaid ? gateway : "cod",
@@ -1071,6 +1111,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
               lastName: form.lastName,
               address: form.address,
               city: form.city,
+              state: form.state,
               pincode: form.pincode,
             },
             couponCode: appliedCoupon?.code,
@@ -1080,6 +1121,8 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
           });
           const publicId = order?.public_id ?? null;
           const handle = order?.gatewayCheckout;
+          // Capture BEFORE clearing — the success screen reads this.
+          setPlacedSummary({ title: displayTitle, total: lockedTotal, preorder: isPreorder });
           if (isCart) cart.clear(); // order created — empty the cart
 
           // Real prepaid order → open the gateway payment sheet. The webhook is
@@ -1103,6 +1146,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                 contact: form.mobile || session?.mobile || undefined,
               },
               handler: () => {
+                attemptKeyRef.current = null; // attempt done — next buy is a new order
                 setOrderId(publicId);
                 setPlaced(true);
                 window.scrollTo(0, 0);
@@ -1119,14 +1163,19 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
           }
 
           // COD, or a simulated (log-mode) prepaid order → straight to success.
+          attemptKeyRef.current = null; // attempt done — next buy is a new order
           setOrderId(publicId);
           setPlaced(true);
           window.scrollTo(0, 0);
           return;
         } catch (err) {
+          // Leave attemptKeyRef set: a retry of THIS attempt must reuse the key
+          // so a network-level double-send cannot create two orders.
+          console.error("[checkout] createOrder failed", err);
           setOrderError(
             err instanceof Error ? err.message : "Could not place order. Try again.",
           );
+          window.scrollTo({ top: 0, behavior: "smooth" });
           return;
         }
       }
@@ -1188,11 +1237,15 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   }
 
   if (placed) {
+    // Prefer the snapshot taken at placement time — the cart is empty by now.
+    const placedTitle = placedSummary?.title ?? displayTitle;
+    const placedTotal = placedSummary?.total ?? lockedTotal;
+    const placedPreorder = placedSummary?.preorder ?? isPreorder;
     return (
       <div className="ez-checkout-bg min-h-screen">
         <div className="ez-checkout-shell">
           <CheckoutHeader
-            label={isPreorder ? "Secure pre-order" : "Secure checkout"}
+            label={placedPreorder ? "Secure pre-order" : "Secure checkout"}
             shortLabel="Secure"
           />
           <main className="ez-page w-full py-14 pb-20 sm:py-20">
@@ -1201,23 +1254,23 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                 {orderId ?? (isPreorder ? "Reserved" : "Confirmed")}
               </span>
               <h1 className="ez-display m-0 font-bold tracking-[-0.04em]">
-                {isPreorder ? "You're in line." : "Order confirmed."}
+                {placedPreorder ? "You're in line." : "Order confirmed."}
               </h1>
               <p className="m-0 max-w-[420px] text-[15px] leading-relaxed text-[#6E6E73]">
-                {isPreorder ? (
+                {placedPreorder ? (
                   <>
-                    {displayTitle} reserved at{" "}
-                    <span className="font-semibold text-[var(--ez-fg)]">{lockedTotal}</span>. We&apos;ll
+                    {placedTitle} reserved at{" "}
+                    <span className="font-semibold text-[var(--ez-fg)]">{placedTotal}</span>. We&apos;ll
                     text {formatMobileDisplay(form.mobile || session?.mobile || "")} when it ships.
                   </>
                 ) : (
                   <>
-                    {displayTitle} · {lockedTotal}. We&apos;ll text{" "}
+                    {placedTitle} · {placedTotal}. We&apos;ll text{" "}
                     {formatMobileDisplay(form.mobile || session?.mobile || "")} with tracking updates.
                   </>
                 )}
               </p>
-              {isPreorder ? <CountdownBoxes size="large" /> : null}
+              {placedPreorder ? <CountdownBoxes size="large" /> : null}
               <TrustRail />
               <div className="mt-2 flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                 {orderId ? (
@@ -1283,6 +1336,33 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
       placeOrder();
     }
   };
+
+  // Cart checkout with nothing in the cart: previously this fell through to a
+  // hardcoded demo product ("Ezurr Play Console" / key `gta-vi-preorder`) that
+  // does not exist in the catalog, so Place order always died on the server
+  // with "One or more items are unavailable." Show an honest empty state.
+  // (Guarded on `hydrated` so we never flash it before localStorage is read.)
+  if (!buyNowKey?.trim() && cart.hydrated && cart.items.length === 0 && !placed) {
+    return (
+      <div className="ez-checkout-bg min-h-screen">
+        <div className="ez-checkout-shell">
+          <CheckoutHeader label="Secure checkout" shortLabel="Secure" />
+          <main className="mx-auto flex max-w-[520px] flex-col items-center gap-4 px-5 py-24 text-center">
+            <h1 className="m-0 text-[24px] font-bold tracking-[-0.03em]">Your cart is empty</h1>
+            <p className="m-0 text-[14px] leading-relaxed text-[#6E6E73]">
+              Add something you love and it will show up here, ready to check out.
+            </p>
+            <Link
+              href="/games"
+              className="ez-checkout-btn-dark mt-2 rounded-full px-7 py-3.5 text-[15px] font-semibold no-underline"
+            >
+              Browse games
+            </Link>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="ez-checkout-bg min-h-screen pb-28 lg:pb-0">
@@ -1408,6 +1488,19 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                   >
                     {policy.blockMessage ?? "Checkout is unavailable for this cart."}
                   </div>
+                ) : null}
+
+                {/* Order errors must render on EVERY step: placeOrder runs at
+                    step 3, so keeping this inside the step-2 branch made a
+                    failed order completely silent (the click appeared to do
+                    nothing at all). */}
+                {orderError ? (
+                  <p
+                    className="m-0 mb-4 rounded-[14px] border border-[#FECACA] bg-[#FEF2F2] px-4 py-3.5 text-[13px] text-[#B42318]"
+                    role="alert"
+                  >
+                    {orderError}
+                  </p>
                 ) : null}
 
                 {step === 1 && (
@@ -1572,6 +1665,26 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                     </div>
                     ) : null}
 
+                    {/* State rides with City/PIN because it is autofilled from the
+                        PIN lookup. It stays editable: the buyer's state decides
+                        whether the invoice is CGST+SGST or IGST, so a wrong
+                        autofill has to be correctable. */}
+                    {showField("city") ? (
+                      <div className="flex flex-col gap-2">
+                        <FieldLabel htmlFor="state">State</FieldLabel>
+                        <CheckoutInput
+                          id="state"
+                          value={form.state}
+                          onChange={(v) => patch({ state: v })}
+                          placeholder="Karnataka"
+                          autoComplete="address-level1"
+                        />
+                        <span className="text-[11px] text-[#86868B]">
+                          Filled in from your PIN code — edit if it&apos;s wrong.
+                        </span>
+                      </div>
+                    ) : null}
+
                     {policy.carriers.length > 1 ? (
                       <div className="flex flex-col gap-2">
                         <FieldLabel htmlFor="shipping-carrier">Shipping carrier</FieldLabel>
@@ -1637,12 +1750,6 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                       </p>
                     ) : null}
 
-                    {orderError ? (
-                      <p className="m-0 rounded-[14px] border border-[#FECACA] bg-[#FEF2F2] px-4 py-3.5 text-[13px] text-[#B42318]" role="alert">
-                        {orderError}
-                      </p>
-                    ) : null}
-
                     {policy.banner ? (
                       <p className="m-0 rounded-[14px] border border-black/[0.06] bg-[#F7F7F8] px-4 py-3.5 text-[13px] leading-relaxed text-[#424245]">
                         {policy.banner}
@@ -1672,7 +1779,17 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                                 {
                                   id: "cod" as const,
                                   title: "Cash on delivery",
-                                  sub: `Pay ${fmt(codTotalNum)} at door · under ${formatInr(policy.codMax)}`,
+                                  // With an advance configured, be explicit that
+                                  // part is paid now and the rest at the door —
+                                  // never imply the whole amount is on delivery.
+                                  sub:
+                                    codAdvanceNum > 0
+                                      ? `${fmt(codAdvanceNum)} now · ${fmt(Math.max(0, codTotalNum - codAdvanceNum))} at door`
+                                      : `Pay ${fmt(codTotalNum)} at door${
+                                          policy.codAdvanceUnlocksCap
+                                            ? ""
+                                            : ` · under ${formatInr(policy.codMax)}`
+                                        }`,
                                 },
                               ]
                             : []),
@@ -1934,7 +2051,14 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
           label={primaryLabel}
           dueToday={dueToday}
           onClick={primaryAction}
-          disabled={(step === 1 && !canContinueDetails) || policy.blocked || placing}
+          disabled={
+            (step === 1 && !canContinueDetails) ||
+            policy.blocked ||
+            placing ||
+            // Match the desktop guard: with no allowed payment method the order
+            // can only 422 ("Payment method not allowed.").
+            policy.methods.length === 0
+          }
         />
 
         <MobileSummarySheet

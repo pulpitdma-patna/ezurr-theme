@@ -31,6 +31,13 @@ function apiToSettings(raw: Record<string, unknown>): AdminSettings {
     showOffer: raw.showOffer !== false,
     gaMeasurementId: String(raw.gaMeasurementId ?? ""),
     metaPixelId: String(raw.metaPixelId ?? ""),
+    codAdvance: Number(raw.codAdvance ?? 0),
+    codAdvanceLabel: String(raw.codAdvanceLabel ?? ""),
+    codAdvanceUnlocksCap: raw.codAdvanceUnlocksCap === true,
+    reservationAmount: Number(raw.reservationAmount ?? 0),
+    whatsappWidgetEnabled: raw.whatsappWidgetEnabled === true,
+    whatsappNumber: String(raw.whatsappNumber ?? ""),
+    whatsappGreeting: String(raw.whatsappGreeting ?? ""),
   };
 }
 

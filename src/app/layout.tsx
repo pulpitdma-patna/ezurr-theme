@@ -8,6 +8,7 @@ import { CartProvider } from "@/lib/cart";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { AnalyticsLoader } from "@/components/analytics/AnalyticsLoader";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
+import { WhatsAppWidget } from "@/components/support/WhatsAppWidget";
 
 const geist = Geist({
   variable: "--font-geist",
@@ -56,6 +57,7 @@ export default async function RootLayout({
           {children}
           <CartDrawer />
         </CartProvider>
+        <WhatsAppWidget />
         <ConsentBanner />
       </body>
     </html>

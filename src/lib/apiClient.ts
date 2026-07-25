@@ -475,12 +475,14 @@ export const api = {
   brands: () => apiFetch<{ data: ApiBrand[] }>("/brands"),
   products: (params?: {
     category?: string;
+    brand?: string;
     q?: string;
     page?: number;
     per_page?: number;
   }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
+    if (params?.brand) qs.set("brand", params.brand);
     if (params?.q) qs.set("q", params.q);
     if (params?.page) qs.set("page", String(params.page));
     if (params?.per_page) qs.set("per_page", String(params.per_page));
@@ -513,6 +515,12 @@ export const api = {
       tax: number;
       total: number;
       deposit: number | null;
+      /** Payable online now (the deposit when there is one, else the total). */
+      dueNow?: number;
+      /** Still owed after the advance — at the door, or on release. */
+      balanceDue?: number;
+      /** Shopper-facing explanation of the advance, e.g. "Pay ₹100 now…". */
+      depositLabel?: string | null;
       currency: string;
     }>("/checkout/quote", { method: "POST", body: JSON.stringify(payload) }),
   // Fire-and-forget abandoned-cart capture (204). Server persists only when a
@@ -789,6 +797,16 @@ export const api = {
   },
   adminOrder: (publicId: string) =>
     apiFetch<Record<string, unknown>>(`/admin/orders/${encodeURIComponent(publicId)}`),
+  // Printable documents. Two calls rather than one typed by argument, so the
+  // caller gets the right payload shape without narrowing a union.
+  adminOrderInvoice: (publicId: string) =>
+    apiFetch<ApiInvoiceDocument>(
+      `/admin/orders/${encodeURIComponent(publicId)}/document?type=invoice`,
+    ),
+  adminOrderPackingSlip: (publicId: string) =>
+    apiFetch<ApiPackingSlipDocument>(
+      `/admin/orders/${encodeURIComponent(publicId)}/document?type=packing_slip`,
+    ),
   patchOrderStatus: (
     publicId: string,
     payload: { status: string; tracking?: string; notes?: string },
@@ -823,18 +841,20 @@ export const api = {
 
   // Integrations
   integrations: () => apiFetch<{ data: ApiIntegration[] }>("/admin/integrations"),
-  updateIntegration: (key: string, patch: Record<string, unknown>) =>
+  integration: (key: string) =>
+    apiFetch<ApiIntegration>(`/admin/integrations/${key}`),
+  updateIntegration: (key: string, patch: ApiIntegrationPatch) =>
     apiFetch<ApiIntegration>(`/admin/integrations/${key}`, {
       method: "PUT",
       body: JSON.stringify(patch),
     }),
-  connectIntegration: (key: string, body: Record<string, unknown> = {}) =>
+  connectIntegration: (key: string, body: ApiIntegrationPatch = {}) =>
     apiFetch<ApiIntegration>(`/admin/integrations/${key}/connect`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
   testIntegration: (key: string) =>
-    apiFetch<{ ok: boolean; message: string }>(`/admin/integrations/${key}/test`, {
+    apiFetch<ApiIntegrationTestResult>(`/admin/integrations/${key}/test`, {
       method: "POST",
     }),
 
@@ -887,6 +907,31 @@ export type ApiAutomationRun = {
   delivery: string | null;
 };
 
+/**
+ * One admin-configurable input, declared by the API. The schema is server-side
+ * on purpose: only the server knows which credential key each provider client
+ * reads, and the previous drawer wrote `credentials.api_key`, which nothing did.
+ *
+ * Secrets are write-only — a secret field carries `configured` (and, for
+ * non-password types, a last-4 `hint`) but never a value.
+ */
+export type ApiIntegrationField = {
+  key: string;
+  label: string;
+  type: "text" | "password" | "url" | "select";
+  scope: "config" | "credential";
+  required: boolean;
+  secret: boolean;
+  /** Resolved from env or another admin page; the drawer renders it disabled. */
+  readOnly: boolean;
+  envVar: string | null;
+  help: string | null;
+  configured: boolean;
+  value: string | null;
+  hint?: string;
+  options?: { value: string; label: string }[];
+};
+
 export type ApiIntegration = {
   id: string;
   name: string;
@@ -896,8 +941,28 @@ export type ApiIntegration = {
   enabled: boolean;
   lastSync?: string | null;
   accountLabel?: string | null;
-  apiKeyMasked?: string | null;
   webhookUrl?: string | null;
+  config?: Record<string, unknown>;
+  /** 'log' = the provider client simulates every call and contacts nobody. */
+  driver?: "log" | "live";
+  fields?: ApiIntegrationField[];
+  missingRequired?: string[];
+};
+
+/** Omitted credential keys keep their stored value — never send blanks to clear. */
+export type ApiIntegrationPatch = {
+  enabled?: boolean;
+  status?: string;
+  accountLabel?: string | null;
+  config?: Record<string, string>;
+  credentials?: Record<string, string>;
+};
+
+export type ApiIntegrationTestResult = {
+  ok: boolean;
+  simulated: boolean;
+  driver?: string;
+  message: string;
 };
 
 export type ApiMessageTemplate = {
@@ -947,4 +1012,115 @@ export type ApiCheckoutRule = {
   experimentId?: string | null;
   variant?: string | null;
   trafficPct?: number | null;
+};
+
+// ---- Printable order documents (invoice / packing slip) --------------------
+// All amounts are integer rupees, exactly as stored on the order. The server is
+// authoritative — nothing here is recomputed client-side.
+
+export type ApiDocumentParty = {
+  name: string | null;
+  addressLines: string[];
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  email?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  country?: string | null;
+  /** Present on the invoice seller block only. */
+  gstin?: string;
+  pan?: string;
+};
+
+export type ApiDocumentLine = {
+  sku: string | null;
+  title: string | null;
+  qty: number;
+  fulfillmentType: string | null;
+  /** Blank when the product carries no HSN — never invented. */
+  hsn: string;
+  /** Invoice only; the packing slip omits money entirely. */
+  unitPrice?: number;
+  lineTotal?: number;
+};
+
+export type ApiDocumentOrder = {
+  publicId: string;
+  status: string;
+  placedAt: string | null;
+  paymentMethod: string | null;
+  carrierName: string | null;
+  tracking: string | null;
+  awb: string | null;
+  /** Packing slip only. */
+  lineCount?: number;
+  unitCount?: number;
+};
+
+export type ApiDocumentTaxComponent = {
+  code: string;
+  label: string;
+  ratePct: number;
+  amount: number;
+};
+
+export type ApiInvoiceDocument = {
+  type: "invoice";
+  title: string;
+  invoiceNumber: string;
+  invoiceDate: string | null;
+  currency: string;
+  order: ApiDocumentOrder;
+  seller: ApiDocumentParty;
+  buyer: ApiDocumentParty;
+  items: ApiDocumentLine[];
+  totals: {
+    linesTotal: number;
+    subtotal: number;
+    discount: number;
+    shipping: number;
+    taxableValue: number;
+    tax: number;
+    total: number;
+  };
+  tax: {
+    ratePct: number;
+    mode: "cgst_sgst" | "igst";
+    sellerState: string | null;
+    placeOfSupply: string | null;
+    stateResolved: boolean;
+    /** Why the split fell back to IGST, when it did. */
+    note: string | null;
+    taxableValue: number;
+    components: ApiDocumentTaxComponent[];
+    total: number;
+  };
+  payment: {
+    method: string | null;
+    depositAmount: number;
+    amountPaid: number;
+    balanceDue: number;
+    balanceLabel: string;
+  };
+  template: {
+    logoUrl: string;
+    declaration: string;
+    footerNote: string;
+    signatureLine: boolean;
+  };
+};
+
+export type ApiPackingSlipDocument = {
+  type: "packing_slip";
+  title: string;
+  order: ApiDocumentOrder;
+  seller: ApiDocumentParty;
+  shipTo: ApiDocumentParty;
+  items: ApiDocumentLine[];
+  template: {
+    logoUrl: string;
+    footerNote: string;
+    signatureLine: boolean;
+  };
 };

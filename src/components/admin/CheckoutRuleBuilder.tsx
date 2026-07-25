@@ -57,6 +57,12 @@ const actionOptions: { value: CheckoutActionType; label: string; hint: string }[
   { value: "set_rate_table", label: "Set rate table", hint: "bluedart:0,delhivery:79" },
   { value: "hide_carrier", label: "Hide carrier", hint: "dunzo" },
   { value: "set_deposit_pct", label: "Set deposit %", hint: "25" },
+  {
+    value: "set_cod_advance",
+    label: "Set COD advance ₹",
+    hint: "100!  ·  add ! to also lift the COD limit, or 100:Custom label",
+  },
+  { value: "set_reservation_amount", label: "Set pre-order reservation ₹", hint: "500" },
   { value: "enable_pay_later", label: "Enable pay later", hint: "true" },
   { value: "split_payment", label: "Split payment", hint: "25:Pay now|75:On release" },
 ];

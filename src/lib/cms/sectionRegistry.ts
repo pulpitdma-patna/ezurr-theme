@@ -225,6 +225,48 @@ export const SECTION_REGISTRY: SectionRegistryEntry[] = [
     fields: [{ key: "html", label: "Content", type: "richtext" }],
   },
   {
+    type: "legal_doc",
+    label: "Legal document",
+    description: "Long-form policy page with auto table of contents.",
+    icon: "doc",
+    nestable: false,
+    acceptsChildren: false,
+    defaults: {
+      eyebrow: "Legal",
+      title: "Policy title",
+      lastUpdated: "",
+      notice: "",
+      showToc: true,
+      html: "<h2>First section</h2><p>Write the policy in plain English. Every <code>h2</code> becomes a table-of-contents entry.</p>",
+    },
+    fields: [
+      { key: "eyebrow", label: "Eyebrow", type: "text" },
+      { key: "title", label: "Document title", type: "text" },
+      {
+        key: "lastUpdated",
+        label: "Last updated",
+        type: "text",
+        placeholder: "12 March 2026",
+        help: "Shown under the title. Update it whenever the policy changes.",
+      },
+      {
+        key: "notice",
+        label: "Notice banner",
+        type: "textarea",
+        help: "Optional highlighted callout above the document. Leave empty to hide it.",
+      },
+      { key: "showToc", label: "Show table of contents", type: "toggle" },
+      {
+        key: "html",
+        // Plain HTML textarea, not `richtext`: a multi-thousand-character policy
+        // re-sanitized on every keystroke thrashes the editor.
+        type: "html",
+        label: "Document body (HTML)",
+        help: "Use h2 for top-level sections — they build the table of contents.",
+      },
+    ],
+  },
+  {
     type: "overlay_stage",
     label: "Overlay stage",
     description: "Full-bleed stage with absolutely positioned children.",

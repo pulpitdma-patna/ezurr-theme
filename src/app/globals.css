@@ -723,6 +723,291 @@ input:focus {
   }
 }
 
+/* Long-form documents — CMS rich_text and legal_doc bodies.
+   Tailwind preflight flattens every heading and list, and the typography plugin
+   is deliberately not installed, so admin-authored HTML needs its own scale. */
+.ez-measure {
+  max-width: 47.5rem;
+  margin-inline: auto;
+}
+
+.ez-prose {
+  color: var(--ez-soft-ink);
+  font-size: 1rem;
+  line-height: 1.75;
+  letter-spacing: -0.006em;
+}
+
+.ez-prose > :first-child {
+  margin-top: 0;
+}
+
+.ez-prose > :last-child {
+  margin-bottom: 0;
+}
+
+.ez-prose h2 {
+  margin: 2.75rem 0 0.7rem;
+  font-size: clamp(1.3rem, 2.6vw, 1.625rem);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.032em;
+  color: var(--ez-ink);
+  /* Sticky header clearance for in-page anchors from the table of contents. */
+  scroll-margin-top: 6rem;
+}
+
+.ez-prose h3 {
+  margin: 1.85rem 0 0.45rem;
+  font-size: clamp(1.05rem, 2vw, 1.1875rem);
+  font-weight: 600;
+  line-height: 1.32;
+  letter-spacing: -0.022em;
+  color: var(--ez-ink);
+  scroll-margin-top: 6rem;
+}
+
+.ez-prose h4 {
+  margin: 1.5rem 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ez-ink);
+}
+
+.ez-prose p {
+  margin: 0 0 1.1rem;
+}
+
+.ez-prose ul,
+.ez-prose ol {
+  margin: 0 0 1.15rem;
+  padding-left: 1.35rem;
+}
+
+.ez-prose ul {
+  list-style: disc;
+}
+
+.ez-prose ol {
+  list-style: decimal;
+}
+
+.ez-prose li {
+  margin-bottom: 0.4rem;
+}
+
+.ez-prose li::marker {
+  color: var(--ez-subtle);
+}
+
+.ez-prose li > ul,
+.ez-prose li > ol {
+  margin: 0.4rem 0 0.15rem;
+}
+
+.ez-prose a {
+  color: var(--ez-accent-text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.ez-prose a:hover {
+  color: var(--ez-accent-hover);
+}
+
+.ez-prose strong,
+.ez-prose b {
+  font-weight: 600;
+  color: var(--ez-ink);
+}
+
+.ez-prose blockquote {
+  margin: 1.5rem 0;
+  border-left: 2px solid var(--ez-border);
+  padding: 0.15rem 0 0.15rem 1.1rem;
+  color: var(--ez-muted);
+}
+
+.ez-prose hr {
+  margin: 2.25rem 0;
+  border: 0;
+  border-top: 1px solid var(--ez-border);
+}
+
+.ez-prose code {
+  font-family: var(--font-space-mono), "Space Mono", ui-monospace, monospace;
+  font-size: 0.875em;
+  background: var(--ez-surface);
+  border-radius: 0.3rem;
+  padding: 0.12em 0.4em;
+}
+
+.ez-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.85rem;
+}
+
+.ez-prose table {
+  width: 100%;
+  margin: 0 0 1.25rem;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.ez-prose th,
+.ez-prose td {
+  border-bottom: 1px solid var(--ez-border);
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.ez-prose th {
+  font-weight: 600;
+  color: var(--ez-ink);
+}
+
+/* Legal / policy document shell (CMS legal_doc section) */
+.ez-legal {
+  padding-top: 2.5rem;
+  padding-bottom: 3.5rem;
+}
+
+@media (min-width: 768px) {
+  .ez-legal {
+    padding-top: 3.5rem;
+    padding-bottom: 5rem;
+  }
+}
+
+.ez-legal-inner {
+  max-width: 64rem;
+  margin-inline: auto;
+}
+
+.ez-legal-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  border-bottom: 1px solid var(--ez-border);
+  padding-bottom: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.ez-legal-title {
+  margin: 0;
+  font-size: clamp(2rem, 4.5vw, 3rem);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  color: var(--ez-ink);
+}
+
+.ez-legal-chip {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--ez-border);
+  border-radius: 999px;
+  background: #fff;
+  padding: 0.28rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--ez-muted);
+}
+
+.ez-legal-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid #f0dcae;
+  border-radius: 1rem;
+  background: #fdf8ee;
+  padding: 0.95rem 1.05rem;
+  color: #6b4e10;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+@media (min-width: 640px) {
+  .ez-legal-notice {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.85rem;
+  }
+}
+
+.ez-legal-notice-tag {
+  flex-shrink: 0;
+  /* Stacked (mobile) the tag must hug its text, not stretch the flex cross-axis. */
+  align-self: flex-start;
+  border-radius: 999px;
+  background: #f3e2bb;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6b4e10;
+}
+
+.ez-legal-notice p {
+  margin: 0;
+}
+
+.ez-legal-body {
+  display: grid;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  .ez-legal-body.has-toc {
+    grid-template-columns: 15rem minmax(0, 1fr);
+    gap: 3.5rem;
+  }
+}
+
+.ez-legal-toc {
+  border: 1px solid var(--ez-border);
+  border-radius: 1rem;
+  background: var(--ez-surface);
+  padding: 1rem 1.1rem;
+}
+
+@media (min-width: 1024px) {
+  .ez-legal-toc {
+    position: sticky;
+    top: 5.5rem;
+    align-self: start;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0.15rem 0;
+  }
+}
+
+.ez-legal-toc ol {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+}
+
+.ez-legal-toc a {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ez-muted);
+}
+
+.ez-legal-toc a:hover {
+  color: var(--ez-ink);
+}
+
 /* Admin packing slip — hide shell chrome, print order content */
 @media print {
   .admin-chrome,

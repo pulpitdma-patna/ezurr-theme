@@ -10,6 +10,7 @@ export type SectionType =
   | "row"
   | "column"
   | "rich_text"
+  | "legal_doc"
   | "overlay_stage"
   | "custom_html"
   | "widget";
