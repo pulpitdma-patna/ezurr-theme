@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Navigation } from "@/lib/navigation";
 
 /**
@@ -24,6 +25,14 @@ export function MobileNavDrawer({
   const [expanded, setExpanded] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const restoreTo = useRef<HTMLElement | null>(null);
+  // Portalled to <body>. The header carries backdrop-blur, and backdrop-filter
+  // establishes a containing block for fixed-position descendants — so
+  // `fixed inset-0` rendered inside the header resolved against the 56px bar
+  // instead of the viewport, clipping the whole drawer out of view on every
+  // screen below lg.
+  //
+  // No mounted-state dance is needed: `open` is false on the server and on the
+  // first client render, so this subtree never participates in hydration.
 
   useEffect(() => {
     if (!open) {
@@ -50,9 +59,9 @@ export function MobileNavDrawer({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[65] bg-black/30 lg:hidden"
       onMouseDown={(e) => {
@@ -175,6 +184,7 @@ export function MobileNavDrawer({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

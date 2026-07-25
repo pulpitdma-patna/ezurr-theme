@@ -25,6 +25,18 @@ export function AdminDrawer({
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // Every consumer passes an unstable onClose — inline arrows, and plain
+  // `function closeDrawer()` declarations, which are equally new each render.
+  // Reading it through a ref keeps the effect below keyed on `open` alone.
+  // With onClose in the dependency array, one keystroke re-rendered the form,
+  // gave onClose a new identity, tore the effect down (restoring focus) and
+  // re-ran it (focusing the first button) — so every drawer form in the admin
+  // accepted exactly one character.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement as HTMLElement | null;
@@ -37,7 +49,7 @@ export function AdminDrawer({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !panel) return;
@@ -64,7 +76,7 @@ export function AdminDrawer({
       document.body.style.overflow = prevOverflow;
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

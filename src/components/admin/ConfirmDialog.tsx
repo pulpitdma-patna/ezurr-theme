@@ -28,6 +28,15 @@ export function ConfirmDialog({
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // Same defect as AdminDrawer had: all 16 call sites pass inline arrows, so
+  // depending on the callbacks re-ran the focus effect on every parent render
+  // and stole focus back to the first button. Harmless while this dialog holds
+  // no text input — it stops being harmless the moment one is added.
+  const handlersRef = useRef({ onCancel, onConfirm });
+  useEffect(() => {
+    handlersRef.current = { onCancel, onConfirm };
+  });
+
   useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement as HTMLElement | null;
@@ -44,14 +53,14 @@ export function ConfirmDialog({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onCancel();
+        handlersRef.current.onCancel();
         return;
       }
       if (event.key === "Enter" && !danger) {
         const tag = (event.target as HTMLElement)?.tagName;
         if (tag === "BUTTON" || tag === "A" || tag === "TEXTAREA") return;
         event.preventDefault();
-        onConfirm();
+        handlersRef.current.onConfirm();
         return;
       }
       if (event.key !== "Tab" || !panel) return;
@@ -76,7 +85,7 @@ export function ConfirmDialog({
       document.removeEventListener("keydown", onKeyDown);
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onCancel, onConfirm, danger]);
+  }, [open, danger]);
 
   if (!open) return null;
 

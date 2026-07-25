@@ -618,10 +618,15 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   // In cart mode there is no single ?key product, so derive the fulfillment from
   // the cart (which only ever holds in-stock items) rather than defaulting to
   // "preorder" — otherwise an in-stock cart would show pre-order payment framing.
+  // Default to "physical", never "preorder". The old fallback meant a generic
+  // /checkout — including the frame before the cart hydrates — inherited
+  // pre-order framing: a "Pre-order checkout" document title, a release date on
+  // the review step, and a "Place pre-order — ₹0 today" CTA on an ordinary COD
+  // order. Pre-order framing must be earned by a real pre-order line.
   const fulfillmentType = (
     isCart
       ? cart.items[0]?.fulfillmentType ?? "physical"
-      : checkoutProduct?.fulfillment_type ?? "preorder"
+      : checkoutProduct?.fulfillment_type ?? "physical"
   ) as "digital" | "preorder" | "physical";
   const isPreorder = fulfillmentType === "preorder";
   const productCategory = isCart ? "games" : checkoutProduct?.category_slug ?? "preorders";
@@ -919,6 +924,17 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   const shipLine = [form.address, form.city, form.state, form.pincode]
     .filter(Boolean)
     .join(", ");
+
+  // What the review step names as the item. Reads the real order lines, so a
+  // multi-line cart is spelled out rather than collapsed to one product name.
+  const reviewItemLabel =
+    orderLineItems.length === 0
+      ? productTitle
+      : orderLineItems.length === 1
+        ? `${orderLineItems[0].title}${orderLineItems[0].qty > 1 ? ` × ${orderLineItems[0].qty}` : ""}`
+        : orderLineItems
+            .map((i) => `${i.title}${i.qty > 1 ? ` × ${i.qty}` : ""}`)
+            .join(", ");
 
   const goto = (s: number) => {
     setStep(s);
@@ -1965,8 +1981,13 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
 
                     <dl className="overflow-hidden rounded-[14px] border border-black/[0.08] bg-[#FAFAFB]">
                       {[
-                        ["Item", productTitle],
-                        ["Releases", releaseLabel],
+                        // Bind to what is actually being bought. This used to
+                        // read `productTitle`, the single-product fallback, so a
+                        // cart order announced "Ezurr Play Console" on the last
+                        // screen before the customer committed.
+                        ["Item", reviewItemLabel],
+                        // Only a genuine pre-order has a release date.
+                        ...(isPreorder ? [["Releases", releaseLabel] as const] : []),
                         ["Ships to", shipLine || "—"],
                         ["Mobile", formatMobileDisplay(form.mobile)],
                         [
@@ -2002,7 +2023,16 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                         disabled={policy.blocked || placing}
                         className="ez-checkout-btn-dark flex-1 rounded-full border-none py-4 text-[15px] font-semibold disabled:opacity-40"
                       >
-                        Place pre-order — {dueTodayNum > 0 ? dueToday : "₹0 today"}
+                        {/* Was a hardcoded "Place pre-order — ₹0 today", which
+                            told a COD customer they owed nothing at the exact
+                            moment they were committing to pay on delivery.
+                            Derive the verb and the amount from the real order. */}
+                        {placeVerb} —{" "}
+                        {dueTodayNum > 0
+                          ? `${dueToday} today`
+                          : isPrepaid
+                            ? lockedTotal
+                            : `${lockedTotal} on delivery`}
                       </button>
                       <button
                         type="button"

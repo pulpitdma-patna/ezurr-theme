@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import type { Navigation } from "@/lib/navigation";
@@ -42,6 +43,10 @@ export function SearchPalette({ onClose, nav }: { onClose: () => void; nav: Navi
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  // Portalled for the same reason as the mobile drawer: the header's
+  // backdrop-blur makes it a containing block, so `fixed inset-0` here was
+  // sized to the header bar rather than the viewport. This component is only
+  // mounted once the palette is opened, so it never runs on the server.
   // Focus is restored here on close so keyboard users land back where they were.
   const restoreTo = useRef<HTMLElement | null>(null);
 
@@ -192,7 +197,9 @@ export function SearchPalette({ onClose, nav }: { onClose: () => void; nav: Navi
 
   let lastGroup = "";
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[70] flex items-start justify-center bg-black/25 px-4 pt-[12vh] backdrop-blur-[2px]"
       onMouseDown={(e) => {
@@ -266,6 +273,7 @@ export function SearchPalette({ onClose, nav }: { onClose: () => void; nav: Navi
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
