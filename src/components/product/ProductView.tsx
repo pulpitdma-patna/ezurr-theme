@@ -11,6 +11,7 @@ import { RelatedProductsSection } from "@/components/product/RelatedProductsSect
 import { ProductDetails } from "@/components/product/ProductDetails";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { formatReleaseLabel, useLiveThemeSettings } from "@/hooks/useLiveThemeSettings";
+import { useApiSettings } from "@/hooks/useApiSettings";
 import type { ResolvedProduct } from "@/lib/productResolve";
 import { useCart } from "@/lib/cart";
 import { api } from "@/lib/apiClient";
@@ -75,6 +76,9 @@ export function ProductView({
   initialProduct: ResolvedProduct | null;
 }) {
   const settings = useLiveThemeSettings();
+  // Tax copy must follow the store's actual setting, never a hardcoded claim.
+  const { settings: storeSettings } = useApiSettings();
+  const taxInclusive = storeSettings.taxInclusive;
   const releaseLabel = formatReleaseLabel(settings.releaseDate);
   const [added, setAdded] = useState(false);
   const cart = useCart();
@@ -282,7 +286,15 @@ export function ProductView({
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-1.5 text-[11px] text-[#86868B]">Inclusive of all taxes</p>
+                {/* Driven by the store's tax setting, not hardcoded. This read
+                    "Inclusive of all taxes" while checkout added 18% GST on
+                    top — two screens in one funnel making opposite tax claims,
+                    which in India is a Legal Metrology exposure, not just a UX
+                    slip. Prices are inclusive by default now, so the claim is
+                    true; if the setting is ever flipped, the copy follows. */}
+                <p className="mt-1.5 text-[11px] text-[#86868B]">
+                  {taxInclusive ? "Inclusive of all taxes" : "Excludes GST · added at checkout"}
+                </p>
               </div>
             </div>
 

@@ -307,6 +307,8 @@ export type AdminSettings = {
   prepaidDiscount: number;
   codEnabled: boolean;
   codLimit: number;
+  /** Catalogue prices already contain GST (India: displayed = payable). */
+  taxInclusive: boolean;
   /** Flat ₹ collected online to confirm a COD order (0 = none). */
   codAdvance: number;
   codAdvanceLabel: string;
@@ -1165,6 +1167,7 @@ export const defaultAdminSettings: AdminSettings = {
   prepaidDiscount: theme.prepaidDiscount,
   codEnabled: true,
   codLimit: 10000,
+  taxInclusive: true,
   codAdvance: 0,
   codAdvanceLabel: "",
   codAdvanceUnlocksCap: false,

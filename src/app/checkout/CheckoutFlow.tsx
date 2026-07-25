@@ -231,6 +231,9 @@ function OrderSummaryRail({
   isPreorder,
   pct,
   discount,
+  couponDiscount,
+  prepaidDiscount,
+  couponCode,
   lockedTotal,
   releaseLabel,
   shippingLabel,
@@ -247,6 +250,10 @@ function OrderSummaryRail({
   isPreorder: boolean;
   pct: number;
   discount: number;
+  /** Split so each row is labelled truthfully; these sum to `discount`. */
+  couponDiscount: number;
+  prepaidDiscount: number;
+  couponCode: string | null;
   lockedTotal: string;
   releaseLabel: string;
   shippingLabel: string;
@@ -298,10 +305,23 @@ function OrderSummaryRail({
             <span className="text-[#86868B]">Subtotal</span>
             <span className="ez-mono shrink-0 text-[#E8E8ED]">{fmt(subtotal)}</span>
           </div>
-          {isPrepaid && discount > 0 ? (
+          {/* Two rows, each labelled for the discount that actually applied.
+              This was one row gated on `isPrepaid`, so a COD order with a
+              coupon showed no discount at all and the column visibly failed to
+              add up — and on prepaid, the coupon's value was printed under a
+              "Prepaid (10%)" label. */}
+          {couponDiscount > 0 ? (
+            <div className="flex justify-between gap-3">
+              <span className="text-[#86868B]">
+                Coupon{couponCode ? ` (${couponCode})` : ""}
+              </span>
+              <span className="ez-mono shrink-0 text-[#8FD9A8]">−{fmt(couponDiscount)}</span>
+            </div>
+          ) : null}
+          {prepaidDiscount > 0 ? (
             <div className="flex justify-between gap-3">
               <span className="text-[#86868B]">Prepaid ({pct}%)</span>
-              <span className="ez-mono shrink-0 text-[#8FD9A8]">−{fmt(discount)}</span>
+              <span className="ez-mono shrink-0 text-[#8FD9A8]">−{fmt(prepaidDiscount)}</span>
             </div>
           ) : null}
           {taxAmount > 0 ? (
@@ -422,6 +442,9 @@ function MobileSummarySheet({
   isPreorder,
   pct,
   discount,
+  couponDiscount,
+  prepaidDiscount,
+  couponCode,
   lockedTotal,
   releaseLabel,
   shippingLabel,
@@ -439,6 +462,10 @@ function MobileSummarySheet({
   isPreorder: boolean;
   pct: number;
   discount: number;
+  /** Split so each row is labelled truthfully; these sum to `discount`. */
+  couponDiscount: number;
+  prepaidDiscount: number;
+  couponCode: string | null;
   lockedTotal: string;
   releaseLabel: string;
   shippingLabel: string;
@@ -503,10 +530,18 @@ function MobileSummarySheet({
             <span className="text-[#86868B]">Subtotal</span>
             <span className="ez-mono">{fmt(subtotal)}</span>
           </div>
-          {isPrepaid && discount > 0 ? (
+          {couponDiscount > 0 ? (
+            <div className="flex justify-between">
+              <span className="text-[#86868B]">
+                Coupon{couponCode ? ` (${couponCode})` : ""}
+              </span>
+              <span className="ez-mono text-[#8FD9A8]">−{fmt(couponDiscount)}</span>
+            </div>
+          ) : null}
+          {prepaidDiscount > 0 ? (
             <div className="flex justify-between">
               <span className="text-[#86868B]">Prepaid ({pct}%)</span>
-              <span className="ez-mono text-[#8FD9A8]">−{fmt(discount)}</span>
+              <span className="ez-mono text-[#8FD9A8]">−{fmt(prepaidDiscount)}</span>
             </div>
           ) : null}
           {taxAmount > 0 ? (
@@ -755,21 +790,55 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
 
   const pct = policy?.prepaidDiscountPct ?? 0;
   const isPrepaid = method === "prepaid";
-  const discount = subtotalBase * (pct / 100);
-  const taxAmount = policy?.taxExempt
-    ? 0
-    : Math.round(subtotalBase * ((policy?.taxRatePct ?? 0) / 100));
-  const taxAdd =
-    policy?.taxExempt || policy?.taxInclusiveMessage ? 0 : taxAmount;
-  const prepaidTotalNum = subtotalBase - discount + shippingAmount + taxAdd;
-  const codTotalNum = subtotalBase + shippingAmount + taxAdd;
-  const prepaidTotal = fmt(prepaidTotalNum);
-  // Prefer the server-computed quote (authoritative total incl. GST + coupon).
+
+  // Offline fallback only — used when the API is unavailable. Never mix these
+  // into a live figure.
+  //
+  // The previous version decided tax-inclusivity from `policy.taxInclusiveMessage`
+  // being a non-empty STRING. The store's message reads "Prices exclude GST
+  // unless noted.", so it was read as "prices include tax" and 18% GST vanished
+  // from every client-computed total. Presentation copy must never drive
+  // arithmetic — inclusivity is now a real boolean on the policy.
+  const taxInclusive = policy?.taxInclusive ?? true;
+  const rate = policy?.taxExempt ? 0 : (policy?.taxRatePct ?? 0);
+  const discount = Math.floor(subtotalBase * (pct / 100)); // server floors too
+  const fallbackGross = (d: number) => subtotalBase - d + shippingAmount;
+  const fallbackTax = (gross: number) =>
+    rate <= 0
+      ? 0
+      : taxInclusive
+        ? gross - Math.round(gross / (1 + rate / 100))
+        : Math.round(gross * (rate / 100));
+  const fallbackTotal = (d: number) => {
+    const gross = fallbackGross(d);
+    return taxInclusive ? gross : gross + fallbackTax(gross);
+  };
+
+  // Prefer the server quote — it is the only figure that accounts for GST, the
+  // coupon, and which discount actually won.
   const useQuote = apiOn && quote != null;
+  // Per-method totals for the payment tiles. The tiles need a counterfactual
+  // (what the OTHER method costs), which is why they used to recompute locally
+  // and advertise amounts the customer would never pay.
+  const methodQuotes = useQuote ? quote.methods : undefined;
+  const prepaidTotalNum = methodQuotes?.prepaid?.total ?? fallbackTotal(discount);
+  const codTotalNum = methodQuotes?.cod?.total ?? fallbackTotal(0);
+  const prepaidTotal = fmt(prepaidTotalNum);
   const effTotalNum = useQuote ? quote.total : isPrepaid ? prepaidTotalNum : codTotalNum;
   const effSubtotal = useQuote ? quote.subtotal : subtotalBase;
   const effDiscount = useQuote ? quote.discount : discount;
-  const effTaxAmount = useQuote ? quote.tax : taxAmount;
+  const effTaxAmount = useQuote ? quote.tax : fallbackTax(fallbackGross(isPrepaid ? discount : 0));
+  // Split the discount so each row can be labelled truthfully. The server picks
+  // the larger of coupon vs prepaid and zeroes the loser, so these always sum
+  // to `effDiscount` — previously a coupon's value was rendered under a
+  // "Prepaid (10%)" label with the prepaid percentage beside it.
+  const effCouponDiscount = useQuote ? (quote.couponDiscount ?? 0) : 0;
+  const effPrepaidDiscount = useQuote
+    ? (quote.prepaidDiscount ?? Math.max(0, quote.discount - (quote.couponDiscount ?? 0)))
+    : isPrepaid
+      ? discount
+      : 0;
+  const effCouponCode = useQuote ? (quote.couponCode ?? null) : (appliedCoupon?.code ?? null);
   const lockedTotal = fmt(effTotalNum);
   const codAvailable = policy?.methods.includes("cod") ?? false;
   const showField = (key: CheckoutFieldKey) => !policy?.hiddenFields.includes(key);
@@ -1786,7 +1855,15 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                                 {
                                   id: "prepaid" as const,
                                   title: "Prepaid · UPI",
-                                  sub: `Save ${pct}% · ${prepaidTotal}`,
+                                  // Both figures now come from the server's
+                                  // per-method quote. The saving is stated as
+                                  // the real rupee difference rather than the
+                                  // prepaid percentage, which was wrong
+                                  // whenever a coupon won instead.
+                                  sub:
+                                    codTotalNum > prepaidTotalNum
+                                      ? `Save ${fmt(codTotalNum - prepaidTotalNum)} · ${prepaidTotal}`
+                                      : `Pay ${prepaidTotal} now`,
                                 },
                               ]
                             : []),
@@ -1798,9 +1875,15 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                                   // With an advance configured, be explicit that
                                   // part is paid now and the rest at the door —
                                   // never imply the whole amount is on delivery.
+                                  // Split amounts come from the server's cod
+                                  // quote (dueNow / balanceDue) rather than
+                                  // being derived here.
                                   sub:
                                     codAdvanceNum > 0
-                                      ? `${fmt(codAdvanceNum)} now · ${fmt(Math.max(0, codTotalNum - codAdvanceNum))} at door`
+                                      ? `${fmt(methodQuotes?.cod?.dueNow ?? codAdvanceNum)} now · ${fmt(
+                                          methodQuotes?.cod?.balanceDue ??
+                                            Math.max(0, codTotalNum - codAdvanceNum),
+                                        )} at door`
                                       : `Pay ${fmt(codTotalNum)} at door${
                                           policy.codAdvanceUnlocksCap
                                             ? ""
@@ -2066,6 +2149,9 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
               isPreorder={isPreorder}
               pct={pct}
               discount={effDiscount}
+              couponDiscount={effCouponDiscount}
+              prepaidDiscount={effPrepaidDiscount}
+              couponCode={effCouponCode}
               lockedTotal={lockedTotal}
               releaseLabel={releaseLabel}
               shippingLabel={shippingLabel}
@@ -2102,6 +2188,9 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
           isPreorder={isPreorder}
           pct={pct}
           discount={effDiscount}
+          couponDiscount={effCouponDiscount}
+          prepaidDiscount={effPrepaidDiscount}
+          couponCode={effCouponCode}
           lockedTotal={lockedTotal}
           releaseLabel={releaseLabel}
           shippingLabel={shippingLabel}

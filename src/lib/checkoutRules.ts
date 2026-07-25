@@ -37,6 +37,7 @@ export type CheckoutActionType =
   | "set_deposit_pct"
   | "set_cod_advance"
   | "set_reservation_amount"
+  | "set_tax_inclusive"
   | "enable_pay_later"
   | "split_payment";
 
@@ -106,6 +107,13 @@ export type CheckoutPolicy = {
   preferredGateway: CheckoutGateway | null;
   taxRatePct: number;
   taxExempt: boolean;
+  /**
+   * Whether catalogue prices already contain GST. A real boolean — the
+   * storefront previously inferred this from `taxInclusiveMessage` being a
+   * non-empty string, so a message saying prices EXCLUDE tax was read as
+   * "inclusive" and silently dropped 18% from every client-side total.
+   */
+  taxInclusive: boolean;
   taxInclusiveMessage: string | null;
   carriers: CheckoutCarrierOption[];
   hiddenCarriers: CheckoutCarrierId[];
@@ -339,6 +347,7 @@ export function baseCheckoutPolicy(settings: AdminSettings): CheckoutPolicy {
     preferredGateway: "upi",
     taxRatePct: 18,
     taxExempt: false,
+    taxInclusive: true,
     taxInclusiveMessage: null,
     carriers: structuredClone(DEMO_CARRIERS),
     hiddenCarriers: [],
@@ -596,6 +605,10 @@ export function resolveCheckoutPolicy(
             codAdvanceLabel: label?.trim() || null,
             codAdvanceUnlocksCap: trimmed.endsWith("!"),
           };
+          break;
+        }
+        case "set_tax_inclusive": {
+          policy = { ...policy, taxInclusive: action.value !== "false" };
           break;
         }
         case "set_reservation_amount": {

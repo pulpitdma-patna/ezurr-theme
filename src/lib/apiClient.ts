@@ -526,6 +526,33 @@ export const api = {
       balanceDue?: number;
       /** Shopper-facing explanation of the advance, e.g. "Pay ₹100 now…". */
       depositLabel?: string | null;
+      /** Net of GST. Below `subtotal` when catalogue prices include tax. */
+      taxableValue?: number | null;
+      /** Discount from the prepaid rule; sums with couponDiscount to discount. */
+      prepaidDiscount?: number;
+      /** Whether catalogue prices already contain GST. */
+      taxInclusive?: boolean;
+      taxRatePct?: number;
+      /**
+       * Totals for every allowed payment method, so the payment tiles can show
+       * a real counterfactual instead of recomputing money client-side.
+       */
+      methods?: Record<
+        string,
+        {
+          subtotal: number;
+          discount: number;
+          couponDiscount: number;
+          prepaidDiscount: number;
+          shipping: number;
+          taxableValue: number | null;
+          tax: number;
+          total: number;
+          deposit: number | null;
+          dueNow: number;
+          balanceDue: number;
+        }
+      >;
       currency: string;
     }>("/checkout/quote", { method: "POST", body: JSON.stringify(payload) }),
   // Fire-and-forget abandoned-cart capture (204). Server persists only when a

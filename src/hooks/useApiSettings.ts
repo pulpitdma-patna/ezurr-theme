@@ -31,6 +31,7 @@ function apiToSettings(raw: Record<string, unknown>): AdminSettings {
     showOffer: raw.showOffer !== false,
     gaMeasurementId: String(raw.gaMeasurementId ?? ""),
     metaPixelId: String(raw.metaPixelId ?? ""),
+    taxInclusive: raw.taxInclusive !== false,
     codAdvance: Number(raw.codAdvance ?? 0),
     codAdvanceLabel: String(raw.codAdvanceLabel ?? ""),
     codAdvanceUnlocksCap: raw.codAdvanceUnlocksCap === true,
