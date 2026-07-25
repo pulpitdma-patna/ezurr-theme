@@ -27,6 +27,22 @@ export function setApiToken(token: string | null) {
   else window.localStorage.removeItem(TOKEN_KEY);
 }
 
+/**
+ * Best-effort server-side token revocation, fired on sign-out.
+ *
+ * `POST /auth/logout` has always existed and correctly revokes, but nothing
+ * called it — signing out only cleared localStorage, leaving the token valid
+ * for its full TTL. `keepalive` lets the request outlive the navigation that
+ * normally follows sign-out; failures are swallowed because the local session
+ * must clear regardless of whether the network call lands.
+ */
+export function revokeApiToken(): void {
+  if (!isApiEnabled() || !getApiToken()) return;
+  void apiFetch("/auth/logout", { method: "POST", keepalive: true }).catch(() => {
+    /* best effort — local sign-out proceeds either way */
+  });
+}
+
 export class ApiError extends Error {
   status: number;
   body: unknown;
@@ -132,6 +148,8 @@ export type ApiCategory = {
   parentId?: string | null;
   parentKey?: string | null;
   active: boolean;
+  /** Admin list only — the public /categories feed does not carry it. */
+  productCount?: number;
 };
 
 export type ApiBrand = {
@@ -366,7 +384,11 @@ export interface ApiCustomer {
   name: string;
   email: string | null;
   mobile: string | null;
+  /** Derived server-side: default saved address, else the latest order's shipping city. */
+  city: string | null;
   tags: string[];
+  banned: boolean;
+  notes: string | null;
   whatsapp_opt_in: boolean;
   orders_count: number;
   lifetime_value: number;
@@ -645,6 +667,12 @@ export const api = {
     return apiFetch<ApiPaginated<ApiCustomer>>(`/admin/customers${suffix}`);
   },
   adminCustomer: (id: number) => apiFetch<ApiCustomerDetail>(`/admin/customers/${id}`),
+  /** Partial: omitted keys are left untouched server-side. Needs customers.write. */
+  updateCustomer: (id: number, payload: { tags?: string[]; notes?: string | null; banned?: boolean }) =>
+    apiFetch<ApiCustomerDetail>(`/admin/customers/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 
   // ---- Admin: activity + reporting ----
   adminActivity: (params?: { q?: string; entityType?: string; page?: number }) => {

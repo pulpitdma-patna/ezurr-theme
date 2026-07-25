@@ -5,6 +5,11 @@ import type { CatalogProduct } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Pre-orders",
+  description:
+    "Upcoming game and console releases at a locked price — reserve now and pay the balance when they ship.",
+  // Without this the route inherits the root layout's canonical ("/") and tells
+  // search engines this category duplicates the homepage.
+  alternates: { canonical: "/preorders" },
 };
 
 export default function PreordersPage() {

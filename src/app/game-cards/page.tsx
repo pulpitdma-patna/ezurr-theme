@@ -5,6 +5,11 @@ import type { GameCardProduct } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Game cards",
+  description:
+    "PlayStation, Xbox, Nintendo, Steam and Roblox digital gift cards — codes delivered instantly.",
+  // Without this the route inherits the root layout's canonical ("/") and tells
+  // search engines this category duplicates the homepage.
+  alternates: { canonical: "/game-cards" },
 };
 
 export default function GameCardsPage() {

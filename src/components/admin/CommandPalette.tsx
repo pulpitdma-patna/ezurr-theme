@@ -19,10 +19,13 @@ const NAV_ITEMS: PaletteItem[] = [
   { id: "nav-products", label: "Products", group: "Pages", href: "/admin/products" },
   { id: "nav-categories", label: "Categories", group: "Pages", href: "/admin/categories" },
   { id: "nav-brands", label: "Brands", group: "Pages", href: "/admin/brands" },
-  { id: "nav-inventory", label: "Inventory", group: "Pages", href: "/admin/inventory" },
+  // Inventory and pre-orders were folded into Products. Their old routes still
+  // redirect for bookmarks' sake, but the palette links straight to the filtered
+  // destination — searching "inventory" should land you there, not bounce.
+  { id: "nav-inventory", label: "Inventory (in Products)", group: "Pages", href: "/admin/products?stock=low" },
   { id: "nav-media", label: "Media library", group: "Pages", href: "/admin/media" },
   { id: "nav-orders", label: "Orders", group: "Pages", href: "/admin/orders" },
-  { id: "nav-preorders", label: "Pre-orders", group: "Pages", href: "/admin/preorders" },
+  { id: "nav-preorders", label: "Pre-orders (in Products)", group: "Pages", href: "/admin/products?fulfillment=preorder" },
   { id: "nav-digital", label: "Digital codes", group: "Pages", href: "/admin/digital-codes" },
   { id: "nav-customers", label: "Customers", group: "Pages", href: "/admin/customers" },
   { id: "nav-coupons", label: "Coupons", group: "Pages", href: "/admin/coupons" },

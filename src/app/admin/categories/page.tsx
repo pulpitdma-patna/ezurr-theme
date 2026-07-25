@@ -26,6 +26,8 @@ type CategoryRow = AdminCategoryRecord & {
   image?: string | null;
   parentId?: string | null;
   parentKey?: string | null;
+  // Counted server-side in API mode; derived from the mock catalog otherwise.
+  productCount?: number;
 };
 
 export default function AdminCategoriesPage() {
@@ -63,6 +65,7 @@ export default function AdminCategoriesPage() {
             parentId: c.parentId ?? null,
             parentKey: c.parentKey ?? null,
             active: c.active,
+            productCount: c.productCount ?? 0,
           })),
         );
         setListError(null);
@@ -81,7 +84,11 @@ export default function AdminCategoriesPage() {
     return categorySource
       .map((cat) => ({
         ...cat,
-        productCount: productSource.filter((p) => p.category === cat.key).length,
+        // In API mode the count arrives with the row — the mock catalog isn't
+        // loaded there, and filtering it locally is what made every row read 0.
+        productCount: apiOn
+          ? (cat.productCount ?? 0)
+          : productSource.filter((p) => p.category === cat.key).length,
       }))
       .filter((cat) => {
         if (!q) return true;
@@ -92,7 +99,7 @@ export default function AdminCategoriesPage() {
         );
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [categorySource, productSource, query]);
+  }, [apiOn, categorySource, productSource, query]);
 
   function openAdd() {
     setEditing(null);
@@ -148,6 +155,10 @@ export default function AdminCategoriesPage() {
             parentId: saved.parentId ?? null,
             parentKey: saved.parentKey ?? null,
             active: saved.active,
+            // The upsert response is the bare category; only the list endpoint
+            // counts products. Carry the known count so an edit doesn't reset
+            // the column to 0 until the next reload.
+            productCount: editing?.productCount ?? 0,
           };
           setApiCategories((prev) => {
             const idx = prev.findIndex((c) => c.key === record.key);

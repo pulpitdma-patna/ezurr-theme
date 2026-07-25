@@ -1,3 +1,5 @@
+import { revokeApiToken } from "@/lib/apiClient";
+
 export type AuthRole = "admin" | "customer";
 
 export type AuthSession = {
@@ -11,11 +13,18 @@ export type AuthSession = {
 const STORAGE_KEY = "ezurr_auth_session";
 const API_TOKEN_KEY = "ezurr_api_token";
 
-function isApiMode(): boolean {
-  const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
-  return Boolean(raw);
-}
-
+/**
+ * Sign-in is server-verified, always. There is deliberately no local fallback:
+ * an earlier build minted a session — including admin, derived from the phone
+ * number itself — whenever NEXT_PUBLIC_API_URL was unset, so one forgotten env
+ * var silently handed out unauthenticated admin.
+ *
+ * Two guards replace it. next.config.ts refuses to produce a production build
+ * without the API, and the sign-in flow fails closed rather than falling back.
+ * Deliberately no module-level throw here: this file is imported by the site
+ * header, so throwing would take the whole storefront down over an auth
+ * misconfiguration — and it would not run at build time anyway.
+ */
 function getStoredApiToken(): string | null {
   if (typeof window === "undefined") return null;
   try {
@@ -25,11 +34,15 @@ function getStoredApiToken(): string | null {
   }
 }
 
-/** True when a session may grant access (API mode requires a Sanctum token). */
+/**
+ * True when a session may grant access.
+ *
+ * Every session is server-issued, so one without its Sanctum token is not a
+ * session — there is no local-only mode left to fall back to.
+ */
 export function isCredentialedSession(session: AuthSession | null | undefined): session is AuthSession {
   if (!session) return false;
-  if (isApiMode() && !getStoredApiToken()) return false;
-  return true;
+  return Boolean(getStoredApiToken());
 }
 
 export function normalizeMobile(value: string) {
@@ -42,12 +55,6 @@ export function isValidMobile(value: string) {
 
 export function isValidOtp(value: string) {
   return /^\d{6}$/.test(value);
-}
-
-/** Demo rule: mobiles ending in 0000 are admins (e.g. 9876500000). */
-export function isAdminMobile(value: string) {
-  const digits = normalizeMobile(value);
-  return digits.length === 10 && digits.endsWith("0000");
 }
 
 export function isAdminSession(session: AuthSession | null | undefined): session is AuthSession {
@@ -66,28 +73,17 @@ export function maskMobile(value: string) {
   return `+91 ${digits.slice(0, 2)}••• ••${digits.slice(8)}`;
 }
 
-function defaultNameFromMobile(mobile: string) {
-  const digits = normalizeMobile(mobile);
-  return isAdminMobile(digits) ? "Admin" : `Player ${digits.slice(-4)}`;
-}
-
-export function createSession(mobile: string): AuthSession {
-  const digits = normalizeMobile(mobile);
-  const name = defaultNameFromMobile(digits);
-  const role: AuthRole = isAdminMobile(digits) ? "admin" : "customer";
-  return {
-    mobile: digits,
-    name,
-    initials: role === "admin" ? "AD" : "EZ",
-    signedInAt: new Date().toISOString(),
-    role,
-  };
-}
-
+/**
+ * Roles come from the server and nowhere else.
+ *
+ * A stored blob with an unrecognised role is treated as a customer rather than
+ * re-derived locally; `ApiAuthBoot` re-reads the real role from `/auth/me` on
+ * every boot, so the downgrade is momentary and self-correcting — and it errs
+ * towards less access, not more.
+ */
 function withRole(session: AuthSession): AuthSession {
   if (session.role === "admin" || session.role === "customer") return session;
-  const role: AuthRole = isAdminMobile(session.mobile) ? "admin" : "customer";
-  return { ...session, role };
+  return { ...session, role: "customer" };
 }
 
 export function getSession(): AuthSession | null {
@@ -101,8 +97,8 @@ export function getSession(): AuthSession | null {
       return null;
     }
     const session = withRole(parsed);
-    // API mode: local role blob without a token must not grant access
-    if (isApiMode() && !getStoredApiToken()) {
+    // A local role blob without a token must never grant access.
+    if (!getStoredApiToken()) {
       clearSession();
       return null;
     }
@@ -124,10 +120,13 @@ export function setSession(session: AuthSession) {
 
 export function clearSession() {
   if (typeof window === "undefined") return;
+  // Revoke server-side first, while the token is still readable. Sign-out used
+  // to clear localStorage only, so a "signed out" Sanctum token stayed valid
+  // for its full 14-day TTL. Best-effort: local state clears either way.
+  revokeApiToken();
   window.localStorage.removeItem(STORAGE_KEY);
   try {
-    // Clear Laravel Sanctum token when present
-    window.localStorage.removeItem("ezurr_api_token");
+    window.localStorage.removeItem(API_TOKEN_KEY);
   } catch {
     /* ignore */
   }

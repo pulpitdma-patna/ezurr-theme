@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import {
   clearSession,
-  createSession,
   formatMobileDisplay,
   getSession,
   isAdminSession,
@@ -22,17 +21,35 @@ import { api, isApiEnabled, setApiToken } from "@/lib/apiClient";
 
 const RESEND_SECONDS = 30;
 
+/**
+ * Shown instead of signing anyone in when the API is not configured.
+ *
+ * There used to be a fallback here that accepted any six digits and derived
+ * the role from the phone number, so an unset NEXT_PUBLIC_API_URL silently
+ * granted admin. Sign-in now fails closed.
+ */
+const API_UNAVAILABLE = "Sign-in is unavailable right now — the store API is not reachable.";
+
 function OtpBoxes({
   value,
   onChange,
   disabled,
+  focusSignal,
 }: {
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
+  /** Bumped by the parent to pull focus back to the first cell (failed verify). */
+  focusSignal: number;
 }) {
   const refs = useRef<Array<HTMLInputElement | null>>([]);
   const digits = value.padEnd(6, " ").slice(0, 6).split("");
+
+  useEffect(() => {
+    if (focusSignal <= 0) return;
+    refs.current[0]?.focus();
+    refs.current[0]?.select();
+  }, [focusSignal]);
 
   function commit(next: string) {
     onChange(next.replace(/\D/g, "").slice(0, 6));
@@ -47,15 +64,18 @@ function OtpBoxes({
       return;
     }
 
-    if (cleaned.length > 1) {
+    // A full-length burst is the OS filling the whole code from an SMS
+    // (autocomplete="one-time-code"). Anything shorter is a keystroke landing
+    // in a cell that already holds a digit — the old code read that as a paste
+    // and replaced the entire code, wiping every other cell.
+    if (cleaned.length >= 6) {
       commit(cleaned);
-      const focusIndex = Math.min(cleaned.length, 5);
-      refs.current[focusIndex]?.focus();
+      refs.current[5]?.focus();
       return;
     }
 
     const next = value.padEnd(6, " ").split("");
-    next[index] = cleaned;
+    next[index] = cleaned.slice(-1);
     const joined = next.join("").replace(/ /g, "");
     commit(joined);
     if (index < 5) refs.current[index + 1]?.focus();
@@ -92,6 +112,9 @@ function OtpBoxes({
           onChange={(event) => handleChange(index, event.target.value)}
           onKeyDown={(event) => handleKeyDown(index, event)}
           onPaste={handlePaste}
+          // Selecting on focus means retyping a cell replaces its digit
+          // instead of appending to it.
+          onFocus={(event) => event.target.select()}
           className="auth-otp-cell h-[3.5rem] w-full max-w-[52px] rounded-[10px] border border-[var(--ez-border)] bg-[var(--ez-warm-surface)] text-center ez-mono text-lg font-bold text-[var(--ez-ink)] outline-none transition-[border-color,box-shadow,background-color] duration-200 placeholder:text-[#c5c8d1] hover:border-[#d2d2d7] focus:border-[var(--ez-accent)] focus:bg-white focus:shadow-[0_0_0_3px_oklch(0.55_0.17_var(--ez-h)_/_0.1)] sm:h-[3.75rem] sm:max-w-[58px] sm:text-xl"
         />
       ))}
@@ -216,6 +239,7 @@ function AuthPageContent() {
   const [step, setStep] = useState<"mobile" | "otp">("mobile");
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
+  const [otpFocusSignal, setOtpFocusSignal] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
@@ -263,18 +287,18 @@ function AuthPageContent() {
       setError("Enter a valid 10-digit mobile number.");
       return;
     }
+    if (!isApiEnabled()) {
+      setError(API_UNAVAILABLE);
+      return;
+    }
 
     setError("");
     setLoading(true);
     try {
-      if (isApiEnabled()) {
-        const res = await api.sendOtp(digits);
-        if (res.devCode) {
-          // Local Laravel returns fixed OTP for demos
-          console.info("[ezurr-api] dev OTP", res.devCode);
-        }
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 700));
+      const res = await api.sendOtp(digits);
+      if (res.devCode) {
+        // Local Laravel returns a fixed OTP for demos
+        console.info("[ezurr-api] dev OTP", res.devCode);
       }
       setMobile(digits);
       setOtp("");
@@ -292,30 +316,31 @@ function AuthPageContent() {
       setError("Enter the 6-digit OTP sent to your mobile.");
       return;
     }
+    // Defence in depth: the only path to a session is a server-verified OTP.
+    if (!isApiEnabled()) {
+      setError(API_UNAVAILABLE);
+      return;
+    }
 
     setError("");
     setLoading(true);
     try {
-      if (isApiEnabled()) {
-        const res = await api.verifyOtp(mobile, otp);
-        setApiToken(res.token);
-        const session: AuthSession = {
-          mobile: res.user.mobile,
-          name: res.user.name,
-          initials: res.user.role === "admin" ? "AD" : "EZ",
-          signedInAt: new Date().toISOString(),
-          role: res.user.role === "admin" ? "admin" : "customer",
-        };
-        setSession(session);
-        router.push(destination(session));
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 700));
-        const session = createSession(mobile);
-        setSession(session);
-        router.push(destination(session));
-      }
+      const res = await api.verifyOtp(mobile, otp);
+      setApiToken(res.token);
+      const session: AuthSession = {
+        mobile: res.user.mobile,
+        name: res.user.name,
+        initials: res.user.role === "admin" ? "AD" : "EZ",
+        signedInAt: new Date().toISOString(),
+        // Role is whatever the server says it is, and nothing else.
+        role: res.user.role === "admin" ? "admin" : "customer",
+      };
+      setSession(session);
+      router.push(destination(session));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Invalid OTP.");
+      // Send focus back to the first cell so a retype starts from the left.
+      setOtpFocusSignal((n) => n + 1);
     } finally {
       setLoading(false);
     }
@@ -423,12 +448,6 @@ function AuthPageContent() {
                   <p className="m-0 text-[12px] text-[var(--ez-subtle)]">
                     We&apos;ll only use this for your sign-in code.
                   </p>
-                  <div className="auth-demo-note mt-1 rounded-[10px] border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] px-3.5 py-2.5">
-                    <p className="m-0 text-[11px] leading-relaxed text-[var(--ez-accent-soft-text)]">
-                      <span className="font-semibold text-[var(--ez-ink)]">Demo access:</span> numbers ending in{" "}
-                      <span className="ez-mono font-bold">0000</span> open Admin.
-                    </p>
-                  </div>
                 </div>
 
                 {error && (
@@ -456,6 +475,7 @@ function AuthPageContent() {
                 <OtpBoxes
                   value={otp}
                   disabled={loading}
+                  focusSignal={otpFocusSignal}
                   onChange={(next) => {
                     setOtp(next);
                     setError("");

@@ -4,15 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminNotice } from "@/components/admin/AdminNotice";
-import { api, isApiEnabled, type ApiCustomer } from "@/lib/apiClient";
+import { api, isApiEnabled } from "@/lib/apiClient";
 import { AdminSelect } from "@/components/admin/AdminSelect";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { formatInr, parsePrice, type AdminCustomer, type AdminCustomerStatus } from "@/data/admin";
+import { parsePrice, type AdminCustomer } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 import { formatMobileDisplay } from "@/lib/auth";
+import { mapApiCustomer } from "./customerModel";
 
 const filters = [
   { value: "all", label: "All" },
@@ -21,22 +22,6 @@ const filters = [
   { value: "new", label: "New" },
   { value: "banned", label: "Banned" },
 ];
-
-function mapApiCustomer(c: ApiCustomer): AdminCustomer {
-  const status: AdminCustomerStatus =
-    c.lifetime_value >= 50000 ? "vip" : c.orders_count > 0 ? "active" : "new";
-  return {
-    id: String(c.id),
-    name: c.name,
-    mobile: c.mobile ?? "",
-    orders: c.orders_count,
-    spent: formatInr(c.lifetime_value),
-    lastOrderAt: c.last_order_at ?? "",
-    city: "—",
-    status,
-    tags: c.tags,
-  };
-}
 
 export default function AdminCustomersPage() {
   const router = useRouter();

@@ -970,11 +970,12 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <details className={`${calloutClass} [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary]:text-[#6E6E73]`}>
-              <summary>Demo auth note</summary>
+              <summary>Sign-in note</summary>
               <p className="mt-2 leading-relaxed">
-                Mobiles ending in <span className="ez-mono">0000</span> sign in as admin
-                (e.g. 9876500000). OTP is any 6 digits. Ops data lives in{" "}
-                <span className="ez-mono">ezurr_admin_store</span>.
+                Every sign-in is an OTP verified by the API — there is no local
+                fallback and no phone-number shortcut to admin. Grant admin and
+                staff roles under <span className="ez-mono">Team</span>. Remaining
+                mock ops data lives in <span className="ez-mono">ezurr_admin_store</span>.
               </p>
             </details>
           </SettingsSection>

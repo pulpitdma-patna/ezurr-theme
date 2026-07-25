@@ -96,6 +96,9 @@ export default function AdminCouponsPage() {
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [disableRow, setDisableRow] = useState<CouponRow | null>(null);
+  // Delete is a hard delete on a shared business object, so it gets the same
+  // confirmation step the far milder "Disable" action already has.
+  const [deletePendingRow, setDeletePendingRow] = useState<CouponRow | null>(null);
   const [apiCoupons, setApiCoupons] = useState<CouponRow[]>([]);
   // Keep the full API records so editing can repopulate every field; the row
   // summary drops maxDiscount, per-customer limit, description, scope, etc.
@@ -274,6 +277,14 @@ export default function AdminCouponsPage() {
       .catch(() => toast.push("Could not delete", "warning"));
   }
 
+  const deleteWarning = deletePendingRow
+    ? deletePendingRow.usedCount > 0
+      ? `${deletePendingRow.code} has already been redeemed ${deletePendingRow.usedCount} time${
+          deletePendingRow.usedCount === 1 ? "" : "s"
+        }. Deleting removes the code permanently — disable it instead if you only want to stop new redemptions.`
+      : `${deletePendingRow.code} will be removed permanently. This cannot be undone.`
+    : "";
+
   const columns: DataTableColumn<CouponRow>[] = [
     {
       key: "code",
@@ -348,7 +359,7 @@ export default function AdminCouponsPage() {
             <button
               type="button"
               disabled={!canWrite}
-              onClick={() => deleteRow(row)}
+              onClick={() => setDeletePendingRow(row)}
               className="rounded-md border border-[#F5C2C0] px-2.5 py-1 text-[11px] font-semibold text-[#B42318] disabled:opacity-40"
             >
               Delete
@@ -365,12 +376,6 @@ export default function AdminCouponsPage() {
 
   return (
     <div>
-      {apiOn ? (
-        <AdminNotice tone="demo">
-          Coupons are saved to the server, but they are not yet applied at checkout (coming in the
-          checkout integration).
-        </AdminNotice>
-      ) : null}
       <AdminPageHeader
         title="Coupons"
         description="Create promo codes with validity windows, discount rules, and usage limits."
@@ -599,6 +604,20 @@ export default function AdminCouponsPage() {
           setDisableRow(null);
         }}
         onCancel={() => setDisableRow(null)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deletePendingRow)}
+        title={`Delete ${deletePendingRow?.code ?? "coupon"}?`}
+        description={deleteWarning}
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => {
+          const row = deletePendingRow;
+          setDeletePendingRow(null);
+          if (row) deleteRow(row);
+        }}
+        onCancel={() => setDeletePendingRow(null)}
       />
     </div>
   );
