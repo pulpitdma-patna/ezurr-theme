@@ -16,9 +16,6 @@ import {
   deleteCmsPage,
   duplicateCmsPage,
   getCmsPage,
-  publishCmsPage,
-  setAdminState,
-  unpublishCmsPage,
 } from "@/lib/adminStore";
 
 // Persist a page's structured document to the server (executable JS is stripped
@@ -37,21 +34,6 @@ function isSnapshot(value: unknown): value is PageRevisionSnapshot {
  * whatever the client sent, so anything without a usable draft snapshot is
  * skipped rather than imported as a broken page.
  */
-function toPageDocument(raw: Record<string, unknown>): CmsPageDocument | null {
-  const draft = raw.draft;
-  if (!isSnapshot(draft)) return null;
-  const status = raw.status === "published" ? "published" : "draft";
-  return {
-    id: String(raw.id ?? ""),
-    title: String(raw.title ?? "Untitled page"),
-    path: String(raw.path ?? ""),
-    status,
-    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date().toISOString(),
-    draft,
-    published: isSnapshot(raw.published) ? raw.published : null,
-    revisions: Array.isArray(raw.revisions) ? (raw.revisions as CmsPageDocument["revisions"]) : [],
-  };
-}
 
 export default function AdminCmsPagesPage() {
   const pages = useCmsPages();
@@ -109,8 +91,8 @@ export default function AdminCmsPagesPage() {
         <AdminNotice tone={syncState === "error" ? "error" : "info"}>
           {syncState === "error" ? (
             <>
-              Could not load pages from the server — you are editing local drafts.
-              Publishing now would overwrite the server copy.{" "}
+              Couldn&apos;t load your pages from the server. This list may be out
+              of date — open a page to see its real state.{" "}
               <button
                 type="button"
                 onClick={() => void hydrateFromApi()}
@@ -122,10 +104,8 @@ export default function AdminCmsPagesPage() {
           ) : (
             <>
               {syncState === "loading"
-                ? "Loading pages from the server…"
-                : "Pages are loaded from the server."}{" "}
-              Publishing saves the structured content back. Custom JS/CSS is kept
-              for editing but only runs inside the storefront sandbox.
+                ? "Loading your pages…"
+                : "Open a page to edit it. Changes save as you work; use Publish inside the editor to put them live."}
             </>
           )}
         </AdminNotice>

@@ -2,66 +2,71 @@
 
 import Link from "next/link";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { useAdminToast } from "@/components/admin/AdminToast";
-import { useCmsGlobalCode } from "@/hooks/useCmsStore";
-import { updateCmsGlobalCode } from "@/lib/adminStore";
 
+/**
+ * Site-wide custom code is not available.
+ *
+ * Both fields that used to live here were fiction. Global JS had zero read
+ * sites anywhere in the app — nothing has ever executed it. Global CSS was read
+ * by CmsCodeInjector from `localStorage`, but from the *visitor's* localStorage,
+ * which is always empty, so it never reached a customer either. The Save button
+ * only fired a toast.
+ *
+ * Rather than keep two textareas that quietly do nothing, this says so and
+ * points at the two places custom code genuinely works today.
+ */
 export default function AdminCmsCodePage() {
-  const code = useCmsGlobalCode();
-  const toast = useAdminToast();
-
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Custom code"
-        description="Site-wide CSS and JavaScript injected on every CMS-powered storefront page."
+        description="Site-wide CSS and JavaScript."
       />
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        Demo only — saved to this browser (localStorage), not the live server, and
-        JS is not sandboxed. Prefer page-level or block-scoped CSS when possible.
-      </div>
+      <div className="rounded-2xl border border-black/[0.07] bg-white p-6">
+        <p className="m-0 text-sm font-semibold text-[#1D1D1F]">
+          Site-wide code isn&apos;t available yet
+        </p>
+        <p className="m-0 mt-2 max-w-[62ch] text-[13px] leading-relaxed text-[#6E6E73]">
+          This screen used to accept CSS and JavaScript that never reached your
+          customers — it was only ever stored in the browser you typed it into.
+          It has been removed rather than left looking like it works.
+        </p>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <label className="block rounded-2xl border border-black/[0.07] bg-white p-5">
-          <span className="text-sm font-semibold text-[#1D1D1F]">Global CSS</span>
-          <textarea
-            className="mt-3 w-full min-h-[280px] rounded-xl border border-black/[0.1] px-3 py-2 font-mono text-xs outline-none focus:border-[#1D1D1F]"
-            value={code.headCss}
-            onChange={(e) => updateCmsGlobalCode({ headCss: e.target.value })}
-            placeholder={`/* Example */\n.ez-section-title { letter-spacing: -0.04em; }`}
-          />
-        </label>
-        <label className="block rounded-2xl border border-black/[0.07] bg-white p-5">
-          <span className="text-sm font-semibold text-[#1D1D1F]">Global JS</span>
-          <textarea
-            className="mt-3 w-full min-h-[280px] rounded-xl border border-black/[0.1] px-3 py-2 font-mono text-xs outline-none focus:border-[#1D1D1F]"
-            value={code.footerJs}
-            onChange={(e) => updateCmsGlobalCode({ footerJs: e.target.value })}
-            placeholder={`// Example\nconsole.log("Ezurr CMS ready");`}
-          />
-        </label>
+        <p className="m-0 mt-5 text-[13px] font-semibold text-[#1D1D1F]">
+          What works today
+        </p>
+        <ul className="mt-2 space-y-2 text-[13px] leading-relaxed text-[#6E6E73]">
+          <li>
+            <strong className="text-[#1D1D1F]">Styling one page</strong> — open
+            the page, then <em>Page code</em> in the top bar. That CSS is saved
+            with the page and does render on the live site.
+          </li>
+          <li>
+            <strong className="text-[#1D1D1F]">Embeds and scripts</strong> — add
+            a <em>Custom HTML</em> section. Its code runs inside an isolated
+            frame on the live page, so it cannot read customer data or interfere
+            with checkout.
+          </li>
+          <li>
+            <strong className="text-[#1D1D1F]">Colours and fonts</strong> —{" "}
+            <Link
+              href="/admin/settings#appearance"
+              className="font-semibold text-[#1D1D1F] underline"
+            >
+              Appearance settings
+            </Link>
+            , no code required.
+          </li>
+        </ul>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => toast.push("Custom code saved to local store", "success")}
-          className="rounded-xl bg-[#1D1D1F] px-4 py-2.5 text-sm font-semibold text-white"
-        >
-          Save
-        </button>
         <Link
           href="/admin/cms"
           className="rounded-xl border border-black/[0.1] bg-white px-4 py-2.5 text-sm font-semibold hover:bg-[#F5F5F7]"
         >
           ← Pages
-        </Link>
-        <Link
-          href="/admin/settings#appearance"
-          className="rounded-xl border border-black/[0.1] bg-white px-4 py-2.5 text-sm font-semibold hover:bg-[#F5F5F7]"
-        >
-          Appearance →
         </Link>
       </div>
     </div>

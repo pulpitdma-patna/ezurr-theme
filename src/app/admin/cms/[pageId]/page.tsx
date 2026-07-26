@@ -1,9 +1,7 @@
 "use client";
 
 import { use } from "react";
-import { AdminNotice } from "@/components/admin/AdminNotice";
 import { PageBuilder } from "@/components/admin/cms/PageBuilder";
-import { isApiEnabled } from "@/lib/apiClient";
 
 export default function AdminCmsBuilderPage({
   params,
@@ -11,15 +9,10 @@ export default function AdminCmsBuilderPage({
   params: Promise<{ pageId: string }>;
 }) {
   const { pageId } = use(params);
-  return (
-    <div>
-      {isApiEnabled() ? (
-        <AdminNotice tone="demo">
-          Page edits are saved to this browser (localStorage) only — not to the
-          live server yet.
-        </AdminNotice>
-      ) : null}
-      <PageBuilder pageId={pageId} />
-    </div>
-  );
+
+  // No banner explaining where edits go. The save chip in the builder's top bar
+  // reports the real state ("Saving…", "Saved 3:41 pm", "Not saved · Retry"),
+  // and a banner is exactly what let the old build claim edits were
+  // browser-only long after that stopped being true.
+  return <PageBuilder pageId={pageId} />;
 }

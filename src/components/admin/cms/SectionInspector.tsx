@@ -10,6 +10,7 @@ import type {
 } from "@/lib/cms/types";
 import { getSectionEntry } from "@/lib/cms/sectionRegistry";
 import { RichTextField } from "./RichTextField";
+import { PlaceholderAssistant } from "./PlaceholderAssistant";
 import {
   duplicateCmsBlock,
   removeCmsBlock,
@@ -109,8 +110,12 @@ function ProductKeysPicker({
         className="w-full rounded-lg border border-black/[0.1] px-2.5 py-2 text-xs"
       />
       <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-black/[0.08] p-2">
+        {/* Stores p.key, not p.name. The picker used to save display names and
+            ApiProductRail feeds these straight to api.product(key) — so every
+            lookup 404'd, was swallowed, and the rail quietly rendered the demo
+            catalogue instead of the products actually chosen. */}
         {products.map((p) => {
-          const checked = value.includes(p.name);
+          const checked = value.includes(p.key);
           return (
             <label
               key={p.key}
@@ -122,8 +127,8 @@ function ProductKeysPicker({
                 onChange={() => {
                   onChange(
                     checked
-                      ? value.filter((k) => k !== p.name)
-                      : [...value, p.name],
+                      ? value.filter((k) => k !== p.key)
+                      : [...value, p.key],
                   );
                 }}
               />
@@ -330,12 +335,22 @@ function FieldControl({
         </select>
       );
     case "textarea":
-    case "html":
       return (
         <textarea
           className={`${inputClass} min-h-[100px] font-mono`}
           value={String(value ?? "")}
           onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case "html":
+      // The blanks come first, and the raw markup is tucked behind a
+      // disclosure. Someone finishing a refund policy should be filling in a
+      // labelled GSTIN box, not hunting for a token between an <h2> and a
+      // <table>.
+      return (
+        <PlaceholderAssistant
+          html={String(value ?? "")}
+          onChange={onChange}
         />
       );
     case "richtext":

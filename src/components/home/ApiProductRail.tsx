@@ -87,10 +87,13 @@ export function ApiProductRail({
             ),
           );
           if (!cancelled) {
-            const mapped = fetched
-              .filter(Boolean)
-              .map((p) => mapApiProductToCatalog(p!));
-            setProducts(mapped.length ? mapped : staticProducts);
+            // A hand-picked rail shows exactly what was picked, in that order.
+            // Falling back to the demo catalogue here meant choosing five
+            // products and getting ten unrelated ones, with no error — the most
+            // trust-destroying behaviour in the builder.
+            setProducts(
+              fetched.filter(Boolean).map((p) => mapApiProductToCatalog(p!)),
+            );
           }
           return;
         }

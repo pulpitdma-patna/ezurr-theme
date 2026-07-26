@@ -631,8 +631,14 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
               </button>
             </div>
             <div className="space-y-3 overflow-y-auto p-3">
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-                Custom JS is demo-only and runs unsandboxed after publish + hydrate.
+              {/* The old warning said this runs "unsandboxed after publish +
+                  hydrate", which is the opposite of what happens: page-level JS
+                  never executes in the storefront document at all, and a Custom
+                  HTML block's code runs in an isolated cross-origin frame. */}
+              <p className="rounded-lg border border-[#E5E5EA] bg-[#F5F5F7] px-3 py-2 text-[11px] text-[#6E6E73]">
+                CSS here styles this page. JavaScript on a page is not run on the
+                live site — put it in a Custom HTML section instead, where it
+                runs inside an isolated frame that cannot read customer data.
               </p>
               <label className="block">
                 <span className="text-[11px] font-semibold text-[#6E6E73]">CSS</span>
