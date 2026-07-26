@@ -169,11 +169,17 @@ export const SECTION_REGISTRY: SectionRegistryEntry[] = [
         key: "theme",
         label: "Theme",
         type: "select",
+        // "Violet" was a lie in the common case: EditorialBanner computes
+        // `prepaidOffer = fullWidth && theme === "violet"`, so on an ordinary
+        // banner picking it changed nothing at all. The option is named for what
+        // it actually is — a full-bleed prepaid treatment — rather than for a
+        // colour it only sometimes applies.
         options: [
           { value: "dark", label: "Dark" },
           { value: "light", label: "Light" },
-          { value: "violet", label: "Violet" },
+          { value: "violet", label: "Prepaid accent — needs Full width" },
         ],
+        help: "Prepaid accent only applies when Full width is on below.",
       },
       { key: "imagePosition", label: "Image position", type: "text" },
       { key: "fullWidth", label: "Full width", type: "toggle" },
