@@ -118,7 +118,20 @@ function ShelfControls({
   );
 }
 
-export function BrandExplorer() {
+/**
+ * The heading was hardcoded, so this section offered nothing but a visibility
+ * checkbox in the builder. The brand shelves themselves stay data-driven — they
+ * come from the catalogue, which is the point of the section.
+ */
+export function BrandExplorer({
+  eyebrow = "Brand discovery",
+  title = "Shop by brand.",
+  description = "One tap switches the entire shelf—hardware, games, and gear curated for each ecosystem.",
+}: {
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+} = {}) {
   const [activeBrand, setActiveBrand] = useState<BrandName>("PlayStation");
   const scrollerRef = useRef<HTMLDivElement>(null);
   const apiOn = isApiEnabled();
@@ -179,9 +192,9 @@ export function BrandExplorer() {
       <div className="ez-page ez-section pb-10 sm:pb-12 lg:pb-14">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <SectionHeading
-            eyebrow="Brand discovery"
-            title="Shop by brand."
-            description="One tap switches the entire shelf—hardware, games, and gear curated for each ecosystem."
+            eyebrow={eyebrow}
+            title={title}
+            description={description}
           />
           {/* The tabs filter this shelf in place; this is the way through to the
               brand's own crawlable landing page. */}

@@ -365,9 +365,30 @@ function RenderBlock({
         />,
       );
     case "offer_banner":
-      return shell(<OfferBannerGate />);
+      // Props passed through, not ignored: this rendered entirely hardcoded copy,
+      // which is why the section had no editable fields at all.
+      return shell(
+        <OfferBannerGate
+          eyebrow={block.props.eyebrow ? String(block.props.eyebrow) : undefined}
+          title={block.props.title ? String(block.props.title) : undefined}
+          description={
+            block.props.description ? String(block.props.description) : undefined
+          }
+          badge={block.props.badge ? String(block.props.badge) : undefined}
+          cta={block.props.cta ? String(block.props.cta) : undefined}
+          href={block.props.href ? String(block.props.href) : undefined}
+        />,
+      );
     case "brand_explorer":
-      return shell(<BrandExplorer />);
+      return shell(
+        <BrandExplorer
+          eyebrow={block.props.eyebrow ? String(block.props.eyebrow) : undefined}
+          title={block.props.title ? String(block.props.title) : undefined}
+          description={
+            block.props.description ? String(block.props.description) : undefined
+          }
+        />,
+      );
     case "editorial_banner":
       return shell(
         <EditorialBanner

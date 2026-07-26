@@ -23,6 +23,21 @@ import { useStaffRole } from "@/hooks/useStaffRole";
 import { can } from "@/lib/adminPermissions";
 import { DEFAULT_HERO_SLIDES } from "@/lib/cms/defaultHomePage";
 
+/**
+ * Why a section has nothing to configure, said in the panel.
+ *
+ * Only the genuinely content-free ones belong here. `offer_banner` and
+ * `brand_explorer` used to be in this position and were not content-free at all —
+ * they rendered hardcoded copy the owner could not reach, which is a bug, not a
+ * property of the section.
+ */
+const NO_FIELDS_REASON: Partial<Record<SectionType, string>> = {
+  category_grid:
+    "This marks where the product grid goes. Anything you put above it appears above the products on every category page, and anything below appears below.",
+  column:
+    "A column just holds the sections you drop into it. Set the number of columns and the gap on the row above.",
+};
+
 type SectionInspectorProps = {
   pageId: string;
   block: CmsBlock | null;
@@ -301,6 +316,7 @@ function FieldControl({
         <textarea
           className={`${inputClass} min-h-[100px] font-mono`}
           value={String(value ?? "")}
+          placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value)}
         />
       );
@@ -373,11 +389,16 @@ function FieldControl({
         />
       );
     default:
+      // `placeholder` was declared on InspectorField and rendered nowhere. It
+      // matters most on a field whose blank state is not blank on the live page:
+      // the offer banner's copy lives in the component's defaults, so an empty
+      // input with no placeholder reads as "there is no text here" when there is.
       return (
         <input
           type="text"
           className={inputClass}
           value={String(value ?? "")}
+          placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value)}
         />
       );
@@ -429,11 +450,27 @@ export function SectionInspector({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
+        {/* A section with no fields used to show a bare visibility checkbox and
+            nothing else, which reads as "this is broken" rather than "this one
+            has nothing to set". Two of them were genuinely broken — the offer
+            banner and the brand explorer rendered hardcoded copy — and are
+            editable now. The rest say why. */}
+        {fields.length === 0 ? (
+          <p className="m-0 rounded-lg bg-[#F5F5F7] px-3 py-2.5 text-[11px] leading-snug text-[#6E6E73]">
+            {NO_FIELDS_REASON[block.type] ??
+              "This section has no settings — it builds itself from your store."}
+          </p>
+        ) : null}
         {fields.map((field) => (
           <label key={field.key} className="block">
             <span className="text-[11px] font-semibold text-[#6E6E73]">
               {field.label}
             </span>
+            {field.help ? (
+              <span className="mt-0.5 block text-[10px] leading-snug text-[#A1A1A6]">
+                {field.help}
+              </span>
+            ) : null}
             <div className="mt-1">
               <FieldControl
                 field={field}

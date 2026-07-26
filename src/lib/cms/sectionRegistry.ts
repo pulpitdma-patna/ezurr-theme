@@ -79,8 +79,39 @@ export const SECTION_REGISTRY: SectionRegistryEntry[] = [
     icon: "offer",
     nestable: false,
     acceptsChildren: false,
-    defaults: {},
-    fields: [],
+    defaults: {
+      eyebrow: "Prepaid advantage",
+      // {pct} is substituted with the store's prepaid discount, so the number
+      // cannot drift from Appearance settings the way a typed one would.
+      title: "Save {pct}% before the story begins.",
+      description:
+        "Pay by UPI or card and the discount is applied at checkout, on top of your locked minimum pre-order price.",
+      badge: "Automatically applied",
+      cta: "Browse pre-orders",
+      href: "/preorders",
+    },
+    // Placeholders are the copy the banner shows when a field is left blank, so an
+    // empty input does not read as "there is no text here" when there is.
+    fields: [
+      { key: "eyebrow", label: "Eyebrow", type: "text", placeholder: "Prepaid advantage" },
+      {
+        key: "title",
+        label: "Title",
+        type: "text",
+        placeholder: "Save {pct}% before the story begins.",
+        help: "Write {pct} where the discount should appear — it follows your Appearance setting, so it can never disagree with what checkout actually applies.",
+      },
+      {
+        key: "description",
+        label: "Description",
+        type: "textarea",
+        placeholder:
+          "Pay by UPI or card and the discount is applied at checkout, on top of your locked minimum pre-order price.",
+      },
+      { key: "badge", label: "Badge", type: "text", placeholder: "Automatically applied" },
+      { key: "cta", label: "Button label", type: "text", placeholder: "Browse pre-orders" },
+      { key: "href", label: "Button link", type: "url", placeholder: "/preorders" },
+    ],
   },
   {
     type: "brand_explorer",
@@ -89,8 +120,23 @@ export const SECTION_REGISTRY: SectionRegistryEntry[] = [
     icon: "brand",
     nestable: false,
     acceptsChildren: false,
-    defaults: {},
-    fields: [],
+    defaults: {
+      eyebrow: "Brand discovery",
+      title: "Shop by brand.",
+      description:
+        "One tap switches the entire shelf—hardware, games, and gear curated for each ecosystem.",
+    },
+    fields: [
+      { key: "eyebrow", label: "Eyebrow", type: "text", placeholder: "Brand discovery" },
+      { key: "title", label: "Title", type: "text", placeholder: "Shop by brand." },
+      {
+        key: "description",
+        label: "Description",
+        type: "textarea",
+        placeholder:
+          "One tap switches the entire shelf—hardware, games, and gear curated for each ecosystem.",
+      },
+    ],
   },
   {
     type: "editorial_banner",

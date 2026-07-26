@@ -19,19 +19,43 @@ const PREPAID_BANNER_PRODUCTS = [
   },
 ] as const;
 
-export function OfferBannerGate() {
+/**
+ * Every string here used to be hardcoded, so selecting this section in the page
+ * builder offered nothing but a visibility checkbox — the owner could turn their
+ * prepaid banner off and could not change a word of it.
+ *
+ * The discount percentage stays derived from Appearance settings. It is
+ * substituted into the title wherever `{pct}` appears, rather than being typed,
+ * because a number typed here would silently contradict the discount actually
+ * applied at checkout the first time either changed.
+ */
+export function OfferBannerGate({
+  eyebrow = "Prepaid advantage",
+  title = "Save {pct}% before the story begins.",
+  description = "Pay by UPI or card and the discount is applied at checkout, on top of your locked minimum pre-order price.",
+  badge = "Automatically applied",
+  cta = "Browse pre-orders",
+  href = "/preorders",
+}: {
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+  badge?: string;
+  cta?: string;
+  href?: string;
+} = {}) {
   const settings = useLiveThemeSettings();
   if (!settings.showOffer) return null;
 
   const pct = settings.prepaidDiscount;
   return (
     <EditorialBanner
-      eyebrow="Prepaid advantage"
-      badge="Automatically applied"
-      title={`Save ${pct}% before the story begins.`}
-      description="Pay by UPI or card and the discount is applied at checkout, on top of your locked minimum pre-order price."
-      href="/preorders"
-      cta="Browse pre-orders"
+      eyebrow={eyebrow}
+      badge={badge}
+      title={title.replaceAll("{pct}", String(pct))}
+      description={description}
+      href={href}
+      cta={cta}
       image={PREPAID_BANNER_PRODUCTS[0].src}
       imageAlt={PREPAID_BANNER_PRODUCTS.map((item) => item.alt).join(", ")}
       productImages={[...PREPAID_BANNER_PRODUCTS]}
