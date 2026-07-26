@@ -1,4 +1,5 @@
 import type { ApiProduct } from "@/lib/apiClient";
+import { derivePlatform } from "@/lib/apiMappers";
 import type { ProductFormValues } from "@/components/admin/ProductForm";
 
 /**
@@ -61,7 +62,7 @@ export function apiProductToForm(p: ApiProduct): ProductFormValues {
     name: p.title,
     brand: p.brand_slug ?? "",
     sku: p.key,
-    platform: (p.fulfillment_type === "digital" ? "Digital" : "PS5") as ProductFormValues["platform"],
+    platform: derivePlatform(p),
     edition: "Standard",
     // Edit the merchant's own basis, not the grossed-up display figure.
     price: String(p.price ?? ""),

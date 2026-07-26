@@ -12,16 +12,6 @@ import {
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { ImageUploadField } from "@/components/admin/ImageUploadField";
 
-const platforms: AdminPlatform[] = [
-  "PS5",
-  "PS4",
-  "Xbox",
-  "Nintendo",
-  "PC",
-  "Multi",
-  "Hardware",
-  "Digital",
-];
 
 export type ProductFormValues = {
   category: AdminProductCategory;
@@ -203,18 +193,20 @@ export function ProductForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
+          {/* Read-only on purpose. Platform is derived from the product's
+              Shopify tags, not stored on the product, so the API has nowhere to
+              save an edit — this was a dropdown that silently discarded every
+              change. Shown because it is useful at a glance; edit the tags in
+              Shopify to change it. */}
           <Field label="Platform">
-            <select
-              value={form.platform}
-              onChange={(e) => handleUpdate("platform", e.target.value as AdminPlatform)}
-              className={inputClass}
+            <div
+              className={`${inputClass} flex items-center justify-between bg-[#F5F5F7] text-[#6E6E73]`}
             >
-              {platforms.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+              <span>{form.platform}</span>
+              <span className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">
+                From tags
+              </span>
+            </div>
           </Field>
           <Field label="Edition">
             <input

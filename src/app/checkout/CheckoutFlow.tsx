@@ -625,7 +625,14 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   const [locating, setLocating] = useState(false);
   const [geoMsg, setGeoMsg] = useState<string | null>(null);
   const [quote, setQuote] = useState<Awaited<ReturnType<typeof api.checkoutQuote>> | null>(null);
-  const [whatsappConsent, setWhatsappConsent] = useState(true);
+  // Marketing consent only, and it starts OFF. This used to be one pre-ticked
+  // box reading "order updates and offers", which bundled a service message the
+  // customer has already contracted for with a standing marketing opt-in they
+  // never actively gave. Under the DPDP Act 2023 consent must be free, specific
+  // and unambiguous, given by clear affirmative action — a pre-ticked box is
+  // none of those. Order updates need no consent and are sent regardless; the
+  // API gates only marketing triggers on this flag.
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [placing, setPlacing] = useState(false);
   // Idempotency key for the CURRENT place-order attempt. Must be a ref (not
   // derived from the cart): the old `web-<session>-cart-<every product key>`
@@ -1200,7 +1207,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
               pincode: form.pincode,
             },
             couponCode: appliedCoupon?.code,
-            marketingConsent: whatsappConsent,
+            marketingConsent,
             // Stitch the server-side purchase mirror to the same GA user.
             gaClientId: getGaClientId(),
           });
@@ -1376,18 +1383,6 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                 >
                   Back to store
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPlaced(false);
-                    setOrderId(null);
-                    setStep(1);
-                    setMethod("prepaid");
-                  }}
-                  className="w-full rounded-full px-4 py-3 text-[13px] font-medium text-[#86868B] hover:text-[#424245] sm:w-auto"
-                >
-                  Restart demo
-                </button>
               </div>
             </div>
           </main>
@@ -1792,15 +1787,27 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                       </div>
                     ) : null}
 
-                    <label className="mt-1 flex items-start gap-2.5 text-[12px] leading-snug text-[#6E6E73]">
+                    {/* Order updates are part of fulfilling the order, so they
+                        are stated as a notice rather than asked for as consent.
+                        Offers are a separate, opt-in choice. */}
+                    <p className="mt-1 m-0 text-[12px] leading-snug text-[#6E6E73]">
+                      We&apos;ll send order and delivery updates on WhatsApp to{" "}
+                      <span className="font-medium text-[#1D1D1F]">
+                        {form.mobile ? formatMobileDisplay(form.mobile) : "your mobile number"}
+                      </span>
+                      .
+                    </p>
+
+                    <label className="flex items-start gap-2.5 text-[12px] leading-snug text-[#6E6E73]">
                       <input
                         type="checkbox"
-                        checked={whatsappConsent}
-                        onChange={(e) => setWhatsappConsent(e.target.checked)}
+                        checked={marketingConsent}
+                        onChange={(e) => setMarketingConsent(e.target.checked)}
                         className="mt-0.5 accent-[#1D1D1F]"
                       />
                       <span>
-                        Send me order updates and offers on WhatsApp. You can opt out anytime.
+                        Also send me offers and new arrivals on WhatsApp. Optional — you
+                        can opt out anytime.
                       </span>
                     </label>
 

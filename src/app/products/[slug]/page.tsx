@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { ProductView } from "@/components/product/ProductView";
 import { findStaticCatalogProduct } from "@/data/home";
 import { api } from "@/lib/apiClient";
+import { toPlainSnippet } from "@/lib/apiMappers";
 import { fromApi, fromStatic, type ResolvedProduct } from "@/lib/productResolve";
 
 // Cached per-request so generateMetadata and the page share one resolve.
@@ -31,7 +32,9 @@ export async function generateMetadata({
   return {
     // Root layout applies the "%s · Ezurr" template, so return the bare title.
     title: product ? product.title : "Product",
-    description: product?.description,
+    // Descriptions are raw HTML from the API; emitting them verbatim shipped
+    // escaped <p><span data-sheets-root="1"> markup into the search snippet.
+    description: toPlainSnippet(product?.description, 155) || undefined,
     alternates: { canonical },
     // Don't let search engines index an unresolved product URL.
     ...(product ? {} : { robots: { index: false, follow: true } }),

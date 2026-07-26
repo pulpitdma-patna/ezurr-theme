@@ -1066,6 +1066,8 @@ export type ApiProduct = {
   active: boolean;
   badges?: { kind: string; label: string }[];
   gallery?: string[];
+  /** Import provenance — carries shopify_tags/shopify_collections. */
+  meta?: Record<string, unknown> | null;
   created_at?: string | null;
 };
 

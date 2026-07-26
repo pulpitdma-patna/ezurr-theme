@@ -7,6 +7,7 @@ import {
   type AdminOrder,
   type AdminOrderItem,
   type AdminOrderStatus,
+  type AdminPlatform,
 } from "@/data/admin";
 import { payableMrp, payablePrice, type ApiProduct } from "@/lib/apiClient";
 import type { CatalogProduct, GameCardProduct } from "@/lib/types";
@@ -83,13 +84,82 @@ export function mapApiProductToCatalog(p: ApiProduct): CatalogProduct {
 }
 
 /** HTML → a short, tag-free one-liner (for card subtitles etc.). */
+/**
+ * Which console a product is for, derived from its imported Shopify tags.
+ *
+ * There is no platform column — the admin used to hardcode
+ * `fulfillment_type === "digital" ? "Digital" : "PS5"`, and since nothing is
+ * digital, all 298 products displayed "PS5", accessories and Switch titles
+ * included. The Shopify tags are correct and already imported, so read those.
+ *
+ * Specific tags win over generic ones ("switch 2" before "switch", "ps5" before
+ * the bare "ps" that PlayStation accessories carry), then category decides.
+ * Nothing is guessed: an unrecognised product falls through to "Multi" rather
+ * than asserting a console it may not be for.
+ */
+export function derivePlatform(p: ApiProduct): AdminPlatform {
+  const meta = (p.meta ?? {}) as { shopify_tags?: unknown };
+  const tags = new Set(
+    (Array.isArray(meta.shopify_tags) ? meta.shopify_tags : [])
+      .filter((t): t is string => typeof t === "string")
+      .map((t) => t.toLowerCase().trim()),
+  );
+
+  if (tags.has("ps5")) return "PS5";
+  if (tags.has("ps4")) return "PS4";
+  if (tags.has("switch 2") || tags.has("switch")) return "Nintendo";
+  if (tags.has("xb")) return "Xbox";
+  if (tags.has("valve")) return "PC";
+  if (tags.has("meta")) return "Hardware";
+
+  // Pre-orders arrive tagged only "preorder" — no platform tag — but every one
+  // of them names its console in the title. Anchored patterns only, so a title
+  // mentioning a platform in passing cannot claim it.
+  const title = p.title.toLowerCase();
+  if (/\bps5\b|\bplaystation 5\b/.test(title)) return "PS5";
+  if (/\bps4\b|\bplaystation 4\b/.test(title)) return "PS4";
+  if (/\bswitch 2\b|\bnintendo switch\b|\bswitch\b/.test(title)) return "Nintendo";
+  if (/\bxbox\b/.test(title)) return "Xbox";
+  if (/\bsteam deck\b/.test(title)) return "PC";
+
+  const category = (p.category_slug ?? "").toLowerCase();
+  if (p.fulfillment_type === "digital" || category === "game-cards") return "Digital";
+  if (category === "consoles" || category === "accessories") return "Hardware";
+
+  return "Multi";
+}
+
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+/**
+ * Flatten product HTML to plain text for a card subtitle or meta description.
+ *
+ * Descriptions arrive as raw HTML from the API — much of it pasted out of
+ * Google Sheets, so it carries `<span data-sheets-root="1">` wrappers. Entities
+ * used to be replaced with a space, which turned "Call of Duty&reg;" into a
+ * gap; they are decoded now. Truncation falls back to the last word boundary so
+ * a description never ends mid-word.
+ */
 export function toPlainSnippet(html: string | null | undefined, max = 90): string {
   const text = (html ?? "")
     .replace(/<[^>]*>/g, " ")
-    .replace(/&[a-z]+;/gi, " ")
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&([a-z]+);/gi, (m, name: string) => NAMED_ENTITIES[name.toLowerCase()] ?? m)
     .replace(/\s+/g, " ")
     .trim();
-  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
+
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
 export function mapApiProductToGameCard(p: ApiProduct, index: number): GameCardProduct {
@@ -120,7 +190,7 @@ export function mapApiProductToAdminRow(p: ApiProduct, index = 0): AdminCatalogR
     name: p.title,
     brand: p.brand_slug || "ezurr",
     sku: p.key,
-    platform: p.fulfillment_type === "digital" ? "Digital" : "PS5",
+    platform: derivePlatform(p),
     edition: "Standard",
     price: formatInr(payablePrice(p)),
     strike: (payableMrp(p) ?? 0) > payablePrice(p) ? formatInr(payableMrp(p)!) : "",
