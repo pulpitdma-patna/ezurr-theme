@@ -139,6 +139,18 @@ export function saveDraft(
         path: page.path,
         title: page.title,
         document: page,
+        // Top-level, not inside `document`: these are columns on the server,
+        // so their length limits are enforced by the database and a meta-tag
+        // edit never touches the snapshot that publish and rollback move.
+        ...(page.seo
+          ? {
+              metaTitle: page.seo.metaTitle,
+              metaDescription: page.seo.metaDescription,
+              ogImageUrl: page.seo.ogImageUrl,
+              canonicalUrl: page.seo.canonicalUrl,
+              robots: page.seo.robots,
+            }
+          : {}),
       }),
     }),
   );

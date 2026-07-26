@@ -111,7 +111,7 @@ export function HeroSlider({ slides = DEFAULT_HERO_SLIDES }: { slides?: HeroSlid
           >
             <Image
               src={s.image}
-              alt=""
+              alt={s.alt ?? ""}
               fill
               className="object-cover"
               style={{ objectPosition: s.imagePosition }}

@@ -7,83 +7,29 @@ import type {
   CmsWidgetDefinition,
   HeroSlide,
   InspectorField,
+  SectionType,
 } from "@/lib/cms/types";
 import { getSectionEntry } from "@/lib/cms/sectionRegistry";
 import { RichTextField } from "./RichTextField";
 import { PlaceholderAssistant } from "./PlaceholderAssistant";
+import { MediaLibraryPicker } from "@/components/admin/MediaLibraryPicker";
 import {
   duplicateCmsBlock,
   removeCmsBlock,
   updateCmsBlock,
 } from "@/lib/adminStore";
 import { useAdminStore } from "@/hooks/useAdminStore";
+import { useStaffRole } from "@/hooks/useStaffRole";
+import { can } from "@/lib/adminPermissions";
 import { DEFAULT_HERO_SLIDES } from "@/lib/cms/defaultHomePage";
 
 type SectionInspectorProps = {
   pageId: string;
   block: CmsBlock | null;
   widgets: CmsWidgetDefinition[];
+  /** Type of the block this one sits inside, if any. Gates overlay positioning. */
+  parentType?: SectionType | null;
 };
-
-function MediaPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (url: string) => void;
-}) {
-  const store = useAdminStore();
-  const [open, setOpen] = useState(false);
-  const assets = useMemo(
-    () =>
-      store.products.slice(0, 40).map((p) => ({
-        name: p.name,
-        url: p.image,
-      })),
-    [store.products],
-  );
-
-  return (
-    <div>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          className="w-full rounded-lg border border-black/[0.1] bg-white px-2.5 py-2 text-xs outline-none focus:border-[#1D1D1F]"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="shrink-0 rounded-lg border border-black/[0.1] px-2 text-[11px] font-semibold"
-        >
-          Browse
-        </button>
-      </div>
-      {open ? (
-        <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-black/[0.08] bg-[#F8F8FA] p-2">
-          <div className="grid grid-cols-3 gap-2">
-            {assets.map((asset) => (
-              <button
-                key={asset.url}
-                type="button"
-                onClick={() => {
-                  onChange(asset.url);
-                  setOpen(false);
-                }}
-                className="overflow-hidden rounded-lg border border-black/[0.06] bg-white"
-                title={asset.name}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={asset.url} alt="" className="aspect-square object-cover" />
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 function ProductKeysPicker({
   value,
@@ -171,19 +117,30 @@ function SlidesRepeater({
               ["title", "Title"],
               ["subtitle", "Subtitle"],
               ["price", "Price"],
-              ["image", "Image URL"],
+              ["image", "Image"],
             ] as const
           ).map(([key, label]) => (
             <label key={key} className="block">
               <span className="text-[10px] text-[#6E6E73]">{label}</span>
               {key === "image" ? (
-                <MediaPicker
+                <MediaLibraryPicker
                   value={String(slide[key] ?? "")}
                   onChange={(url) => {
                     const next = [...slides];
                     next[index] = { ...slide, image: url };
                     onChange(next);
                   }}
+                  alt={slide.alt ?? ""}
+                  onAltChange={(alt) => {
+                    const next = [...slides];
+                    next[index] = { ...slide, alt };
+                    onChange(next);
+                  }}
+                  // A hero image sits behind the same headline it illustrates,
+                  // so empty is the correct answer more often than not — and a
+                  // forced "GTA 6 image" is worse for a screen reader than
+                  // silence. Offered, not demanded.
+                  altHint="Usually leave blank — the headline beside it already says this. Fill it in only if the image shows something the text doesn't."
                 />
               ) : (
                 <input
@@ -291,10 +248,15 @@ function FieldControl({
   field,
   value,
   onChange,
+  alt,
+  onAltChange,
 }: {
   field: InspectorField;
   value: unknown;
   onChange: (v: unknown) => void;
+  /** Only meaningful for `media-url`; stored on a sibling `<key>Alt` prop. */
+  alt?: string;
+  onAltChange?: (alt: string) => void;
 }) {
   const inputClass =
     "w-full rounded-lg border border-black/[0.1] bg-white px-2.5 py-2 text-xs outline-none focus:border-[#1D1D1F]";
@@ -389,9 +351,11 @@ function FieldControl({
       );
     case "media-url":
       return (
-        <MediaPicker
+        <MediaLibraryPicker
           value={String(value ?? "")}
           onChange={(url) => onChange(url)}
+          alt={alt}
+          onAltChange={onAltChange}
         />
       );
     case "slides":
@@ -420,7 +384,15 @@ function FieldControl({
   }
 }
 
-export function SectionInspector({ pageId, block, widgets }: SectionInspectorProps) {
+export function SectionInspector({
+  pageId,
+  block,
+  widgets,
+  parentType,
+}: SectionInspectorProps) {
+  const { role } = useStaffRole();
+  const canWriteCode = can("cms.code.write", role);
+
   if (!block) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-xs text-[#A1A1A6]">
@@ -429,6 +401,7 @@ export function SectionInspector({ pageId, block, widgets }: SectionInspectorPro
     );
   }
 
+  const insideOverlay = parentType === "overlay_stage";
   const entry = getSectionEntry(block.type);
   const widget = block.widgetId
     ? widgets.find((w) => w.id === block.widgetId)
@@ -470,48 +443,78 @@ export function SectionInspector({ pageId, block, widgets }: SectionInspectorPro
                     props: { [field.key]: v },
                   })
                 }
+                alt={
+                  typeof block.props[`${field.key}Alt`] === "string"
+                    ? (block.props[`${field.key}Alt`] as string)
+                    : ""
+                }
+                onAltChange={
+                  field.type === "media-url"
+                    ? (next) =>
+                        updateCmsBlock(pageId, block.id, {
+                          props: { [`${field.key}Alt`]: next },
+                        })
+                    : undefined
+                }
               />
             </div>
           </label>
         ))}
 
-        <div className="space-y-2 rounded-xl border border-black/[0.06] bg-[#F8F8FA] p-3">
-          <p className="text-[11px] font-semibold text-[#6E6E73]">Layout (%)</p>
-          {(["xPct", "yPct", "wPct", "zIndex"] as const).map((key) => (
-            <label
-              key={key}
-              className="flex items-center justify-between gap-2 text-[11px]"
-            >
-              <span>{key}</span>
-              <input
-                type="number"
-                className="w-20 rounded-md border border-black/[0.1] px-2 py-1"
-                value={
-                  block.layout?.[key] ??
-                  (key === "wPct" ? 40 : key === "zIndex" ? 1 : 10)
-                }
-                onChange={(e) =>
-                  updateCmsBlock(pageId, block.id, {
-                    layout: { [key]: Number(e.target.value) },
-                  })
-                }
-              />
-            </label>
-          ))}
-        </div>
+        {/* Free-positioning only means something inside an Overlay stage —
+            everywhere else these four numbers were accepted, stored, and
+            ignored by the renderer. And "xPct" is not a word anyone typed
+            into a form on purpose. */}
+        {insideOverlay ? (
+          <div className="space-y-2 rounded-xl border border-black/[0.06] bg-[#F8F8FA] p-3">
+            <p className="text-[11px] font-semibold text-[#6E6E73]">
+              Position on the stage
+            </p>
+            {(
+              [
+                ["xPct", "Left %", 10],
+                ["yPct", "Top %", 10],
+                ["wPct", "Width %", 40],
+                ["zIndex", "Layer", 1],
+              ] as const
+            ).map(([key, label, fallback]) => (
+              <label
+                key={key}
+                className="flex items-center justify-between gap-2 text-[11px]"
+              >
+                <span>{label}</span>
+                <input
+                  type="number"
+                  className="w-20 rounded-md border border-black/[0.1] px-2 py-1"
+                  value={block.layout?.[key] ?? fallback}
+                  onChange={(e) =>
+                    updateCmsBlock(pageId, block.id, {
+                      layout: { [key]: Number(e.target.value) },
+                    })
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        ) : null}
 
-        <label className="block">
-          <span className="text-[11px] font-semibold text-[#6E6E73]">
-            Advanced · Block CSS
-          </span>
-          <textarea
-            className="mt-1 w-full min-h-[90px] rounded-lg border border-black/[0.1] bg-white px-2.5 py-2 font-mono text-xs outline-none focus:border-[#1D1D1F]"
-            value={block.customCss ?? ""}
-            onChange={(e) =>
-              updateCmsBlock(pageId, block.id, { customCss: e.target.value })
-            }
-          />
-        </label>
+        {/* Hidden, not disabled: a manager offered a CSS box whose save is
+            re-grafted away would be typing into something that quietly
+            discards their work. */}
+        {canWriteCode ? (
+          <details className="rounded-xl border border-black/[0.06] bg-[#F8F8FA] p-3">
+            <summary className="cursor-pointer text-[11px] font-semibold text-[#6E6E73]">
+              Advanced · CSS for this section
+            </summary>
+            <textarea
+              className="mt-2 w-full min-h-[90px] rounded-lg border border-black/[0.1] bg-white px-2.5 py-2 font-mono text-xs outline-none focus:border-[#1D1D1F]"
+              value={block.customCss ?? ""}
+              onChange={(e) =>
+                updateCmsBlock(pageId, block.id, { customCss: e.target.value })
+              }
+            />
+          </details>
+        ) : null}
       </div>
 
       <div className="flex gap-2 border-t border-black/[0.06] p-3">

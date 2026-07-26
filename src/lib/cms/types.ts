@@ -93,6 +93,29 @@ export type PageRevision = {
   snapshot: PageRevisionSnapshot;
 };
 
+/**
+ * Search-engine fields. Stored as COLUMNS on the server, not inside the
+ * snapshot: fixing a typo in a meta description has no business touching
+ * publish, rollback or the code-strip walk, and the length limits belong in the
+ * database. They ride along on load and save for the sake of one round trip.
+ */
+export type CmsPageSeo = {
+  metaTitle: string | null;
+  metaDescription: string | null;
+  ogImageUrl: string | null;
+  canonicalUrl: string | null;
+  /** "index,follow" or "noindex,nofollow" — surfaced as one toggle. */
+  robots: string;
+};
+
+export const DEFAULT_CMS_SEO: CmsPageSeo = {
+  metaTitle: null,
+  metaDescription: null,
+  ogImageUrl: null,
+  canonicalUrl: null,
+  robots: "index,follow",
+};
+
 export type CmsPageDocument = {
   id: string;
   title: string;
@@ -103,6 +126,11 @@ export type CmsPageDocument = {
   draft: PageRevisionSnapshot;
   published: PageRevisionSnapshot | null;
   revisions: PageRevision[];
+  seo?: CmsPageSeo;
+  /** Set when a future go-live is pending; ISO, server-owned. */
+  publishAt?: string | null;
+  unpublishAt?: string | null;
+  publishedAt?: string | null;
 };
 
 export type CmsWidgetDefinition = {
@@ -141,6 +169,8 @@ export type HeroSlide = {
   secondaryCta: { label: string; href: string };
   showCountdown?: boolean;
   image: string;
+  /** Usually empty — the slide's own headline already names what's shown. */
+  alt?: string;
   imagePosition: string;
   backdrop: string;
 };

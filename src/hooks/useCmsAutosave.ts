@@ -9,7 +9,14 @@ export type SaveState = "idle" | "saving" | "saved" | "error";
 
 /** What the server has to agree with for the page to count as saved. */
 function signature(doc: CmsPageDocument): string {
-  return JSON.stringify({ draft: doc.draft, title: doc.title, path: doc.path });
+  // `seo` is in here because those fields go up on the same request — leave it
+  // out and editing a meta description reads as "Saved" without saving.
+  return JSON.stringify({
+    draft: doc.draft,
+    title: doc.title,
+    path: doc.path,
+    seo: doc.seo ?? null,
+  });
 }
 
 /**

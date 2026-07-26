@@ -20,12 +20,10 @@ import {
   getDraftCmsSections,
   moveCmsBlock,
   publishCmsPage,
-  pushCmsRevision,
   reorderCmsSections,
   hasStrandedVariantB,
   adoptVariantB,
-  resetCmsPage,
-  restoreCmsRevision,
+  revertCmsPageToPublished,
   setAdminState,
   updateCmsPageCode,
 } from "@/lib/adminStore";
@@ -41,6 +39,10 @@ import { PageRenderer } from "@/components/cms/PageRenderer";
 import { ModulePalette } from "./ModulePalette";
 import { StructureTree } from "./StructureTree";
 import { SectionInspector } from "./SectionInspector";
+import { PageSettingsPanel } from "./PageSettingsPanel";
+import { RevisionHistory } from "./RevisionHistory";
+import { SchedulePublishDialog } from "./SchedulePublishDialog";
+import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { useRouter } from "next/navigation";
 import { useCmsAutosave } from "@/hooks/useCmsAutosave";
@@ -59,6 +61,32 @@ function findBlock(blocks: CmsBlock[], id: string): CmsBlock | undefined {
     }
   }
   return undefined;
+}
+
+/** Block count across every variant — a change here is structural, not typing. */
+function countBlocks(snap: PageRevisionSnapshot): number {
+  let n = 0;
+  const walk = (blocks: CmsBlock[]) => {
+    for (const b of blocks) {
+      n += 1;
+      if (b.children) walk(b.children);
+    }
+  };
+  for (const v of snap.variants ?? []) walk(v.sections ?? []);
+  return n;
+}
+
+/** Ids in document order, so a reorder counts as structural too. */
+function blockOrder(snap: PageRevisionSnapshot): string {
+  const ids: string[] = [];
+  const walk = (blocks: CmsBlock[]) => {
+    for (const b of blocks) {
+      ids.push(b.id);
+      if (b.children) walk(b.children);
+    }
+  };
+  for (const v of snap.variants ?? []) walk(v.sections ?? []);
+  return ids.join(",");
 }
 
 function findParentId(
@@ -95,18 +123,40 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
   const [dismissedB, setDismissedB] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [confirmRevert, setConfirmRevert] = useState(false);
   const [leftTab, setLeftTab] = useState<"modules" | "tree">("modules");
+  // The tab choice is remembered against the block it was made for, so
+  // selecting a different section returns to Section on its own — no effect
+  // writing state on every selection change.
+  const [rightTabFor, setRightTabFor] = useState<{
+    id: string | null;
+    tab: "page" | "section";
+  } | null>(null);
   const [showChrome, setShowChrome] = useState(false);
   const [pendingInsert, setPendingInsert] = useState<number | null>(null);
   const undoStack = useRef<PageRevisionSnapshot[]>([]);
   const redoStack = useRef<PageRevisionSnapshot[]>([]);
   const lastSnap = useRef<string>("");
+  const lastEditAt = useRef<number>(0);
+  const lastWasStructural = useRef<boolean>(true);
 
   const sections = page ? getDraftCmsSections(page) : [];
   const draft = page?.draft;
 
   const selected = selectedId ? findBlock(sections, selectedId) ?? null : null;
   const selectedEntry = selected ? getSectionEntry(selected.type) : undefined;
+  const selectedParentId = selectedId ? findParentId(sections, selectedId) : undefined;
+  const selectedParentType = selectedParentId
+    ? findBlock(sections, selectedParentId)?.type ?? null
+    : null;
+  // With nothing selected, Section has nothing to say — Page is the useful
+  // default, and that rail used to be 300px of "select a section".
+  const activeRightTab: "page" | "section" = !selected
+    ? "page"
+    : rightTabFor?.id === selectedId
+      ? rightTabFor.tab
+      : "section";
   const nestParentId =
     selected &&
     (selectedEntry?.acceptsChildren || selected.type === "column")
@@ -122,17 +172,40 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
-  // Undo capture
+  /**
+   * Undo capture, coalesced.
+   *
+   * Every keystroke in a text field produces a new draft, so an uncoalesced
+   * stack meant Cmd+Z removed one character and the 40-entry cap was spent
+   * before you had finished a sentence — undo could not reach the edit you
+   * actually wanted to take back. Rapid changes (< 700 ms apart) now fold into
+   * the entry already at the top: one Cmd+Z steps back a phrase, not a letter.
+   *
+   * A structural change — adding, deleting or moving a block — always starts a
+   * new entry, because that is exactly what people expect to undo as a unit.
+   */
   useEffect(() => {
     if (!page) return;
     const serialized = JSON.stringify(page.draft);
     if (serialized === lastSnap.current) return;
     if (lastSnap.current) {
-      undoStack.current = [
-        JSON.parse(lastSnap.current) as PageRevisionSnapshot,
-        ...undoStack.current,
-      ].slice(0, 40);
+      const prev = JSON.parse(lastSnap.current) as PageRevisionSnapshot;
+      const now = Date.now();
+      const structural =
+        countBlocks(prev) !== countBlocks(page.draft) ||
+        blockOrder(prev) !== blockOrder(page.draft);
+      const coalesce =
+        !structural &&
+        !lastWasStructural.current &&
+        now - lastEditAt.current < 700 &&
+        undoStack.current.length > 0;
+
+      if (!coalesce) {
+        undoStack.current = [prev, ...undoStack.current].slice(0, 40);
+      }
       redoStack.current = [];
+      lastEditAt.current = now;
+      lastWasStructural.current = structural;
     }
     lastSnap.current = serialized;
   }, [page?.draft, page]);
@@ -208,6 +281,19 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  const pullFromServer = useCallback(async () => {
+    const res = await loadPage(pageId);
+    if (!res.ok) return false;
+    setAdminState((prev) => ({
+      ...prev,
+      cmsPages: prev.cmsPages.some((p) => p.id === res.data.id)
+        ? prev.cmsPages.map((p) => (p.id === res.data.id ? res.data : p))
+        : [...prev.cmsPages, res.data],
+    }));
+    autosave.markSynced(res.data);
+    return true;
+  }, [pageId, autosave]);
+
   // Pull the stored page in before the first edit, so the builder is never
   // editing a stale local copy that a later save would push over the server's.
   useEffect(() => {
@@ -230,6 +316,42 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
       cancelled = true;
     };
   }, [pageId, loaded, autosave]);
+
+  /**
+   * Publish, optionally at a future time.
+   *
+   * The draft is flushed first every time: publish copies what the SERVER has
+   * stored, so publishing an unsaved edit would put the *previous* version live
+   * and read as the edit having been lost.
+   */
+  const doPublish = useCallback(
+    async (publishAt?: string) => {
+      if (!isApiEnabled()) {
+        publishCmsPage(pageId);
+        toast.push("Published", "success");
+        return;
+      }
+      setPublishing(true);
+      await autosave.flush();
+      const res = await publishPage(pageId, publishAt ? { publishAt } : {});
+      if (res.ok) {
+        publishCmsPage(pageId);
+        // The server owns publishAt/publishedAt; re-read rather than guess.
+        await pullFromServer();
+      }
+      setPublishing(false);
+      setScheduling(false);
+      toast.push(
+        res.ok
+          ? publishAt
+            ? "Scheduled — this version will go live then"
+            : "Published — your page is live"
+          : res.error.message,
+        res.ok ? "success" : "danger",
+      );
+    },
+    [pageId, autosave, toast, pullFromServer],
+  );
 
   // Unsaved work must survive a reload or a mis-click on the browser's back
   // button. Autosave should make this almost never fire, which is precisely
@@ -402,28 +524,21 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
           >
             History
           </button>
+          {/* "Reset" used to replace the page with the demo layout — a button
+              beside Publish that destroyed an owner's About page. It now means
+              what everyone read it as: throw away the unpublished edits. */}
           <button
             type="button"
-            onClick={() => {
-              pushCmsRevision(pageId, "Checkpoint");
-              toast.push("Checkpoint saved", "success");
-            }}
-            className="rounded-lg border border-black/[0.1] px-2.5 py-1.5 text-[11px] font-semibold hover:bg-[#F5F5F7]"
+            onClick={() => setConfirmRevert(true)}
+            disabled={!page.published}
+            title={
+              page.published
+                ? "Throw away edits since the last publish"
+                : "This page has never been published"
+            }
+            className="rounded-lg border border-black/[0.1] px-2.5 py-1.5 text-[11px] font-semibold hover:bg-[#F5F5F7] disabled:opacity-40"
           >
-            Checkpoint
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm("Reset this page draft to the default layout?")) {
-                resetCmsPage(pageId);
-                setSelectedId(null);
-                toast.push("Reset to default", "success");
-              }
-            }}
-            className="rounded-lg border border-black/[0.1] px-2.5 py-1.5 text-[11px] font-semibold hover:bg-[#F5F5F7]"
-          >
-            Reset
+            Discard edits
           </button>
           <a
             href={page.path}
@@ -433,36 +548,56 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
           >
             Open live
           </a>
-          <button
-            type="button"
-            disabled={publishing}
-            onClick={async () => {
-              // Local first so mock mode still works, then the server — which is
-              // what actually reaches customers. The old button did only the
-              // former and reported success regardless.
-              publishCmsPage(pageId);
-              if (!isApiEnabled()) {
-                toast.push("Published", "success");
-                return;
-              }
-              setPublishing(true);
-              // Flush the draft first: publish copies what the SERVER has
-              // stored, so publishing an unsaved edit would put the previous
-              // version live and look like the edit was lost.
-              await autosave.flush();
-              const res = await publishPage(pageId);
-              setPublishing(false);
-              toast.push(
-                res.ok ? "Published — your page is live" : res.error.message,
-                res.ok ? "success" : "danger",
-              );
-            }}
-            className="rounded-lg bg-[#1D1D1F] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-black disabled:opacity-50"
-          >
-            {publishing ? "Publishing…" : "Publish"}
-          </button>
+          <div className="flex overflow-hidden rounded-lg bg-[#1D1D1F]">
+            <button
+              type="button"
+              disabled={publishing}
+              onClick={() => void doPublish()}
+              className="px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-black disabled:opacity-50"
+            >
+              {publishing ? "Publishing…" : "Publish"}
+            </button>
+            {isApiEnabled() ? (
+              <button
+                type="button"
+                disabled={publishing}
+                onClick={() => setScheduling(true)}
+                title="Schedule for later"
+                className="border-l border-white/20 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-black disabled:opacity-50"
+              >
+                ▾
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
+
+      {/* A pending go-live is invisible everywhere else in the builder, and the
+          page still reads "Draft" — which is true and unhelpful on its own. */}
+      {page.publishAt ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-200 bg-sky-50 px-3 py-2 text-[12px] text-sky-900">
+          <span>
+            Scheduled to go live{" "}
+            <strong>
+              {new Date(page.publishAt).toLocaleString("en-IN", {
+                day: "numeric",
+                month: "short",
+                hour: "numeric",
+                minute: "2-digit",
+              })}{" "}
+              IST
+            </strong>{" "}
+            — the version you approved then, not any edits since.
+          </span>
+          <button
+            type="button"
+            onClick={() => void doPublish()}
+            className="rounded-full border border-sky-300 bg-white px-3 py-1 font-semibold hover:bg-sky-100"
+          >
+            Publish now instead
+          </button>
+        </div>
+      ) : null}
 
       {strandedB ? (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
@@ -614,8 +749,43 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
           </div>
         </div>
 
-        <aside className="w-[300px] shrink-0 border-l border-black/[0.08] bg-white">
-          <SectionInspector pageId={pageId} block={selected} widgets={widgets} />
+        {/* With nothing selected this rail used to be 300px of "Select a
+            section", while the page's own title, address and Google fields had
+            no UI anywhere. Page is the default when nothing is selected. */}
+        <aside className="flex w-[300px] shrink-0 flex-col border-l border-black/[0.08] bg-white">
+          <div className="flex border-b border-black/[0.06] p-1">
+            {(
+              [
+                ["page", "Page"],
+                ["section", "Section"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setRightTabFor({ id: selectedId, tab: key })}
+                className={`flex-1 rounded-md py-1.5 text-[11px] font-semibold ${
+                  activeRightTab === key
+                    ? "bg-[#F0F0F2] text-[#1D1D1F]"
+                    : "text-[#86868B]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {activeRightTab === "page" ? (
+              <PageSettingsPanel page={page} />
+            ) : (
+              <SectionInspector
+                pageId={pageId}
+                block={selected}
+                widgets={widgets}
+                parentType={selectedParentType}
+              />
+            )}
+          </div>
         </aside>
 
         {showCode ? (
@@ -665,48 +835,43 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
         ) : null}
 
         {showHistory ? (
-          <div className="absolute inset-y-0 left-[260px] z-20 flex w-[320px] flex-col border-r border-black/[0.08] bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-black/[0.06] px-3 py-2.5">
-              <p className="text-sm font-semibold">Version history</p>
-              <button
-                type="button"
-                onClick={() => setShowHistory(false)}
-                className="text-xs font-semibold text-[#6E6E73]"
-              >
-                Close
-              </button>
-            </div>
-            <ul className="flex-1 space-y-1 overflow-y-auto p-2">
-              {page.revisions.length === 0 ? (
-                <li className="px-2 py-6 text-center text-xs text-[#A1A1A6]">
-                  No checkpoints yet.
-                </li>
-              ) : (
-                page.revisions.map((rev) => (
-                  <li key={rev.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        restoreCmsRevision(pageId, rev.id);
-                        toast.push("Revision restored", "success");
-                        setShowHistory(false);
-                      }}
-                      className="w-full rounded-xl px-3 py-2.5 text-left hover:bg-[#F5F5F7]"
-                    >
-                      <span className="block text-xs font-semibold text-[#1D1D1F]">
-                        {rev.label}
-                      </span>
-                      <span className="ez-mono text-[10px] text-[#A1A1A6]">
-                        {new Date(rev.at).toLocaleString("en-IN")}
-                      </span>
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
+          <RevisionHistory
+            pageId={pageId}
+            onClose={() => setShowHistory(false)}
+            onRestored={() => {
+              setSelectedId(null);
+              void pullFromServer().then(() =>
+                toast.push("Restored — press Publish to make it live", "success"),
+              );
+            }}
+          />
         ) : null}
       </div>
+
+      <SchedulePublishDialog
+        open={scheduling}
+        busy={publishing}
+        onCancel={() => setScheduling(false)}
+        onConfirm={(iso) => void doPublish(iso)}
+      />
+
+      <ConfirmDialog
+        open={confirmRevert}
+        title="Discard your edits?"
+        description="This page goes back to exactly what customers see right now. Anything you have changed since the last publish is lost."
+        confirmLabel="Discard edits"
+        danger
+        onCancel={() => setConfirmRevert(false)}
+        onConfirm={() => {
+          setConfirmRevert(false);
+          if (revertCmsPageToPublished(pageId)) {
+            setSelectedId(null);
+            toast.push("Back to the published version", "success");
+          } else {
+            toast.push("This page has never been published", "danger");
+          }
+        }}
+      />
     </div>
   );
 }

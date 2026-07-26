@@ -46,13 +46,14 @@ import type {
   CmsBlock,
   CmsGlobalCode,
   CmsPageDocument,
+  CmsPageSeo,
   CmsWidgetDefinition,
   PageRevision,
   PageRevisionSnapshot,
   PageVariantId,
   SectionType,
 } from "@/lib/cms/types";
-import { snapshotsEqual } from "@/lib/cms/types";
+import { DEFAULT_CMS_SEO, snapshotsEqual } from "@/lib/cms/types";
 import {
   migrateCheckoutRules,
   seedCheckoutRules,
@@ -1534,6 +1535,14 @@ export function updateCmsPageMeta(
   mapPage(pageId, (page) => ({ ...page, ...patch }));
 }
 
+/** Patch the search-engine fields. Autosave picks these up like any other edit. */
+export function updateCmsPageSeo(pageId: string, patch: Partial<CmsPageSeo>) {
+  mapPage(pageId, (page) => ({
+    ...page,
+    seo: { ...DEFAULT_CMS_SEO, ...(page.seo ?? {}), ...patch },
+  }));
+}
+
 export function deleteCmsPage(pageId: string) {
   if (pageId === "home") return;
   setAdminState((prev) => ({
@@ -1567,14 +1576,27 @@ export function duplicateCmsPage(pageId: string) {
   return newId;
 }
 
-export function resetCmsPage(pageId: string) {
-  if (pageId === "home") {
-    mapPage(pageId, () => createDefaultHomePage());
-    return;
-  }
+/**
+ * Throw away the unpublished edits and go back to what customers currently see.
+ *
+ * This used to mean "reset to the default layout" — a button sitting next to
+ * Publish that replaced a shop owner's About page with the demo homepage, or a
+ * landing page with a blank one. Nobody wanted that; it read as "undo my recent
+ * changes" and did something far bigger and unrecoverable.
+ *
+ * Returns false when there is no published version to go back to, so the caller
+ * can say so instead of destroying the only copy.
+ */
+export function revertCmsPageToPublished(pageId: string): boolean {
   const page = getCmsPage(pageId);
-  if (!page) return;
-  mapPage(pageId, () => createBlankLandingPage(page.id, page.title, page.id));
+  if (!page?.published) return false;
+  mapPage(pageId, (p) => ({
+    ...p,
+    draft: structuredClone(p.published as PageRevisionSnapshot),
+    status: "published",
+    updatedAt: new Date().toISOString(),
+  }));
+  return true;
 }
 
 export function setCmsActiveVariant(pageId: string, variantId: PageVariantId) {
