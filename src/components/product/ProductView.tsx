@@ -85,6 +85,30 @@ export function ProductView({
   const cart = useCart();
   const resolved = initialProduct;
 
+  /*
+   * Every hook lives ABOVE the not-found guard below.
+   *
+   * These three and the analytics effect used to sit further down, after the
+   * `if (!resolved) return` — so the number of hooks this component ran depended
+   * on whether the product had resolved. React requires the same hooks in the
+   * same order on every render, and the moment a product goes from unresolved to
+   * resolved (or back, when a navigation swaps `initialProduct`) it throws
+   * "Rendered fewer hooks than expected" and takes the page down.
+   */
+  const [notifyMobile, setNotifyMobile] = useState("");
+  const [notifyMsg, setNotifyMsg] = useState<string | null>(null);
+  const [notifySent, setNotifySent] = useState(false);
+
+  // Read off `initialProduct` rather than the destructured values, which are only
+  // available past the guard. Primitives in the dep array, not the object, so a
+  // new object identity for the same product does not re-fire the event.
+  const viewTitle = initialProduct?.title;
+  const viewPrice = initialProduct?.priceValue;
+  useEffect(() => {
+    if (viewTitle === undefined || viewPrice === undefined) return;
+    viewItem({ id: productKey, name: viewTitle, price: viewPrice });
+  }, [productKey, viewTitle, viewPrice]);
+
   if (!resolved) {
     return (
       <div className="min-h-screen bg-white">
@@ -132,10 +156,6 @@ export function ProductView({
   const isDigital = fulfillmentType === "digital";
   const isOutOfStock = !isPreorder && !isDigital && typeof stock === "number" && stock <= 0;
 
-  const [notifyMobile, setNotifyMobile] = useState("");
-  const [notifyMsg, setNotifyMsg] = useState<string | null>(null);
-  const [notifySent, setNotifySent] = useState(false);
-
   async function notifyMe() {
     const mobile = notifyMobile.replace(/\D/g, "").slice(0, 10);
     if (mobile.length !== 10) {
@@ -150,10 +170,6 @@ export function ProductView({
       setNotifyMsg(e instanceof Error ? e.message : "Could not subscribe. Try again.");
     }
   }
-
-  useEffect(() => {
-    viewItem({ id: productKey, name: title, price: priceValue });
-  }, [productKey, title, priceValue]);
 
   function handleAddToCart() {
     cart.addItem({

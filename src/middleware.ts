@@ -52,6 +52,18 @@ function legacyUrlRedirect(request: NextRequest): NextResponse | null {
     }
   }
 
+  // CMS pages moved from /pages/<slug> to /<slug>. Those URLs are indexed and
+  // forwarded around, so they redirect rather than 404 — and the seeded policy
+  // pages cross-link each other, so a migration rewrote those hrefs too instead of
+  // relying on this for every internal click.
+  const legacyCmsPage = /^\/pages\/([a-z0-9-]+)\/?$/.exec(pathname);
+  if (legacyCmsPage) {
+    const url = request.nextUrl.clone();
+    url.search = "";
+    url.pathname = `/${legacyCmsPage[1]}`;
+    return NextResponse.redirect(url, 308);
+  }
+
   // The five pre-CMS category paths keep their URLs, so /categories/games must
   // never serve 200 as well — a second live URL for the same products is
   // duplicate content, and /games is the one that is already indexed.

@@ -136,11 +136,38 @@ export async function fetchCategoryProducts(
   slug: string,
   perPage = SSR_CARD_COUNT,
 ): Promise<CategoryProductPage> {
+  return fetchCatalogPage({ category: slug }, perPage);
+}
+
+/** The first page of a brand's products, server-side. Same reasoning. */
+export async function fetchBrandProducts(
+  slug: string,
+  perPage = SSR_CARD_COUNT,
+): Promise<CategoryProductPage> {
+  return fetchCatalogPage({ brand: slug }, perPage);
+}
+
+/**
+ * One page of the catalogue for any single filter the products endpoint accepts.
+ *
+ * Shared so a brand page and a category page cannot drift into rendering the
+ * catalogue two different ways — which is how /games ended up server-rendering a
+ * checked-in JSON file while /brands rendered nothing at all.
+ */
+async function fetchCatalogPage(
+  filters: Record<string, string>,
+  perPage: number,
+): Promise<CategoryProductPage> {
+  const qs = new URLSearchParams({
+    ...filters,
+    page: "1",
+    per_page: String(perPage),
+  });
   const body = await getJson<{
     data?: ApiProduct[];
     total?: number;
     last_page?: number;
-  }>(`/products?category=${encodeURIComponent(slug)}&page=1&per_page=${perPage}`);
+  }>(`/products?${qs}`);
 
   const rows = Array.isArray(body?.data) ? body.data : [];
   return {

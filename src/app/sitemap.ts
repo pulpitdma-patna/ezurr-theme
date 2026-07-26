@@ -91,12 +91,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     brandPaths(),
     categoryPaths(),
   ]);
+  const cmsSet = new Set(cms);
   const paths = [...STATIC_PATHS, "/categories", ...categories, ...brands, ...cms, ...products];
   // De-dupe in case a product handle ever collides with a static path.
   const unique = Array.from(new Set(paths));
   return unique.map((path) => {
     // Policy/company pages change rarely and shouldn't outrank the catalogue.
-    const isCms = path.startsWith("/pages/");
+    // CMS pages are top level now, so "starts with /pages/" no longer finds
+    // them. Match the set we actually fetched instead of guessing from the shape.
+    const isCms = cmsSet.has(path) && path !== "/";
     return {
       url: new URL(path, SITE_URL).toString(),
       lastModified: now,

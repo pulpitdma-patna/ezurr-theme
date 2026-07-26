@@ -32,6 +32,12 @@ export type CmsPageSummary = {
   title: string;
   status: "draft" | "published";
   updatedAt: string | null;
+  /** Set when a future go-live is pending — otherwise this reads as "Draft". */
+  publishAt?: string | null;
+  unpublishAt?: string | null;
+  publishedAt?: string | null;
+  /** Live, but the draft has moved on since. Answered from the two hashes. */
+  hasUnpublishedChanges?: boolean;
 };
 
 export type CmsRevisionSummary = {

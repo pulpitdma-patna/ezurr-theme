@@ -1566,7 +1566,7 @@ export function duplicateCmsPage(pageId: string) {
     ...structuredClone(source),
     id: newId,
     title: `${source.title} (copy)`,
-    path: `/pages/${newId}`,
+    path: `/${newId}`,
     status: "draft",
     updatedAt: nowIso(),
     published: null,

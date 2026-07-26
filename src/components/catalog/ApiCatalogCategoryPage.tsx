@@ -29,7 +29,12 @@ export function ApiCatalogCategoryPage({
   brandSlug,
   collection,
 }: {
-  active: NavKey;
+  /**
+   * Which top-level nav entry to highlight — a category slug. Optional because a
+   * brand page and a promotional collection are not categories; both used to pass
+   * `active="games"` and highlight the wrong menu item on every visit.
+   */
+  active?: NavKey;
   breadcrumb: string;
   title: string;
   description: string;

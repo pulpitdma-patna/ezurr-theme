@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getApiBaseUrl } from "@/lib/apiClient";
+import { cmsPagePath } from "@/lib/cms/cmsRoutes";
 import type { CmsBlock, PageRevisionSnapshot, PageVariantId } from "./types";
 
 /**
@@ -83,7 +84,7 @@ export async function fetchPublishedCmsPage(
 
 /** Storefront path for a CMS slug (matches how the admin stores page.path). */
 export function cmsPathForSlug(slug: string): string {
-  return slug === "home" ? "/" : `/pages/${slug}`;
+  return cmsPagePath(slug);
 }
 
 /** Enabled sections of the served variant — mirrors getPublishedCmsSections. */

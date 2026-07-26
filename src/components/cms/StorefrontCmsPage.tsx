@@ -8,6 +8,7 @@ import { PageRenderer } from "@/components/cms/PageRenderer";
 import { useCmsPage, useCmsWidgets, usePublishedSections } from "@/hooks/useCmsStore";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import type { CmsPageDocument, PageRevisionSnapshot } from "@/lib/cms/types";
+import { cmsPagePath } from "@/lib/cms/cmsRoutes";
 
 type StorefrontCmsPageProps = {
   pageId: string;
@@ -16,7 +17,7 @@ type StorefrontCmsPageProps = {
 
 /** Storefront path for a CMS pageId (matches how the admin stores page.path). */
 function pathForPageId(pageId: string): string {
-  return pageId === "home" ? "/" : `/pages/${pageId}`;
+  return cmsPagePath(pageId);
 }
 
 function CmsSkeleton() {

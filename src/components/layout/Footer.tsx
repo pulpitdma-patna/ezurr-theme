@@ -11,12 +11,12 @@ const SUPPORT_EMAIL = "info@ezurr.com";
 
 /** CMS-managed policy pages (seeded by PolicyPagesSeeder, edited in /admin/cms). */
 const policyLinks = {
-  shipping: { href: "/pages/shipping-policy", label: "Shipping policy" },
-  returns: { href: "/pages/returns-refunds", label: "Returns & refunds" },
-  privacy: { href: "/pages/privacy-policy", label: "Privacy" },
-  terms: { href: "/pages/terms-of-service", label: "Terms" },
-  contact: { href: "/pages/contact", label: "Contact us" },
-  about: { href: "/pages/about", label: "About" },
+  shipping: { href: "/shipping-policy", label: "Shipping policy" },
+  returns: { href: "/returns-refunds", label: "Returns & refunds" },
+  privacy: { href: "/privacy-policy", label: "Privacy" },
+  terms: { href: "/terms-of-service", label: "Terms" },
+  contact: { href: "/contact", label: "Contact us" },
+  about: { href: "/about", label: "About" },
 } as const;
 
 const legalBarLinks = [

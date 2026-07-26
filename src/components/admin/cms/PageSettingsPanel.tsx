@@ -6,6 +6,7 @@ import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { updateCmsPageMeta, updateCmsPageSeo, getDraftCmsSections } from "@/lib/adminStore";
 import { summarizeSections } from "@/lib/cms/publicPages";
 import { DEFAULT_CMS_SEO, type CmsPageDocument } from "@/lib/cms/types";
+import { cmsPagePath, cmsSlugFromPath, isReservedCmsSlug } from "@/lib/cms/cmsRoutes";
 
 /**
  * The "Page" tab of the builder's right rail.
@@ -20,7 +21,7 @@ import { DEFAULT_CMS_SEO, type CmsPageDocument } from "@/lib/cms/types";
  */
 
 function slugFromPath(path: string): string {
-  return path.replace(/^\/pages\//, "").replace(/^\//, "");
+  return cmsSlugFromPath(path);
 }
 
 function Counter({ value, max }: { value: string; max: number }) {
@@ -41,6 +42,7 @@ export function PageSettingsPanel({ page }: { page: CmsPageDocument }) {
   const isHome = page.id === "home";
   const [slug, setSlug] = useState(slugFromPath(page.path));
   const [renameTo, setRenameTo] = useState<string | null>(null);
+  const [slugError, setSlugError] = useState<string | null>(null);
 
   const commitSlug = (nextSlug: string) => {
     const clean = nextSlug
@@ -49,15 +51,25 @@ export function PageSettingsPanel({ page }: { page: CmsPageDocument }) {
       .replace(/^-|-$/g, "");
     if (!clean || clean === slugFromPath(page.path)) {
       setSlug(slugFromPath(page.path));
+      setSlugError(null);
       return;
     }
+    // Pages are top level now, so this address competes with every storefront
+    // route — and Next serves the storefront route, silently. Say so here rather
+    // than let the owner save a page that will never appear.
+    if (isReservedCmsSlug(clean)) {
+      setSlugError(`Your store already uses /${clean}. Try another address.`);
+      setSlug(slugFromPath(page.path));
+      return;
+    }
+    setSlugError(null);
     // A published page's URL is in Google, in WhatsApp forwards, and possibly
     // printed on an invoice. Changing it is not a text-field edit.
     if (page.status === "published") {
       setRenameTo(clean);
       return;
     }
-    updateCmsPageMeta(page.id, { path: `/pages/${clean}` });
+    updateCmsPageMeta(page.id, { path: cmsPagePath(clean) });
     setSlug(clean);
   };
 
@@ -95,7 +107,7 @@ export function PageSettingsPanel({ page }: { page: CmsPageDocument }) {
           ) : (
             <div className="mt-1 flex items-center rounded-lg border border-black/[0.1] bg-white pl-2.5">
               <span className="ez-mono shrink-0 text-[11px] text-[#A1A1A6]">
-                /pages/
+                /
               </span>
               <input
                 className="ez-mono w-full min-w-0 bg-transparent py-2 pr-2.5 text-[11px] outline-none"
@@ -108,6 +120,9 @@ export function PageSettingsPanel({ page }: { page: CmsPageDocument }) {
               />
             </div>
           )}
+          {slugError ? (
+            <p className="m-0 mt-1 text-[11px] font-semibold text-red-700">{slugError}</p>
+          ) : null}
         </div>
 
         <div className="space-y-3 rounded-xl border border-black/[0.06] bg-[#F8F8FA] p-3">
@@ -243,7 +258,7 @@ export function PageSettingsPanel({ page }: { page: CmsPageDocument }) {
         title="Change this page's address?"
         description={
           renameTo
-            ? `This page is live. Anyone who has the old link — a customer, a Google result, a WhatsApp forward — will get "page not found".\n\nOld: yourstore.com${page.path}\nNew: yourstore.com/pages/${renameTo}`
+            ? `This page is live. Anyone who has the old link — a customer, a Google result, a WhatsApp forward — will get "page not found".\n\nOld: yourstore.com${page.path}\nNew: yourstore.com/${renameTo}`
             : ""
         }
         confirmLabel="Change the address"
@@ -254,7 +269,7 @@ export function PageSettingsPanel({ page }: { page: CmsPageDocument }) {
         }}
         onConfirm={() => {
           if (renameTo) {
-            updateCmsPageMeta(page.id, { path: `/pages/${renameTo}` });
+            updateCmsPageMeta(page.id, { path: cmsPagePath(renameTo) });
             setSlug(renameTo);
           }
           setRenameTo(null);

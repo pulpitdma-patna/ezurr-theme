@@ -17,8 +17,9 @@ export const metadata: Metadata = {
  */
 export default function PriceGuaranteePage() {
   return (
+    // No `active`: this is a promotional collection, not a category, and claiming
+    // "games" highlighted the wrong top-level menu item on every visit.
     <ApiCatalogCategoryPage
-      active="games"
       breadcrumb="Price guarantee"
       title="Minimum price guarantee"
       description="Every title here is covered — find it cheaper on another Indian store and we'll match the price."

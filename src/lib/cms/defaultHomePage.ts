@@ -1,3 +1,4 @@
+import { cmsPagePath } from "./cmsRoutes";
 import type {
   CmsBlock,
   CmsPageDocument,
@@ -185,7 +186,7 @@ export function createBlankLandingPage(
   return {
     id,
     title,
-    path: `/pages/${slug}`,
+    path: cmsPagePath(slug),
     status: "draft",
     updatedAt: now,
     draft,
