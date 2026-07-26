@@ -302,12 +302,6 @@ export default function AdminCmsPagesPage() {
 
       <div className="flex flex-wrap gap-3 text-sm">
         <Link
-          href="/admin/cms/widgets"
-          className="rounded-full border border-black/[0.1] bg-white px-4 py-2 font-semibold hover:bg-[#F5F5F7]"
-        >
-          Widget marketplace →
-        </Link>
-        <Link
           href="/admin/cms/code"
           className="rounded-full border border-black/[0.1] bg-white px-4 py-2 font-semibold hover:bg-[#F5F5F7]"
         >

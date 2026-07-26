@@ -1336,11 +1336,55 @@ function mapPage(
   }));
 }
 
+/**
+ * The variant the editor works on — always A.
+ *
+ * A/B variants are no longer offered in the UI, but documents saved while they
+ * were can still carry `activeVariantId: "B"`. Honouring that now would edit a
+ * variant nobody can see: published reads default to A, so every change would
+ * go live for no one. Pin to A and fall back to whatever exists.
+ *
+ * A page in that state is detected on load (see `hasStrandedVariantB`) so the
+ * builder can offer to adopt B's layout rather than silently discarding it.
+ */
 function draftActiveVariant(page: CmsPageDocument) {
   return (
-    page.draft.variants.find((v) => v.id === page.draft.activeVariantId) ??
-    page.draft.variants[0]
+    page.draft.variants.find((v) => v.id === "A") ?? page.draft.variants[0]
   );
+}
+
+/**
+ * True when this page was left mid-A/B-test: B is the active variant and its
+ * layout differs from A, so pinning to A hides work the author did.
+ */
+export function hasStrandedVariantB(page: CmsPageDocument): boolean {
+  if (page.draft.activeVariantId !== "B") return false;
+  const a = page.draft.variants.find((v) => v.id === "A");
+  const b = page.draft.variants.find((v) => v.id === "B");
+  if (!a || !b) return false;
+  return JSON.stringify(a.sections) !== JSON.stringify(b.sections);
+}
+
+/** Copy variant B's layout over A, for a page stranded mid-test. */
+export function adoptVariantB(pageId: string) {
+  setAdminState((prev) => ({
+    ...prev,
+    cmsPages: prev.cmsPages.map((page) => {
+      if (page.id !== pageId) return page;
+      const b = page.draft.variants.find((v) => v.id === "B");
+      if (!b) return page;
+      return {
+        ...page,
+        draft: {
+          ...page.draft,
+          activeVariantId: "A",
+          variants: page.draft.variants.map((v) =>
+            v.id === "A" ? { ...v, sections: b.sections } : v,
+          ),
+        },
+      };
+    }),
+  }));
 }
 
 function withDraftSections(

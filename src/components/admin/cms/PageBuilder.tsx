@@ -22,18 +22,17 @@ import {
   publishCmsPage,
   pushCmsRevision,
   reorderCmsSections,
+  hasStrandedVariantB,
+  adoptVariantB,
   resetCmsPage,
   restoreCmsRevision,
   setAdminState,
-  setCmsActiveVariant,
   updateCmsPageCode,
-  updateCmsTrafficSplit,
 } from "@/lib/adminStore";
 import { snapshotsEqual } from "@/lib/cms/types";
 import type {
   CmsBlock,
   PageRevisionSnapshot,
-  PageVariantId,
   SectionType,
 } from "@/lib/cms/types";
 import { getSectionEntry } from "@/lib/cms/sectionRegistry";
@@ -85,6 +84,7 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
   const toast = useAdminToast();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<"desktop" | "mobile">("desktop");
+  const [dismissedB, setDismissedB] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [leftTab, setLeftTab] = useState<"modules" | "tree">("modules");
@@ -245,8 +245,9 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
     reorderCmsSections(pageId, next);
   };
 
-  const trafficA =
-    draft.variants.find((v) => v.id === "A")?.trafficPct ?? 100;
+  // A page left mid-A/B-test would otherwise have B's layout silently orphaned
+  // once the switcher is gone, since the editor and the storefront both use A.
+  const strandedB = !dismissedB && page ? hasStrandedVariantB(page) : false;
 
   return (
     <div className="fixed inset-0 z-[80] flex flex-col bg-[#EFEFF2]">
@@ -287,35 +288,6 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
           >
             Redo
           </button>
-          <div className="flex rounded-lg border border-black/[0.1] p-0.5">
-            {(["A", "B"] as PageVariantId[]).map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setCmsActiveVariant(pageId, id)}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-                  draft.activeVariantId === id
-                    ? "bg-[#1D1D1F] text-white"
-                    : "text-[#6E6E73]"
-                }`}
-              >
-                {id}
-              </button>
-            ))}
-          </div>
-          <label className="flex items-center gap-1.5 text-[11px] text-[#6E6E73]">
-            A%
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={trafficA}
-              onChange={(e) =>
-                updateCmsTrafficSplit(pageId, Number(e.target.value))
-              }
-              className="w-14 rounded-md border border-black/[0.1] px-1.5 py-1 text-xs"
-            />
-          </label>
           <div className="flex rounded-lg border border-black/[0.1] p-0.5">
             <button
               type="button"
@@ -401,6 +373,34 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
         </div>
       </div>
 
+      {strandedB ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+          <span>
+            This page had an A/B test. <strong>Variant A</strong> is what
+            customers see, so that is what you are editing now.
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                adoptVariantB(pageId);
+                setDismissedB(true);
+              }}
+              className="rounded-full border border-amber-300 bg-white px-3 py-1 font-semibold hover:bg-amber-100"
+            >
+              Use variant B&apos;s layout instead
+            </button>
+            <button
+              type="button"
+              onClick={() => setDismissedB(true)}
+              className="rounded-full px-3 py-1 font-semibold underline"
+            >
+              Keep A
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="relative flex min-h-0 flex-1">
         <aside className="flex w-[260px] shrink-0 flex-col border-r border-black/[0.08] bg-white">
           <div className="flex border-b border-black/[0.06] p-1">
@@ -438,7 +438,6 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
           <div className="min-h-0 flex-1 overflow-hidden">
             {leftTab === "modules" ? (
               <ModulePalette
-                widgets={widgets}
                 onAdd={onAdd}
                 nestParentId={nestParentId}
               />

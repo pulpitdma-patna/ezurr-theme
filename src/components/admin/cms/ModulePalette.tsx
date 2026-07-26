@@ -2,18 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { SECTION_REGISTRY } from "@/lib/cms/sectionRegistry";
-import type { CmsWidgetDefinition, SectionType } from "@/lib/cms/types";
+import type { SectionType } from "@/lib/cms/types";
 
 type ModulePaletteProps = {
-  widgets: CmsWidgetDefinition[];
   onAdd: (type: SectionType, widgetId?: string) => void;
   nestParentId?: string | null;
 };
 
-export function ModulePalette({ widgets, onAdd, nestParentId }: ModulePaletteProps) {
+export function ModulePalette({ onAdd, nestParentId }: ModulePaletteProps) {
   const [query, setQuery] = useState("");
-  const installed = widgets.filter((w) => w.installed && w.enabled);
-
   const modules = useMemo(() => {
     const q = query.trim().toLowerCase();
   const builtIns = SECTION_REGISTRY.filter(
@@ -23,13 +20,8 @@ export function ModulePalette({ widgets, onAdd, nestParentId }: ModulePalettePro
         ? true
         : e.label.toLowerCase().includes(q) || e.description.toLowerCase().includes(q),
     );
-    const wgt = installed.filter((w) =>
-      !q
-        ? true
-        : w.name.toLowerCase().includes(q) || w.description.toLowerCase().includes(q),
-    );
-    return { builtIns, wgt };
-  }, [installed, query]);
+    return { builtIns };
+  }, [query]);
 
   return (
     <div className="flex h-full flex-col">
@@ -73,38 +65,6 @@ export function ModulePalette({ widgets, onAdd, nestParentId }: ModulePalettePro
             ))}
           </ul>
         </div>
-        {modules.wgt.length > 0 ? (
-          <div>
-            <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#A1A1A6]">
-              Widgets
-            </p>
-            <ul className="mt-1.5 space-y-1">
-              {modules.wgt.map((w) => (
-                <li key={w.id}>
-                  <button
-                    type="button"
-                    onClick={() => onAdd("widget", w.id)}
-                    className="flex w-full items-start gap-2 rounded-xl border border-transparent px-2.5 py-2 text-left transition hover:border-black/[0.08] hover:bg-[#F5F5F7]"
-                  >
-                    <span className="mt-0.5 text-sm">{w.icon}</span>
-                    <span>
-                      <span className="block text-[13px] font-semibold text-[#1D1D1F]">
-                        {w.name}
-                      </span>
-                      <span className="text-[11px] leading-snug text-[#86868B]">
-                        {w.description}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <p className="px-1 text-[11px] text-[#A1A1A6]">
-            Install widgets from the marketplace to use them here.
-          </p>
-        )}
       </div>
     </div>
   );

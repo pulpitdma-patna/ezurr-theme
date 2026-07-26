@@ -1,4 +1,8 @@
-/** UI-level staff roles for Phase 1 (mock). Server authZ is Phase 2. */
+/**
+ * Mirror of the server's permission map (ezurr-api User::STAFF_PERMISSIONS).
+ * The server is authoritative — this only decides which controls are shown, so
+ * a manager is never offered a button that will 403.
+ */
 
 export type StaffRole = "owner" | "manager" | "support" | "viewer";
 
@@ -13,6 +17,9 @@ export type Permission =
   | "automations.write"
   | "import.write"
   | "reports.export"
+  /** Edit page content. */
+  | "content.write"
+  /** Inject custom HTML/JS into a page — a different risk, owner-only. */
   | "cms.code.write";
 
 const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
@@ -27,6 +34,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     "automations.write",
     "import.write",
     "reports.export",
+    "content.write",
     "cms.code.write",
   ],
   manager: [
@@ -39,6 +47,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
     "automations.write",
     "import.write",
     "reports.export",
+    "content.write",
   ],
   support: ["orders.write", "customers.write", "reports.export"],
   viewer: ["reports.export"],

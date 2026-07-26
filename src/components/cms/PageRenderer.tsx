@@ -164,9 +164,12 @@ function BlockShell({
 function WidgetBlock({
   block,
   widgets,
+  interactive = false,
 }: {
   block: CmsBlock;
   widgets: CmsWidgetDefinition[];
+  /** True inside the builder, where an unresolvable widget is recoverable. */
+  interactive?: boolean;
 }) {
   const widget = widgets.find((w) => w.id === block.widgetId);
 
@@ -175,9 +178,23 @@ function WidgetBlock({
   // not via a parent-context <script> injection. Only sanitized HTML/CSS renders here.
 
   if (!widget || !widget.enabled) {
+    // Widget definitions only ever lived in the author's own browser, so a
+    // visitor could never resolve one — every customer was shown the words
+    // "Widget unavailable" on a live page. An empty gap is strictly better
+    // than that; the builder gets a card that can recover the content.
+    if (!interactive) return null;
+
     return (
-      <div className="ez-page py-8 text-center text-sm text-[#86868B]">
-        Widget unavailable
+      <div className="ez-page py-6">
+        <div className="rounded-[14px] border border-dashed border-[#E5A8A3] bg-[#FEF3F2]/60 p-4 text-center">
+          <p className="m-0 text-sm font-semibold text-[#B42318]">
+            Removed module
+          </p>
+          <p className="m-0 mt-1 text-[13px] leading-relaxed text-[#6E6E73]">
+            This came from the old widget marketplace, which never reached
+            customers. Convert it to keep the content, or delete it.
+          </p>
+        </div>
       </div>
     );
   }
@@ -477,7 +494,9 @@ function RenderBlock({
           />,
         );
       }
-      return shell(<WidgetBlock block={block} widgets={widgets} />);
+      return shell(
+        <WidgetBlock block={block} widgets={widgets} interactive={interactive} />,
+      );
     case "column": {
       const children = (block.children ?? []).filter(
         (c) => c.enabled || showDisabled,

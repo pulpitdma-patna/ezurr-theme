@@ -305,7 +305,6 @@ const pageTitles: { match: (path: string) => boolean; title: string; crumb?: str
   { match: (p) => p.startsWith("/admin/coupons"), title: "Coupons", crumb: "Grow", crumbHref: "/admin/coupons" },
   { match: (p) => p.startsWith("/admin/recovery"), title: "Recovery", crumb: "Grow", crumbHref: "/admin/recovery" },
   { match: (p) => p === "/admin/cms", title: "Pages", crumb: "Online store", crumbHref: "/admin/cms" },
-  { match: (p) => p === "/admin/cms/widgets", title: "Widgets", crumb: "Online store", crumbHref: "/admin/cms" },
   { match: (p) => p === "/admin/cms/code", title: "Custom code", crumb: "Online store", crumbHref: "/admin/cms" },
   { match: (p) => p.startsWith("/admin/cms/"), title: "Page builder", crumb: "Online store", crumbHref: "/admin/cms" },
   { match: (p) => p === "/admin/checkout-rules/templates", title: "Templates", crumb: "Online store", crumbHref: "/admin/checkout-rules" },
@@ -412,7 +411,6 @@ const navSubmenus: NavGroup[] = [
     icon: <IconMedia />,
     items: [
       { href: "/admin/cms", label: "Pages", icon: <IconReports /> },
-      { href: "/admin/cms/widgets", label: "Widgets", icon: <IconBox /> },
       { href: "/admin/cms/code", label: "Custom code", icon: <IconBolt /> },
       { href: "/admin/checkout-rules", label: "Checkout rules", icon: <IconStore /> },
       { href: "/admin/settings#appearance", label: "Appearance", icon: <IconGear /> },
