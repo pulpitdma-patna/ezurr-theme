@@ -6,6 +6,7 @@ import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { useAdminToast } from "@/components/admin/AdminToast";
+import { formatAdminDateTime } from "@/lib/adminFormat";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import { useCmsPages } from "@/hooks/useCmsStore";
 import type { CmsPageDocument, PageRevisionSnapshot } from "@/lib/cms/types";
@@ -222,7 +223,7 @@ export default function AdminCmsPagesPage() {
                   </span>
                 </td>
                 <td className="ez-mono px-4 py-3.5 text-[11px] text-[#A1A1A6]">
-                  {new Date(page.updatedAt).toLocaleString("en-IN")}
+                  {formatAdminDateTime(page.updatedAt)}
                 </td>
                 <td className="px-4 py-3.5">
                   <div className="flex flex-wrap justify-end gap-1.5">

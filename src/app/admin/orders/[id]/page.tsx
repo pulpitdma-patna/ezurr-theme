@@ -28,6 +28,7 @@ import {
 } from "@/lib/adminStore";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import { mapApiOrderToAdmin } from "@/lib/apiMappers";
+import { formatAdminDateTime } from "@/lib/adminFormat";
 import { formatMobileDisplay } from "@/lib/auth";
 import { can } from "@/lib/adminPermissions";
 
@@ -39,16 +40,6 @@ const nextActions: Partial<Record<AdminOrderStatus, AdminOrderStatus[]>> = {
   preorder: ["confirmed", "cancelled"],
   delivered: [],
 };
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export default function AdminOrderDetailPage({
   params,
@@ -223,7 +214,7 @@ export default function AdminOrderDetailPage({
     <div className="admin-print-packing">
       <AdminPageHeader
         title={order.id}
-        description={`Placed ${formatDate(order.placedAt)} · ${order.city}`}
+        description={`Placed ${formatAdminDateTime(order.placedAt)} · ${order.city}`}
         breadcrumbs={[
           { label: "Orders", href: "/admin/orders" },
           { label: order.id },
@@ -252,7 +243,7 @@ export default function AdminOrderDetailPage({
               <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
                 Packing slip · {order.id}
               </span>
-              <span className="text-[11px] text-[#86868B]">{formatDate(order.placedAt)}</span>
+              <span className="text-[11px] text-[#86868B]">{formatAdminDateTime(order.placedAt)}</span>
             </div>
             <div className="border-b border-black/[0.05] px-4 py-2.5 text-xs text-[#6E6E73]">
               Line items · {order.items.length}

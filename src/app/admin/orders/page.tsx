@@ -17,6 +17,7 @@ import {
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useListSavedViews } from "@/hooks/useListSavedViews";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
+import { formatAdminDate } from "@/lib/adminFormat";
 import { formatMobileDisplay } from "@/lib/auth";
 import { bulkUpdateOrderStatus } from "@/lib/adminStore";
 import { api, isApiEnabled } from "@/lib/apiClient";
@@ -45,14 +46,6 @@ const dateRangeOptions = [
   { value: "30d", label: "Last 30 days" },
   { value: "custom", label: "Custom range" },
 ];
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function startOfDay(d: Date) {
   const next = new Date(d);
@@ -236,7 +229,7 @@ export default function AdminOrdersPage() {
           <div className="ez-mono text-[10px] font-semibold uppercase tracking-[0.08em]">
             {row.id}
           </div>
-          <div className="mt-0.5 text-[11px] text-[#86868B]">{formatDate(row.placedAt)}</div>
+          <div className="mt-0.5 text-[11px] text-[#86868B]">{formatAdminDate(row.placedAt)}</div>
         </div>
       ),
     },

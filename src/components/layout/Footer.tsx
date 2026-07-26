@@ -54,10 +54,10 @@ export function FooterFull() {
             India&apos;s ultimate gaming store — games, consoles and gear at the
             lowest price, guaranteed.
           </p>
-          <div className="mt-1 flex flex-col gap-1">
+          <div className="mt-1 flex flex-col">
             <a
               href={`mailto:${SUPPORT_EMAIL}`}
-              className="ez-mono w-fit text-[11px] tracking-[0.08em] text-[#424245] hover:text-[#1D1D1F]"
+              className="ez-mono w-fit py-1 text-[11px] tracking-[0.08em] text-[#424245] hover:text-[#1D1D1F]"
             >
               {SUPPORT_EMAIL}
             </a>
@@ -104,7 +104,7 @@ export function FooterFull() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-xs text-white/45 hover:text-white"
+                className="py-1 text-xs text-white/45 hover:text-white"
               >
                 {link.label}
               </Link>
@@ -127,16 +127,18 @@ function FooterColumn({
   title: string;
   links: { href: string; label: string }[];
 }) {
+  // Links carry their own vertical padding to clear the 24px minimum target;
+  // the column gap shrinks by the same amount so the rhythm is unchanged.
   return (
-    <div className="flex flex-col gap-2.5 text-sm">
-      <span className="ez-mono mb-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[#86868B]">
+    <div className="flex flex-col gap-0.5 text-sm">
+      <span className="ez-mono mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-[#86868B]">
         {title}
       </span>
       {links.map((link) => (
         <Link
           key={`${link.href}-${link.label}`}
           href={link.href}
-          className="text-[#424245] hover:text-[#1D1D1F]"
+          className="py-1 text-[#424245] hover:text-[#1D1D1F]"
         >
           {link.label}
         </Link>
@@ -156,16 +158,16 @@ export function FooterCompact() {
           </span>
         </Link>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[#86868B]">
-          <Link href="/auth" className="hover:text-[#1D1D1F]">
+          <Link href="/auth" className="py-1 hover:text-[#1D1D1F]">
             Sign in
           </Link>
-          <Link href="/account" className="hover:text-[#1D1D1F]">
+          <Link href="/account" className="py-1 hover:text-[#1D1D1F]">
             Account
           </Link>
-          <Link href={policyLinks.privacy.href} className="hover:text-[#1D1D1F]">
+          <Link href={policyLinks.privacy.href} className="py-1 hover:text-[#1D1D1F]">
             {policyLinks.privacy.label}
           </Link>
-          <Link href={policyLinks.terms.href} className="hover:text-[#1D1D1F]">
+          <Link href={policyLinks.terms.href} className="py-1 hover:text-[#1D1D1F]">
             {policyLinks.terms.label}
           </Link>
           <span>Minimum price guarantee on selected titles.</span>

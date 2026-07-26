@@ -17,6 +17,34 @@ export interface CartItem {
   image?: string;
   fulfillmentType?: string;
   qty: number;
+  /**
+   * Units the server last said were on hand, when that is known (the drawer
+   * refreshes it). Absent means "unknown" — the line then only gets the
+   * per-line ceiling.
+   */
+  stock?: number;
+}
+
+/**
+ * Per-line ceiling for a browser cart.
+ *
+ * The server is the authority on quantity and stock, and it rejects absurd
+ * values at order time. This exists so a hand-edited localStorage cart cannot
+ * render a nine-figure subtotal or a header badge wide enough to break the
+ * layout before the buyer ever reaches checkout.
+ */
+export const MAX_LINE_QTY = 20;
+
+/** Whole units, at least one, never past the ceiling or known stock. */
+export function clampQty(qty: number, stock?: number): number {
+  if (!Number.isFinite(qty)) return 1;
+  // stock <= 0 is treated as unknown: the line is unbuyable either way, and
+  // silently rewriting it to 0 would just delete the buyer's cart line.
+  const ceiling =
+    typeof stock === "number" && Number.isFinite(stock) && stock > 0
+      ? Math.min(MAX_LINE_QTY, Math.floor(stock))
+      : MAX_LINE_QTY;
+  return Math.min(Math.max(1, Math.floor(qty)), ceiling);
 }
 
 interface CartContextValue {
@@ -26,6 +54,8 @@ interface CartContextValue {
   hydrated: boolean;
   addItem: (item: Omit<CartItem, "qty">, qty?: number) => void;
   setQty: (productKey: string, qty: number) => void;
+  /** Record live availability for a line and re-clamp its quantity to it. */
+  setStock: (productKey: string, stock: number) => void;
   removeItem: (productKey: string) => void;
   clear: () => void;
   has: (productKey: string) => boolean;
@@ -48,10 +78,19 @@ function isValidItem(x: unknown): x is CartItem {
   return (
     typeof i.productKey === "string" &&
     typeof i.title === "string" &&
+    // A negative or non-finite price is tampering, not a discount: drop the
+    // line rather than let it drag the subtotal below zero.
     typeof i.price === "number" &&
+    Number.isFinite(i.price) &&
+    i.price >= 0 &&
     typeof i.qty === "number" &&
     i.qty > 0
   );
+}
+
+/** Storage is user-writable, so re-clamp everything it hands back. */
+function sanitizeItem(item: CartItem): CartItem {
+  return { ...item, qty: clampQty(item.qty, item.stock) };
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
@@ -66,7 +105,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed: unknown = JSON.parse(raw);
-        if (Array.isArray(parsed)) setItems(parsed.filter(isValidItem));
+        if (Array.isArray(parsed)) setItems(parsed.filter(isValidItem).map(sanitizeItem));
       }
       const c = window.localStorage.getItem(COUPON_KEY);
       if (c) setCouponCodeState(c);
@@ -91,10 +130,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const idx = prev.findIndex((x) => x.productKey === item.productKey);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = { ...next[idx], qty: next[idx].qty + qty };
+        // Prefer the freshest stock reading the caller has.
+        const stock = item.stock ?? next[idx].stock;
+        next[idx] = { ...next[idx], stock, qty: clampQty(next[idx].qty + qty, stock) };
         return next;
       }
-      return [...prev, { ...item, qty: Math.max(1, qty) }];
+      return [...prev, { ...item, qty: clampQty(qty, item.stock) }];
     });
   }, []);
 
@@ -102,7 +143,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems((prev) =>
       qty <= 0
         ? prev.filter((x) => x.productKey !== productKey)
-        : prev.map((x) => (x.productKey === productKey ? { ...x, qty } : x)),
+        : prev.map((x) =>
+            x.productKey === productKey ? { ...x, qty: clampQty(qty, x.stock) } : x,
+          ),
+    );
+  }, []);
+
+  const setStock = useCallback((productKey: string, stock: number) => {
+    setItems((prev) =>
+      prev.map((x) =>
+        x.productKey === productKey ? { ...x, stock, qty: clampQty(x.qty, stock) } : x,
+      ),
     );
   }, []);
 
@@ -128,8 +179,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   const value = useMemo<CartContextValue>(() => {
-    const count = items.reduce((n, x) => n + x.qty, 0);
-    const subtotal = items.reduce((n, x) => n + x.price * x.qty, 0);
+    const count = items.reduce((n, x) => n + clampQty(x.qty, x.stock), 0);
+    // Belt and braces: a line that somehow arrives with a negative price must
+    // not render a negative subtotal.
+    const subtotal = Math.max(
+      0,
+      items.reduce((n, x) => n + Math.max(0, x.price) * clampQty(x.qty, x.stock), 0),
+    );
     return {
       items,
       count,
@@ -137,6 +193,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       hydrated,
       addItem,
       setQty,
+      setStock,
       removeItem,
       clear,
       has: (k: string) => items.some((x) => x.productKey === k),
@@ -151,6 +208,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     hydrated,
     addItem,
     setQty,
+    setStock,
     removeItem,
     clear,
     drawerOpen,

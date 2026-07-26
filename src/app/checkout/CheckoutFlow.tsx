@@ -59,6 +59,44 @@ function fmt(n: number) {
   return "₹" + Math.round(n).toLocaleString("en-IN");
 }
 
+/**
+ * Indian PIN codes are six digits and the first one is the postal region, 1-9.
+ * A length check alone waved through 000000 and every other impossible code,
+ * and the buyer only found out when the parcel could not be routed.
+ */
+function isValidPincode(value: string) {
+  return /^[1-9]\d{5}$/.test(value.trim());
+}
+
+/** Says which rule the entry broke, rather than restating the format. */
+function pincodeError(value: string): string | null {
+  const pin = value.trim();
+  if (isValidPincode(pin)) return null;
+  if (pin.length === 0) return "Enter your 6-digit PIN code.";
+  if (pin.startsWith("0")) return "Indian PIN codes never start with 0 — check the first digit.";
+  if (pin.length < 6) return `A PIN code is 6 digits — you've entered ${pin.length}.`;
+  return "Please enter a valid 6-digit PIN code (e.g. 400001).";
+}
+
+/**
+ * Split an account name into first/last for the shipping label.
+ *
+ * The API mints "User <mobile>" when a signup carries no name, so splitting on
+ * whitespace put the buyer's phone number in lastName — and that printed on the
+ * courier label. A bare run of digits is never a surname, and what remains of
+ * the generated placeholder is no name at all: leave the fields empty so the
+ * buyer supplies a real one.
+ */
+function splitAccountName(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const words = parts.filter((p) => !/^\+?\d[\d-]*$/.test(p));
+  if (words.length === 0) return { firstName: "", lastName: "" };
+  if (words.length === 1 && words[0].toLowerCase() === "user" && words.length < parts.length) {
+    return { firstName: "", lastName: "" };
+  }
+  return { firstName: words[0], lastName: words.slice(1).join(" ") };
+}
+
 const STEPS = [
   { num: 1, label: "Details" },
   { num: 2, label: "Payment" },
@@ -111,6 +149,7 @@ function CheckoutInput({
   inputMode,
   autoComplete,
   hasError,
+  errorId,
 }: {
   id: string;
   type?: string;
@@ -122,6 +161,8 @@ function CheckoutInput({
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   autoComplete?: string;
   hasError?: boolean;
+  /** id of the element holding this field's error message, when shown. */
+  errorId?: string;
 }) {
   return (
     <input
@@ -132,6 +173,12 @@ function CheckoutInput({
       required={required}
       inputMode={inputMode}
       autoComplete={autoComplete}
+      // The red border was the only signal a field was rejected, which says
+      // nothing to a screen reader. aria-invalid marks the field itself, and
+      // aria-describedby ties it to the message so the reason is read out with
+      // the field rather than announced once and lost.
+      aria-invalid={hasError || undefined}
+      aria-describedby={hasError && errorId ? errorId : undefined}
       onChange={(e) => onChange(e.target.value)}
       className={`ez-checkout-input w-full rounded-[12px] px-4 py-3.5 text-[15px] text-[var(--ez-fg)] outline-none ${
         hasError ? "!border-[#B42318] !bg-[#FFF5F5]" : ""
@@ -624,6 +671,9 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const [geoMsg, setGeoMsg] = useState<string | null>(null);
+  const [pinLookupMsg, setPinLookupMsg] = useState<string | null>(null);
+  // Monotonic counter identifying the newest PIN lookup; see applyPincode.
+  const pinLookupSeq = useRef(0);
   const [quote, setQuote] = useState<Awaited<ReturnType<typeof api.checkoutQuote>> | null>(null);
   // Marketing consent only, and it starts OFF. This used to be one pre-ticked
   // box reading "order updates and offers", which bundled a service message the
@@ -912,11 +962,12 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
     const s = getSession();
     setSessionState(s);
     if (s) {
+      const { firstName, lastName } = splitAccountName(s.name);
       setForm((prev) => ({
         ...prev,
         mobile: prev.mobile || normalizeMobile(s.mobile),
-        firstName: prev.firstName || s.name.split(" ")[0] || "",
-        lastName: prev.lastName || s.name.split(" ").slice(1).join(" ") || "",
+        firstName: prev.firstName || firstName,
+        lastName: prev.lastName || lastName,
       }));
     }
   }, []);
@@ -1073,23 +1124,54 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
 
   // India Post pincode → city/state (authoritative for India, no permission).
   const applyPincode = async (pin: string): Promise<boolean> => {
-    if (pin.length !== 6) return false;
+    if (!isValidPincode(pin)) return false;
+    // Every edit of the PIN retires the lookups already in flight — their
+    // answers describe a PIN the buyer has moved on from.
+    const seq = ++pinLookupSeq.current;
+    // City/state as they stood when the lookup started. Anything else in those
+    // fields by the time it lands was typed by the buyer, and wins.
+    const before = { city: form.city, state: form.state };
     try {
       const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
       const data = (await res.json()) as Array<{
         Status?: string;
         PostOffice?: Array<{ District?: string; State?: string; Block?: string }>;
       }>;
+      if (seq !== pinLookupSeq.current) return false;
       const po = data?.[0]?.PostOffice?.[0];
       if (data?.[0]?.Status === "Success" && po?.District) {
-        // Capture the state, not just display it — it decides CGST/SGST vs IGST
-        // on the invoice. Don't blank an existing value if the API omits it.
-        patch({ city: po.District, ...(po.State ? { state: po.State } : {}) });
-        setGeoMsg(`${po.District}${po.State ? `, ${po.State}` : ""} · ${pin}`);
+        const district = po.District;
+        const state = po.State;
+        setPinLookupMsg(null);
+        setForm((prev) => {
+          if (prev.pincode !== pin) return prev;
+          const next = { ...prev };
+          let changed = false;
+          // A late autofill used to land in the middle of what the buyer was
+          // typing, and the rest of their keystrokes appended to it —
+          // "Bangalore" + "Bengaluru" = "BangaloreBengaluru".
+          if (prev.city === before.city) {
+            next.city = district;
+            changed = true;
+          }
+          // Capture the state, not just display it — it decides CGST/SGST vs IGST
+          // on the invoice. Don't blank an existing value if the API omits it.
+          if (state && prev.state === before.state) {
+            next.state = state;
+            changed = true;
+          }
+          return changed ? next : prev;
+        });
+        setGeoMsg(`${district}${state ? `, ${state}` : ""} · ${pin}`);
         return true;
       }
+      // India Post has no such PIN. Say so: the autofill used to fail silently,
+      // leaving the buyer to find out from an undeliverable parcel.
+      setPinLookupMsg(
+        `We couldn't find PIN ${pin}. Check it, or enter your city and state yourself.`,
+      );
     } catch {
-      /* ignore — manual entry still works */
+      /* offline or blocked — manual entry still works, so stay quiet */
     }
     return false;
   };
@@ -1111,7 +1193,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
           );
           const data = (await res.json()) as { city?: string; locality?: string; postcode?: string };
           const pincode = (data.postcode || "").replace(/\D/g, "").slice(0, 6);
-          if (pincode.length === 6) {
+          if (isValidPincode(pincode)) {
             patch({ pincode });
             const ok = await applyPincode(pincode);
             if (!ok && (data.city || data.locality)) {
@@ -1287,13 +1369,22 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
     })().finally(() => setPlacing(false));
   };
 
+  // Flag a malformed PIN as soon as it is six digits long — waiting for the
+  // Continue attempt hides the reason until after the buyer has moved on. An
+  // empty box is only wrong once they try to continue past a required field.
+  const showPinError =
+    !isValidPincode(form.pincode) &&
+    (form.pincode.trim().length === 6 ||
+      (showValidationErrors &&
+        (form.pincode.trim().length > 0 || fieldRequired("pincode"))));
+
   const canContinueDetails =
     (!fieldRequired("mobile") || isValidMobile(form.mobile)) &&
     (!fieldRequired("address") || form.address.trim().length > 0) &&
     (!fieldRequired("firstName") || form.firstName.trim().length > 0) &&
     (!fieldRequired("lastName") || form.lastName.trim().length > 0) &&
     (!fieldRequired("city") || form.city.trim().length > 0) &&
-    (!fieldRequired("pincode") || form.pincode.trim().length === 6) &&
+    (!fieldRequired("pincode") || isValidPincode(form.pincode)) &&
     (!fieldRequired("upi") || form.upiId.trim().length > 0);
 
   if (apiOn && !policy && !policyError) {
@@ -1301,7 +1392,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
       <div className="ez-checkout-bg min-h-screen">
         <div className="ez-checkout-shell">
           <CheckoutHeader label="Secure checkout" shortLabel="Checkout" />
-          <main className="ez-page w-full py-20">
+          <main id="ez-main" className="ez-page w-full py-20">
             <p className="text-sm text-[#86868B]">Loading checkout policy…</p>
           </main>
         </div>
@@ -1314,7 +1405,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
       <div className="ez-checkout-bg min-h-screen">
         <div className="ez-checkout-shell">
           <CheckoutHeader label="Secure checkout" shortLabel="Checkout" />
-          <main className="ez-page w-full py-20">
+          <main id="ez-main" className="ez-page w-full py-20">
             <p className="text-sm text-[#B42318]" role="alert">
               {policyError}
             </p>
@@ -1340,7 +1431,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
             label={placedPreorder ? "Secure pre-order" : "Secure checkout"}
             shortLabel="Secure"
           />
-          <main className="ez-page w-full py-14 pb-20 sm:py-20">
+          <main id="ez-main" className="ez-page w-full py-14 pb-20 sm:py-20">
             <div className="ez-checkout-success mx-auto flex max-w-[520px] flex-col items-center gap-5 text-center">
               <span className="ez-mono rounded-full border border-black/[0.08] bg-white px-4 py-1.5 text-[10px] uppercase tracking-[0.16em] text-[#6E6E73] shadow-sm">
                 {orderId ?? (isPreorder ? "Reserved" : "Confirmed")}
@@ -1427,7 +1518,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
       <div className="ez-checkout-bg min-h-screen">
         <div className="ez-checkout-shell">
           <CheckoutHeader label="Secure checkout" shortLabel="Secure" />
-          <main className="mx-auto flex max-w-[520px] flex-col items-center gap-4 px-5 py-24 text-center">
+          <main id="ez-main" className="mx-auto flex max-w-[520px] flex-col items-center gap-4 px-5 py-24 text-center">
             <h1 className="m-0 text-[24px] font-bold tracking-[-0.03em]">Your cart is empty</h1>
             <p className="m-0 text-[14px] leading-relaxed text-[#6E6E73]">
               Add something you love and it will show up here, ready to check out.
@@ -1452,7 +1543,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
           shortLabel="Secure"
         />
 
-        <main className="ez-page w-full py-6 sm:py-10 sm:pb-16">
+        <main id="ez-main" className="ez-page w-full py-6 sm:py-10 sm:pb-16">
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-8">
             <div className="max-w-[36rem]">
               <p className="ez-mono m-0 text-[10px] uppercase tracking-[0.2em] text-[#86868B]">
@@ -1728,18 +1819,29 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                           onChange={(v) => {
                             const pin = v.replace(/\D/g, "").slice(0, 6);
                             patch({ pincode: pin });
-                            if (pin.length === 6) void applyPincode(pin);
+                            setPinLookupMsg(null);
+                            pinLookupSeq.current += 1;
+                            if (isValidPincode(pin)) void applyPincode(pin);
                           }}
                           placeholder="400001"
                           inputMode="numeric"
                           autoComplete="postal-code"
-                          hasError={showValidationErrors && form.pincode.trim().length !== 6}
+                          hasError={showPinError}
+                          errorId="checkout-pincode-error"
                         />
-                        {showValidationErrors && form.pincode.trim().length !== 6 && (
-                          <span className="text-[11px] font-medium text-[#B42318]">
-                            Please enter a valid 6-digit PIN code (e.g. 400001).
+                        {showPinError ? (
+                          <span
+                            id="checkout-pincode-error"
+                            role="alert"
+                            className="text-[11px] font-medium text-[#B42318]"
+                          >
+                            {pincodeError(form.pincode)}
                           </span>
-                        )}
+                        ) : pinLookupMsg ? (
+                          <span className="text-[11px] font-medium text-[#B54708]">
+                            {pinLookupMsg}
+                          </span>
+                        ) : null}
                       </div>
                       ) : null}
                     </div>

@@ -9,6 +9,7 @@ import { CartDrawer } from "@/components/cart/CartDrawer";
 import { AnalyticsLoader } from "@/components/analytics/AnalyticsLoader";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import { WhatsAppWidget } from "@/components/support/WhatsAppWidget";
+import { SkipLink } from "@/components/layout/SkipLink";
 
 const geist = Geist({
   variable: "--font-geist",
@@ -73,6 +74,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={`${geist.variable} ${spaceMono.variable} min-h-screen antialiased`}>
+        <SkipLink />
         <ApiAuthBoot />
         <ThemeAccent />
         <AnalyticsLoader nonce={nonce} />

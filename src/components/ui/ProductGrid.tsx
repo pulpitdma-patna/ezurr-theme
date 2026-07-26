@@ -45,6 +45,9 @@ export function ProductGrid({ products, pageSize = 12 }: ProductGridProps) {
             key={getCatalogProductKey(p, i)}
             {...p}
             productKey={getCatalogProductKey(p, i)}
+            // First row only (4 across on desktop, 2 on mobile) — that is where
+            // the LCP element actually is.
+            priority={i < 4}
           />
         ))}
       </div>

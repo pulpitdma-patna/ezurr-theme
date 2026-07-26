@@ -89,14 +89,14 @@ export function ProductView({
       <div className="min-h-screen bg-white">
         <MicroBar />
         <Header active="preorders" />
-        <div className="ez-page py-20">
+        <main id="ez-main" className="ez-page py-20">
           <p className="text-sm text-[#B42318]" role="alert">
             Product not found
           </p>
           <Link href="/preorders" className="mt-4 inline-block text-sm font-semibold">
             ← Back to pre-orders
           </Link>
-        </div>
+        </main>
         <FooterFull />
       </div>
     );
@@ -195,6 +195,9 @@ export function ProductView({
     <div className="min-h-screen bg-[#FAFAFB]">
       <MicroBar />
       <Header active={navActive} />
+
+      {/* The PDP rendered no <main> at all, so it had no landmark to skip to. */}
+      <main id="ez-main">
 
       <div className="border-b border-[#E8E8ED]/80 bg-white">
         <div className={`${PDP_PAGE} flex w-full flex-wrap items-center gap-x-2 gap-y-1 py-3 sm:py-3.5`}>
@@ -396,6 +399,8 @@ export function ProductView({
       <ProductDetails descriptionHtml={description} />
 
       <RelatedProductsSection categorySlug={categorySlug} excludeKey={productKey} />
+
+      </main>
 
       <FooterFull />
     </div>

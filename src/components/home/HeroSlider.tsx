@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CountdownSummaryPanel } from "@/components/ui/Countdown";
@@ -26,36 +26,74 @@ function ArrowIcon({ direction }: { direction: "left" | "right" }) {
   );
 }
 
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+function subscribeToReducedMotion(listener: () => void) {
+  const query = window.matchMedia(REDUCED_MOTION);
+  query.addEventListener("change", listener);
+  return () => query.removeEventListener("change", listener);
+}
+
+function PlayPauseIcon({ playing }: { playing: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      {playing ? (
+        <>
+          <rect x="7" y="5" width="3.6" height="14" rx="1.2" />
+          <rect x="13.4" y="5" width="3.6" height="14" rx="1.2" />
+        </>
+      ) : (
+        <path d="M8 5.6c0-.9 1-1.5 1.8-1L18.4 10c.7.5.7 1.5 0 2l-8.6 5.4c-.8.5-1.8-.1-1.8-1V5.6z" />
+      )}
+    </svg>
+  );
+}
+
 export function HeroSlider({ slides = DEFAULT_HERO_SLIDES }: { slides?: HeroSlide[] }) {
   const resolvedSlides = slides.length > 0 ? slides : DEFAULT_HERO_SLIDES;
   const [slide, setSlide] = useState(0);
-  const [paused, setPaused] = useState(false);
+  const [hoverPaused, setHoverPaused] = useState(false);
+  // null = follow the OS preference; a boolean is the user's own call on the
+  // pause/play button, which outranks it in both directions (someone on
+  // reduce-motion can still start the slideshow deliberately).
+  const [playOverride, setPlayOverride] = useState<boolean | null>(null);
   const total = resolvedSlides.length;
+
+  const reducedMotion = useSyncExternalStore(
+    subscribeToReducedMotion,
+    () => window.matchMedia(REDUCED_MOTION).matches,
+    () => false,
+  );
 
   const go = useCallback(
     (i: number) => setSlide(((i % total) + total) % total),
     [total],
   );
 
+  const playing = playOverride ?? !reducedMotion;
+  const autoAdvancing = playing && !hoverPaused;
+
   useEffect(() => {
-    if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!autoAdvancing) return;
     const id = window.setInterval(() => setSlide((current) => (current + 1) % total), 6500);
     return () => clearInterval(id);
-  }, [paused, total]);
+  }, [autoAdvancing, total]);
 
   return (
     <section
       className="relative overflow-hidden bg-[#08090b]"
       aria-roledescription="carousel"
       aria-label="Featured products"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
+      onMouseEnter={() => setHoverPaused(true)}
+      onMouseLeave={() => setHoverPaused(false)}
+      onFocusCapture={() => setHoverPaused(true)}
       onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false);
+        if (!event.currentTarget.contains(event.relatedTarget)) setHoverPaused(false);
       }}
     >
-      <p className="sr-only" aria-live="polite">
+      {/* Silent while it advances on its own — otherwise a screen reader
+          interrupts the user every 6.5s. Announced once the user is driving. */}
+      <p className="sr-only" aria-live={autoAdvancing ? "off" : "polite"}>
         Slide {slide + 1} of {total}: {resolvedSlides[slide].title}
       </p>
       <div
@@ -87,13 +125,22 @@ export function HeroSlider({ slides = DEFAULT_HERO_SLIDES }: { slides?: HeroSlid
 
             <div className="ez-page relative z-10 flex h-full w-full items-start pb-24 pt-10 sm:items-center sm:pb-20 sm:pt-6">
               <div className="flex w-full max-w-[720px] flex-col gap-2.5 text-white sm:gap-4">
-                <h1 className="m-0 max-w-[720px] text-[clamp(1.9rem,6vw,4.8rem)] font-semibold leading-[0.98] tracking-[-0.055em] text-white">
-                  {s.title}
-                  <br />
-                  <span className="text-[0.72em] font-medium leading-[1.05] tracking-[-0.045em] text-white/58">
-                    {s.subtitle}
-                  </span>
-                </h1>
+                {/* One h1 per document. Every slide used to declare one, so the
+                    homepage shipped three competing page headings. The first
+                    slide is the page's heading; the rest are promotional panels
+                    and rank below it. Identical styling either way. */}
+                {(() => {
+                  const Heading = index === 0 ? "h1" : "h2";
+                  return (
+                    <Heading className="m-0 max-w-[720px] text-[clamp(1.9rem,6vw,4.8rem)] font-semibold leading-[0.98] tracking-[-0.055em] text-white">
+                      {s.title}
+                      <br />
+                      <span className="text-[0.72em] font-medium leading-[1.05] tracking-[-0.045em] text-white/58">
+                        {s.subtitle}
+                      </span>
+                    </Heading>
+                  );
+                })()}
                 <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5">
                   <span className="text-2xl font-bold tracking-[-0.03em] text-white sm:text-[30px]">
                     {s.price}
@@ -151,7 +198,7 @@ export function HeroSlider({ slides = DEFAULT_HERO_SLIDES }: { slides?: HeroSlid
 
       <div className="absolute inset-x-0 bottom-6 z-20 sm:bottom-8">
         <div className="ez-page flex w-full items-center justify-between">
-          <div className="flex items-center gap-2" role="tablist" aria-label="Choose featured product">
+          <div className="flex items-center gap-1" role="tablist" aria-label="Choose featured product">
           {resolvedSlides.map((s, i) => (
             <button
               key={s.id}
@@ -160,7 +207,9 @@ export function HeroSlider({ slides = DEFAULT_HERO_SLIDES }: { slides?: HeroSlid
               aria-selected={slide === i}
               aria-label={`Show slide ${i + 1}: ${s.title}`}
               onClick={() => go(i)}
-              className="group flex h-11 items-center justify-center px-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              /* px-1.5 around a 12px pill is what carries the button to the
+                 24px minimum target width; the pill itself stays 12px. */
+              className="group flex h-11 items-center justify-center px-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               <span
                 className={`block h-1 rounded-full transition-all duration-300 ${
@@ -171,6 +220,15 @@ export function HeroSlider({ slides = DEFAULT_HERO_SLIDES }: { slides?: HeroSlid
           ))}
           </div>
           <div className="flex gap-2">
+            <button
+              type="button"
+              aria-label={playing ? "Pause slideshow" : "Play slideshow"}
+              aria-pressed={!playing}
+              onClick={() => setPlayOverride(!playing)}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/25 text-white backdrop-blur-md transition hover:border-white/40 hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              <PlayPauseIcon playing={playing} />
+            </button>
             <button
               type="button"
               aria-label="Previous slide"

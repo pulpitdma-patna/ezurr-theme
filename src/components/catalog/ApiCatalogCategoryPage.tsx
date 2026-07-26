@@ -168,6 +168,9 @@ export function ApiGameCardsPage({
     <div className="flex min-h-screen flex-col bg-white">
       <MicroBar />
       <Header active="game-cards" />
+      {/* Game cards take their own render path rather than CategoryPage, so the
+          landmark has to be declared here too. */}
+      <main id="ez-main" className="flex flex-1 flex-col">
       <section className="ez-page w-full pt-10 sm:pt-14">
         <div className="flex flex-col gap-3">
           <div className="ez-mono flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.1em] text-[#86868B] sm:text-[10.5px]">
@@ -200,6 +203,7 @@ export function ApiGameCardsPage({
           <GameCardGrid cards={cards} />
         )}
       </section>
+      </main>
       <FooterFull />
     </div>
   );

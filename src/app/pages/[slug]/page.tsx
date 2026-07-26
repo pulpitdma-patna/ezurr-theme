@@ -68,7 +68,7 @@ export default async function CmsLandingPage({ params }: CmsLandingPageProps) {
     <div className="min-h-screen overflow-x-hidden bg-white">
       <MicroBar />
       <Header showSearch />
-      <main>
+      <main id="ez-main">
         <PageRenderer
           sections={sections}
           pageCss={

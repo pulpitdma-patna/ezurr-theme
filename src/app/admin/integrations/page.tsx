@@ -9,6 +9,7 @@ import {
   IntegrationConfigForm,
   type IntegrationConfigSubmit,
 } from "@/components/admin/IntegrationConfigForm";
+import { formatAdminDateTime } from "@/lib/adminFormat";
 import { api, isApiEnabled, type ApiIntegration } from "@/lib/apiClient";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import {
@@ -507,8 +508,7 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 function formatSync(value?: string) {
-  if (!value) return "Not synced yet";
-  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(value));
+  return formatAdminDateTime(value, "Not synced yet");
 }
 
 function PlugIcon() {

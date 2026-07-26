@@ -11,7 +11,7 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
     <div className="min-h-screen bg-white">
       <MicroBar />
       <Header />
-      <main>
+      <main id="ez-main">
         <AccountAuthGate>
           <AccountShell>{children}</AccountShell>
         </AccountAuthGate>

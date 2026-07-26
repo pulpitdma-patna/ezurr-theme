@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminNotice } from "@/components/admin/AdminNotice";
+import { formatAdminDateTime } from "@/lib/adminFormat";
 import { api, isApiEnabled, type ApiActivityEntry } from "@/lib/apiClient";
 import { AdminSelect } from "@/components/admin/AdminSelect";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
@@ -74,15 +75,6 @@ function inDateRange(timestamp: string, range: string, from: string, to: string)
     }
   }
   return true;
-}
-
-function formatAt(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function formatRelative(iso: string) {
@@ -308,7 +300,7 @@ export default function AdminActivityPage() {
         const relative = formatRelative(row.at);
         return (
           <div className="min-w-[5.5rem]">
-            <div className="ez-mono text-[11px] text-[#1D1D1F]">{formatAt(row.at)}</div>
+            <div className="ez-mono text-[11px] text-[#1D1D1F]">{formatAdminDateTime(row.at)}</div>
             {relative ? (
               <div className="mt-0.5 text-[10px] text-[#AEAEB2]">{relative}</div>
             ) : null}

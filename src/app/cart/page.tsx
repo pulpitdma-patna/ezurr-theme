@@ -17,7 +17,7 @@ export default function CartPage() {
       <MicroBar />
       <Header active="games" />
 
-      <div className="ez-page py-8 sm:py-12">
+      <main id="ez-main" className="ez-page py-8 sm:py-12">
         <h1 className="text-[clamp(1.8rem,3vw,2.6rem)] font-bold tracking-[-0.04em] text-[#111113]">
           Your cart
         </h1>
@@ -136,7 +136,7 @@ export default function CartPage() {
             </aside>
           </div>
         )}
-      </div>
+      </main>
 
       <FooterFull />
     </div>

@@ -53,6 +53,11 @@ export function CategoryPage({
       <MicroBar />
       <Header active={active} />
 
+      {/* One <main id="ez-main"> per page: the landmark screen-reader users jump to, and the
+          target of the skip link. Wraps the whole body between header and
+          footer so "skip to content" lands on the category, not the filters. */}
+      <main id="ez-main" className="flex flex-1 flex-col">
+
       {/* Header + filters */}
       <section className="ez-page w-full pt-5 pb-3 sm:pt-6 sm:pb-4">
         <div className="grid gap-x-4 gap-y-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
@@ -124,6 +129,8 @@ export function CategoryPage({
           <ProductGrid products={filteredProducts} />
         )}
       </section>
+
+      </main>
 
       <FooterFull />
     </div>

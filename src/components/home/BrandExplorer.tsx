@@ -187,7 +187,9 @@ export function BrandExplorer() {
               brand's own crawlable landing page. */}
           <Link
             href="/brands"
-            className="shrink-0 pb-1 text-[13px] font-semibold text-[#6E6E73] no-underline transition hover:text-[var(--ez-fg)]"
+            /* py-1 not pb-1: items-end keeps the label where it was while the
+               extra padding carries the target past 24px. */
+            className="shrink-0 py-1 text-[13px] font-semibold text-[#6E6E73] no-underline transition hover:text-[var(--ez-fg)]"
           >
             All brands →
           </Link>

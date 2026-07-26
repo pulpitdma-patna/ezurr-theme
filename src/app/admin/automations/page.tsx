@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { formatAdminDateTime } from "@/lib/adminFormat";
 import { api, isApiEnabled, type ApiAutomation } from "@/lib/apiClient";
 import { AdminSelect } from "@/components/admin/AdminSelect";
 import { AutomationBuilder } from "@/components/admin/AutomationBuilder";
@@ -690,7 +691,7 @@ function RunRow({ run }: { run: AdminAutomationRun }) {
     <li className="flex flex-col gap-2 px-3.5 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4">
       <div className="shrink-0 sm:w-28">
         <time className="ez-mono text-[10px] text-[#86868B]" dateTime={run.at}>
-          {formatRunAt(run.at)}
+          {formatAdminDateTime(run.at)}
         </time>
       </div>
       <div className="min-w-0 flex-1">
@@ -785,11 +786,3 @@ function operatorShort(op: AdminAutomationRule["conditions"][number]["operator"]
   return "≤";
 }
 
-function formatRunAt(value: string) {
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}

@@ -15,6 +15,7 @@ import { formatInr } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 import { useStaffRole } from "@/hooks/useStaffRole";
+import { formatAdminDate } from "@/lib/adminFormat";
 import { can } from "@/lib/adminPermissions";
 import { upsertCoupon } from "@/lib/adminStore";
 import { api, isApiEnabled, type ApiCoupon } from "@/lib/apiClient";
@@ -61,6 +62,7 @@ function statusOf(row: CouponRow): { label: string; className: string } {
   return { label: "Active", className: "bg-[#EAF6ED] text-[#2D6B3C]" };
 }
 
+/** `<input type="date">` only accepts `YYYY-MM-DD`, so this stays unformatted. */
 function toDateInput(iso?: string | null): string {
   return iso ? iso.slice(0, 10) : "";
 }
@@ -311,7 +313,7 @@ export default function AdminCouponsPage() {
       render: (row) => (
         <span className="text-[11px] text-[#6E6E73]">
           {row.startsAt || row.endsAt
-            ? `${toDateInput(row.startsAt) || "—"} → ${toDateInput(row.endsAt) || "—"}`
+            ? `${formatAdminDate(row.startsAt)} → ${formatAdminDate(row.endsAt)}`
             : "No expiry"}
         </span>
       ),

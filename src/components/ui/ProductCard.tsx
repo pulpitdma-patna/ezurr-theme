@@ -15,6 +15,13 @@ type ProductCardProps = CatalogProduct & {
   variant?: "grid" | "preorder";
   productKey?: string;
   showWishlist?: boolean;
+  /**
+   * Set on the cards above the fold only. Next lazy-loads images by default,
+   * which on a category page means the LCP element waits for hydration before
+   * it even starts downloading. Marking every card would just recreate the
+   * problem with extra bandwidth.
+   */
+  priority?: boolean;
 };
 
 const CARD_SHELL =
@@ -70,10 +77,12 @@ function CardMedia({
   img,
   name,
   tall = false,
+  priority = false,
 }: {
   img: string;
   name: string;
   tall?: boolean;
+  priority?: boolean;
 }) {
   return (
     <div
@@ -92,6 +101,7 @@ function CardMedia({
         fill
         className="object-contain p-4 transition duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.03] sm:p-5"
         sizes="(max-width: 640px) 66vw, 286px"
+        priority={priority}
       />
       <div
         aria-hidden
@@ -113,6 +123,7 @@ export function ProductCard({
   variant = "grid",
   productKey,
   showWishlist = true,
+  priority = false,
 }: ProductCardProps) {
   const key =
     productKey ??
@@ -126,7 +137,7 @@ export function ProductCard({
         {showWishlist ? <WishlistButton productKey={key} name={name} /> : null}
         <ProductRibbons badges={badges} size="sm" />
         <Link href={resolvedHref} className={CARD_SHELL}>
-          <CardMedia img={img} name={name} tall />
+          <CardMedia img={img} name={name} tall priority={priority} />
 
           <div className="flex flex-1 flex-col gap-2.5 px-4 pb-4 pt-3 sm:gap-3 sm:px-5 sm:pb-5 sm:pt-3.5">
             <div className="flex items-center gap-2">
@@ -173,7 +184,7 @@ export function ProductCard({
       {showWishlist ? <WishlistButton productKey={key} name={name} /> : null}
       <ProductRibbons badges={badges} size="sm" />
       <Link href={resolvedHref} className={CARD_SHELL}>
-        <CardMedia img={img} name={name} />
+        <CardMedia img={img} name={name} priority={priority} />
 
         <div className="flex flex-1 flex-col gap-2 px-4 pb-4 pt-3 sm:gap-2.5 sm:px-5 sm:pb-5 sm:pt-3.5">
           <span className="ez-mono truncate text-[10px] font-bold uppercase tracking-[0.16em] text-[#6E6E73]">

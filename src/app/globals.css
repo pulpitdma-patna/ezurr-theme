@@ -95,6 +95,46 @@ input:focus {
   border-color: var(--ez-accent) !important;
 }
 
+/* Skip link — off-canvas until it takes focus, then pinned above the sticky
+   header (z-50) so it is never covered by it. Kept in the a11y tree (no
+   display:none / visibility:hidden) so it stays reachable by Tab. */
+.ez-skip-link {
+  position: fixed;
+  top: 0.625rem;
+  left: 0.625rem;
+  z-index: 200;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.625rem 1.25rem;
+  border-radius: 999px;
+  background: #1d1d1f;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  box-shadow: 0 12px 32px rgba(17, 17, 19, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(-100% - 0.625rem));
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.ez-skip-link:focus {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  color: #fff;
+  outline: 2px solid var(--ez-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ez-skip-link {
+    transition: none;
+  }
+}
+
 /* Mobile-first layout */
 .ez-page {
   padding-left: var(--ez-page-x);

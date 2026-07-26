@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatInr } from "@/data/admin";
-import { useCart } from "@/lib/cart";
+import { MAX_LINE_QTY, useCart } from "@/lib/cart";
 import { DEFAULT_IMG } from "@/lib/productResolve";
 import { api, isApiEnabled } from "@/lib/apiClient";
 
@@ -86,8 +86,9 @@ function GhostIconButton({
  */
 export function CartDrawer() {
   const cart = useCart();
-  const { drawerOpen, closeDrawer } = cart;
+  const { drawerOpen, closeDrawer, setStock } = cart;
   const apiOn = isApiEnabled();
+  const lineKeys = cart.items.map((i) => i.productKey).join(",");
   const [couponInput, setCouponInput] = useState("");
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
   const [couponOk, setCouponOk] = useState(false);
@@ -124,25 +125,99 @@ export function CartDrawer() {
     setCouponOk(false);
   }
 
-  // Lock body scroll + close on Escape while open.
+  // A cart can sit in localStorage for days, so what it holds is not what we
+  // can necessarily ship. Re-read availability when the drawer opens; the cart
+  // clamps each line to it, which is what stops the stepper (and a tampered
+  // stored quantity) from proposing more units than exist.
+  useEffect(() => {
+    if (!drawerOpen || !apiOn || !lineKeys) return;
+    let cancelled = false;
+    for (const key of lineKeys.split(",")) {
+      void api
+        .product(key)
+        .then((p) => {
+          if (!cancelled && typeof p?.stock === "number") setStock(key, p.stock);
+        })
+        .catch(() => {
+          /* availability stays unknown — the per-line ceiling still applies */
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [drawerOpen, apiOn, lineKeys, setStock]);
+
+  // closeDrawer is recreated on most renders; holding it in a ref keeps it out
+  // of the effect's deps, so a re-render mid-interaction cannot tear the focus
+  // handling down and re-run it (which is exactly how the admin drawer used to
+  // steal focus after a single keystroke).
+  const closeRef = useRef(closeDrawer);
+  useEffect(() => {
+    closeRef.current = closeDrawer;
+  });
+
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  // Lock body scroll, close on Escape, and keep focus inside the dialog.
   useEffect(() => {
     if (!drawerOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
+    // Opening the drawer used to leave focus on the "Add to cart" button behind
+    // the scrim: a keyboard or screen-reader user was told a dialog opened and
+    // then kept operating the page underneath it.
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const focusables = () =>
+      Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((el) => el.offsetParent !== null);
+
+    const id = window.setTimeout(() => (focusables()[0] ?? panelRef.current)?.focus(), 0);
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeDrawer();
+      if (e.key === "Escape") {
+        closeRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      // Trap: a modal that lets Tab wander back to the page behind it is not
+      // modal for anyone navigating by keyboard.
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !panelRef.current?.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
+
     document.addEventListener("keydown", onKey);
     return () => {
+      window.clearTimeout(id);
       document.body.style.overflow = prev;
       document.removeEventListener("keydown", onKey);
+      // Send focus back where it came from, so closing the cart does not dump
+      // the user at the top of the document.
+      previouslyFocused?.focus?.();
     };
-  }, [drawerOpen, closeDrawer]);
+  }, [drawerOpen]);
 
   return (
     <div
       className={`fixed inset-0 z-[100] ${drawerOpen ? "" : "pointer-events-none"}`}
-      aria-hidden={!drawerOpen}
+      // The drawer stays mounted and slides out of view, so aria-hidden alone
+      // left every control inside it in the tab order — a keyboard user could
+      // Tab into an invisible cart. `inert` removes it from both the tab order
+      // and the accessibility tree.
+      inert={!drawerOpen}
     >
       {/* Scrim */}
       <button
@@ -156,9 +231,11 @@ export function CartDrawer() {
 
       {/* Panel: bottom sheet on mobile, right drawer on desktop */}
       <aside
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Your cart"
+        tabIndex={-1}
         className={`absolute inset-x-0 bottom-0 flex max-h-[88vh] flex-col overflow-hidden rounded-t-[24px] bg-white shadow-[0_-16px_60px_rgba(17,17,19,0.16)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] sm:inset-y-0 sm:right-0 sm:left-auto sm:bottom-auto sm:h-full sm:max-h-none sm:w-[520px] sm:rounded-none sm:border-l sm:border-[var(--ez-accent-panel-border)] sm:shadow-[-24px_0_80px_rgba(17,17,19,0.12)] ${
           drawerOpen
             ? "translate-y-0 sm:translate-x-0"
@@ -232,7 +309,12 @@ export function CartDrawer() {
           </div>
         ) : (
           <ul className="flex-1 overflow-y-auto bg-[var(--ez-warm-surface)] px-4 py-2 sm:px-5">
-            {cart.items.map((item) => (
+            {cart.items.map((item) => {
+              const inStock =
+                typeof item.stock === "number" && item.stock > 0 ? item.stock : null;
+              const lineMax = Math.min(MAX_LINE_QTY, inStock ?? MAX_LINE_QTY);
+              const atMax = item.qty >= lineMax;
+              return (
               <li
                 key={item.productKey}
                 className="border-b border-black/[0.05] py-4 last:border-b-0"
@@ -281,7 +363,8 @@ export function CartDrawer() {
                         <button
                           type="button"
                           onClick={() => cart.setQty(item.productKey, item.qty + 1)}
-                          className="flex h-8 w-8 items-center justify-center text-[var(--ez-ink)] transition hover:bg-black/[0.03]"
+                          disabled={atMax}
+                          className="flex h-8 w-8 items-center justify-center text-[var(--ez-ink)] transition hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-35"
                           aria-label="Increase quantity"
                         >
                           <PlusIcon />
@@ -291,10 +374,18 @@ export function CartDrawer() {
                         {formatInr(item.price * item.qty)}
                       </p>
                     </div>
+                    {atMax ? (
+                      <p className="mt-1.5 text-[11px] font-medium text-[var(--ez-subtle)]">
+                        {inStock !== null && inStock < MAX_LINE_QTY
+                          ? `Only ${inStock} left in stock.`
+                          : `Limit ${MAX_LINE_QTY} per order.`}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 

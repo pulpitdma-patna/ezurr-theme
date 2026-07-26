@@ -225,7 +225,7 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
           {!compact && session?.role === "admin" && (
             <Link
               href="/admin"
-              className={`hidden text-sm font-semibold text-[#1D1D1F] hover:text-[#1D1D1F] sm:inline ${
+              className={`hidden min-h-6 items-center py-1 text-sm font-semibold text-[#1D1D1F] hover:text-[#1D1D1F] sm:inline-flex ${
                 ready ? "opacity-100" : "opacity-0"
               }`}
             >
@@ -290,28 +290,34 @@ export function Header({ active, showSearch = false, compact = false }: HeaderPr
               ) : (
                 <Link
                   href={accountHref}
-                  className="text-sm font-medium text-[#424245] hover:text-[#1D1D1F]"
+                  className="inline-flex min-h-6 items-center py-1 text-sm font-medium text-[#424245] hover:text-[#1D1D1F]"
                 >
                   {accountLabel}
                 </Link>
               )}
             </div>
           )}
+          {/* 32px hit target around a 22px glyph. The negative inline margin
+              gives the padding back to the layout so the header spacing is
+              unchanged; the badge hangs off the inner span so it stays pinned
+              to the bag rather than to the enlarged button box. */}
           <button
             type="button"
-            className="relative flex items-center"
+            className="-mx-[5px] flex h-8 w-8 items-center justify-center rounded-full"
             aria-label={`Cart${cart.hydrated && cart.count > 0 ? ` (${cart.count})` : ""}`}
             onClick={() => {
               closeMenu();
               cart.openDrawer();
             }}
           >
-            <BagIcon />
-            {cart.hydrated && cart.count > 0 ? (
-              <span className="absolute -right-2 -top-[7px] inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-[var(--ez-accent)] px-1 text-[10.5px] font-semibold text-white">
-                {cart.count}
-              </span>
-            ) : null}
+            <span className="relative flex items-center">
+              <BagIcon />
+              {cart.hydrated && cart.count > 0 ? (
+                <span className="absolute -right-2 -top-[7px] inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-[var(--ez-accent)] px-1 text-[10.5px] font-semibold text-white">
+                  {cart.count}
+                </span>
+              ) : null}
+            </span>
           </button>
           {!compact && (
             <button

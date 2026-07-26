@@ -14,6 +14,7 @@ import {
 } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useStaffRole } from "@/hooks/useStaffRole";
+import { formatAdminDate } from "@/lib/adminFormat";
 import { can } from "@/lib/adminPermissions";
 import { updateCustomer } from "@/lib/adminStore";
 import { api, isApiEnabled, type ApiCustomerDetail } from "@/lib/apiClient";
@@ -198,7 +199,7 @@ export default function AdminCustomerDetailPage({
                     <div>
                       <div className="ez-mono text-[10px] font-semibold">{order.id}</div>
                       <div className="mt-0.5 text-xs text-[#86868B]">
-                        {new Date(order.placedAt).toLocaleDateString("en-IN")}
+                        {formatAdminDate(order.placedAt)}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -219,7 +220,9 @@ export default function AdminCustomerDetailPage({
             </div>
             <div className="mt-2 text-xl font-semibold tracking-[-0.04em]">{customer.spent}</div>
             <div className="mt-1 text-xs text-[#6E6E73]">{customer.orders} orders</div>
-            <div className="mt-1 text-xs text-[#86868B]">Last · {customer.lastOrderAt}</div>
+            <div className="mt-1 text-xs text-[#86868B]">
+              Last · {formatAdminDate(customer.lastOrderAt, "No orders yet")}
+            </div>
           </div>
 
           <div className="rounded-lg border border-black/[0.08] bg-white p-4">

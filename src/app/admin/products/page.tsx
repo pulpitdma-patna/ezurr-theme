@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { formatAdminDate } from "@/lib/adminFormat";
 import { priceToNumber } from "@/lib/productPayload";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -173,12 +174,6 @@ const FULFILMENT_TABS: { value: FulfilmentFilter; label: string }[] = [
   { value: "digital", label: "Digital" },
   { value: "preorder", label: "Pre-orders" },
 ];
-
-function formatReleaseDate(iso: string): string {
-  const date = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-}
 
 export default function AdminProductsPage() {
   const store = useAdminStore();
@@ -656,7 +651,7 @@ export default function AdminProductsPage() {
               <div className="mt-0.5 text-[11px] text-[#86868B]">
                 {row.brand}
                 {f.type === "preorder" && f.releaseAt
-                  ? ` · releases ${formatReleaseDate(f.releaseAt)}`
+                  ? ` · releases ${formatAdminDate(f.releaseAt)}`
                   : ""}
               </div>
             </div>
@@ -1143,7 +1138,7 @@ function ProductViewPanel({
           <>
             <ViewField
               label="Release"
-              value={fulfilment.releaseAt ? formatReleaseDate(fulfilment.releaseAt) : "Not set"}
+              value={formatAdminDate(fulfilment.releaseAt, "Not set")}
             />
             <ViewField
               label="Reservation"

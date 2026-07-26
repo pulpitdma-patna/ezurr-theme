@@ -46,7 +46,7 @@ export default async function BrandsPage() {
     <div className="min-h-screen bg-[var(--ez-bg)]">
       <MicroBar />
       <Header active="games" />
-      <main className="mx-auto w-full max-w-[1200px] px-5 py-10 sm:px-8 sm:py-14">
+      <main id="ez-main" className="mx-auto w-full max-w-[1200px] px-5 py-10 sm:px-8 sm:py-14">
         <nav className="ez-mono mb-5 text-[10px] uppercase tracking-[0.16em] text-[#86868B]">
           <Link href="/" className="no-underline text-inherit hover:text-[var(--ez-fg)]">
             Home
