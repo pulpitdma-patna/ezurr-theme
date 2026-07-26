@@ -7,7 +7,8 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { formatAdminDateTime } from "@/lib/adminFormat";
-import { api, isApiEnabled } from "@/lib/apiClient";
+import { isApiEnabled } from "@/lib/apiClient";
+import { listPages, deletePage as deletePage_, type CmsPageSummary } from "@/lib/cms/cmsApi";
 import { useCmsPages } from "@/hooks/useCmsStore";
 import type { CmsPageDocument, PageRevisionSnapshot } from "@/lib/cms/types";
 import {
@@ -22,20 +23,6 @@ import {
 
 // Persist a page's structured document to the server (executable JS is stripped
 // server-side before it can ever reach the storefront).
-function syncCmsPageToApi(id: string) {
-  if (!isApiEnabled()) return;
-  const doc = getCmsPage(id);
-  if (!doc) return;
-  void api
-    .upsertCmsPage({
-      id: doc.id,
-      path: doc.path,
-      title: doc.title,
-      status: doc.status,
-      document: doc as unknown as Record<string, unknown>,
-    })
-    .catch(() => {});
-}
 
 function isSnapshot(value: unknown): value is PageRevisionSnapshot {
   return (
@@ -72,6 +59,7 @@ export default function AdminCmsPagesPage() {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [deletePage, setDeletePage] = useState<{ id: string; title: string } | null>(null);
+  const [summaries, setSummaries] = useState<CmsPageSummary[]>([]);
   const [syncState, setSyncState] = useState<"idle" | "loading" | "synced" | "error">(
     isApiEnabled() ? "loading" : "idle",
   );
@@ -81,32 +69,29 @@ export default function AdminCmsPagesPage() {
    * document into the editor store so seeded pages are editable, and so
    * publishing pushes the server copy back instead of a stale local draft.
    */
+  /**
+   * Load the LIST only — never the documents.
+   *
+   * This used to fetch every page's full document and do
+   * `byId.set(doc.id, doc)`, replacing each local copy wholesale, draft
+   * included, with no dirty check. Since the builder saved only to
+   * localStorage, coming back to this screen silently threw away everything
+   * the owner had just written.
+   *
+   * The builder now loads and saves its own page against the server, so this
+   * screen only needs titles, paths and statuses. It cannot overwrite an edit
+   * because it no longer touches drafts at all.
+   */
   const hydrateFromApi = useCallback(async () => {
     if (!isApiEnabled()) return;
     setSyncState("loading");
-    try {
-      const summaries = await api.adminCmsPages();
-      const documents = await Promise.all(
-        summaries.map(async (summary) => {
-          try {
-            return toPageDocument(await api.adminCmsPage(summary.id));
-          } catch {
-            return null;
-          }
-        }),
-      );
-      const fetched = documents.filter((doc): doc is CmsPageDocument => doc !== null);
-      if (fetched.length > 0) {
-        setAdminState((prev) => {
-          const byId = new Map(prev.cmsPages.map((page) => [page.id, page]));
-          for (const doc of fetched) byId.set(doc.id, doc);
-          return { ...prev, cmsPages: [...byId.values()] };
-        });
-      }
-      setSyncState("synced");
-    } catch {
+    const res = await listPages();
+    if (!res.ok) {
       setSyncState("error");
+      return;
     }
+    setSummaries(res.data);
+    setSyncState("synced");
   }, []);
 
   useEffect(() => {
@@ -212,15 +197,24 @@ export default function AdminCmsPagesPage() {
                 </td>
                 <td className="ez-mono px-4 py-3.5 text-xs text-[#6E6E73]">{page.path}</td>
                 <td className="px-4 py-3.5">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                      page.status === "published"
-                        ? "bg-emerald-50 text-emerald-800"
-                        : "bg-[#F0F0F2] text-[#6E6E73]"
-                    }`}
-                  >
-                    {page.status}
-                  </span>
+                  {/* Status comes from the SERVER, not the local copy — the
+                      local one said "published" the moment you pressed a button
+                      that had not reached anything. */}
+                  {(() => {
+                    const live =
+                      summaries.find((s) => s.id === page.id)?.status ?? page.status;
+                    return (
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                          live === "published"
+                            ? "bg-emerald-50 text-emerald-800"
+                            : "bg-[#F0F0F2] text-[#6E6E73]"
+                        }`}
+                      >
+                        {live === "published" ? "Live" : "Draft"}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="ez-mono px-4 py-3.5 text-[11px] text-[#A1A1A6]">
                   {formatAdminDateTime(page.updatedAt)}
@@ -233,45 +227,10 @@ export default function AdminCmsPagesPage() {
                     >
                       Edit
                     </Link>
-                    {page.published ? (
-                      page.id !== "home" ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            unpublishCmsPage(page.id);
-                            syncCmsPageToApi(page.id);
-                            toast.push("Unpublished", "neutral");
-                          }}
-                          className="rounded-lg border border-black/[0.1] px-2.5 py-1 text-[11px] font-semibold hover:bg-[#F5F5F7]"
-                        >
-                          Unpublish
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            publishCmsPage(page.id);
-                            syncCmsPageToApi(page.id);
-                            toast.push("Re-published", "success");
-                          }}
-                          className="rounded-lg border border-black/[0.1] px-2.5 py-1 text-[11px] font-semibold hover:bg-[#F5F5F7]"
-                        >
-                          Re-publish
-                        </button>
-                      )
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          publishCmsPage(page.id);
-                          syncCmsPageToApi(page.id);
-                          toast.push("Published", "success");
-                        }}
-                        className="rounded-lg border border-black/[0.1] px-2.5 py-1 text-[11px] font-semibold hover:bg-[#F5F5F7]"
-                      >
-                        Publish
-                      </button>
-                    )}
+                    {/* Publish and Unpublish live in the builder now. Having
+                        them here is what created the trap where a published
+                        page offered only "Unpublish", so the way to save your
+                        work was to take the page down and put it back up. */}
                     <button
                       type="button"
                       onClick={() => {
@@ -322,14 +281,20 @@ export default function AdminCmsPagesPage() {
         confirmLabel="Delete"
         danger
         onCancel={() => setDeletePage(null)}
-        onConfirm={() => {
-          if (deletePage) {
-            const id = deletePage.id;
-            deleteCmsPage(id);
-            if (isApiEnabled()) void api.deleteCmsPage(id).catch(() => {});
-            toast.push("Deleted", "success");
-          }
+        onConfirm={async () => {
+          const target = deletePage;
           setDeletePage(null);
+          if (!target) return;
+          deleteCmsPage(target.id);
+          if (!isApiEnabled()) {
+            toast.push("Deleted", "success");
+            return;
+          }
+          // The server refuses to delete a published page, which is a real
+          // answer the owner needs to see — not something to swallow.
+          const res = await deletePage_(target.id);
+          toast.push(res.ok ? "Deleted" : res.error.message, res.ok ? "success" : "danger");
+          if (res.ok) void hydrateFromApi();
         }}
       />
     </div>

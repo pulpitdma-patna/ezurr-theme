@@ -42,6 +42,10 @@ import { ModulePalette } from "./ModulePalette";
 import { StructureTree } from "./StructureTree";
 import { SectionInspector } from "./SectionInspector";
 import { useAdminToast } from "@/components/admin/AdminToast";
+import { useRouter } from "next/navigation";
+import { useCmsAutosave } from "@/hooks/useCmsAutosave";
+import { publishPage, loadPage } from "@/lib/cms/cmsApi";
+import { isApiEnabled } from "@/lib/apiClient";
 import { MicroBar } from "@/components/layout/MicroBar";
 import { Header } from "@/components/layout/Header";
 import { FooterFull } from "@/components/layout/Footer";
@@ -80,8 +84,12 @@ type PageBuilderProps = {
 export function PageBuilder({ pageId }: PageBuilderProps) {
   const page = useCmsPage(pageId);
   const widgets = useCmsWidgets();
-  const dirty = useCmsDraftDirty(pageId);
+  const localDirty = useCmsDraftDirty(pageId);
+  const autosave = useCmsAutosave(page);
   const toast = useAdminToast();
+  const router = useRouter();
+  const [loaded, setLoaded] = useState(!isApiEnabled());
+  const [publishing, setPublishing] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<"desktop" | "mobile">("desktop");
   const [dismissedB, setDismissedB] = useState(false);
@@ -200,6 +208,39 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  // Pull the stored page in before the first edit, so the builder is never
+  // editing a stale local copy that a later save would push over the server's.
+  useEffect(() => {
+    if (!isApiEnabled() || loaded) return;
+    let cancelled = false;
+    void loadPage(pageId).then((res) => {
+      if (cancelled) return;
+      if (res.ok) {
+        setAdminState((prev) => ({
+          ...prev,
+          cmsPages: prev.cmsPages.some((p) => p.id === res.data.id)
+            ? prev.cmsPages.map((p) => (p.id === res.data.id ? res.data : p))
+            : [...prev.cmsPages, res.data],
+        }));
+        autosave.markSynced(res.data);
+      }
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pageId, loaded, autosave]);
+
+  // Unsaved work must survive a reload or a mis-click on the browser's back
+  // button. Autosave should make this almost never fire, which is precisely
+  // what makes it meaningful when it does.
+  useEffect(() => {
+    if (!autosave.dirty && autosave.state !== "error") return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [autosave.dirty, autosave.state]);
+
   // Fullscreen builder class on body
   useEffect(() => {
     document.documentElement.classList.add("ezurr-cms-builder");
@@ -245,6 +286,21 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
     reorderCmsSections(pageId, next);
   };
 
+  const saveChip: { label: string; tone: "ok" | "busy" | "error" } = !isApiEnabled()
+    ? { label: localDirty ? "Editing draft" : "Draft saved on this device", tone: "ok" }
+    : autosave.state === "saving"
+      ? { label: "Saving…", tone: "busy" }
+      : autosave.state === "error"
+        ? { label: "Not saved", tone: "error" }
+        : autosave.dirty
+          ? { label: "Unsaved changes", tone: "busy" }
+          : autosave.savedAt
+            ? {
+                label: `Saved ${autosave.savedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`,
+                tone: "ok",
+              }
+            : { label: localDirty ? "Draft" : "Published matches draft", tone: "ok" };
+
   // A page left mid-A/B-test would otherwise have B's layout silently orphaned
   // once the switcher is gone, since the editor and the storefront both use A.
   const strandedB = !dismissedB && page ? hasStrandedVariantB(page) : false;
@@ -253,25 +309,42 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
     <div className="fixed inset-0 z-[80] flex flex-col bg-[#EFEFF2]">
       {/* Top bar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-3 py-2.5">
-        <Link
-          href="/admin/cms"
+        {/* A Next <Link> never triggers beforeunload, and "go back to Pages"
+            is exactly when the old build threw the edit away. Flush first. */}
+        <button
+          type="button"
+          onClick={async () => {
+            await autosave.flush();
+            router.push("/admin/cms");
+          }}
           className="rounded-lg px-2 py-1.5 text-xs font-semibold text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
         >
           ← Pages
-        </Link>
+        </button>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-[#1D1D1F]">{page.title}</p>
           <p className="ez-mono text-[10px] text-[#A1A1A6]">{page.path}</p>
         </div>
         <span
           className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
-            dirty
-              ? "bg-amber-50 text-amber-900"
-              : "bg-emerald-50 text-emerald-800"
+            saveChip.tone === "error"
+              ? "bg-red-50 text-red-800"
+              : saveChip.tone === "busy"
+                ? "bg-amber-50 text-amber-900"
+                : "bg-emerald-50 text-emerald-800"
           }`}
         >
-          {dirty ? "Editing draft" : "Published matches draft"}
+          {saveChip.label}
         </span>
+        {autosave.state === "error" ? (
+          <button
+            type="button"
+            onClick={() => void autosave.flush()}
+            className="rounded-full border border-red-200 bg-white px-2.5 py-0.5 text-[10px] font-semibold text-red-800 hover:bg-red-50"
+          >
+            Retry
+          </button>
+        ) : null}
 
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button
@@ -362,13 +435,31 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
           </a>
           <button
             type="button"
-            onClick={() => {
+            disabled={publishing}
+            onClick={async () => {
+              // Local first so mock mode still works, then the server — which is
+              // what actually reaches customers. The old button did only the
+              // former and reported success regardless.
               publishCmsPage(pageId);
-              toast.push("Published", "success");
+              if (!isApiEnabled()) {
+                toast.push("Published", "success");
+                return;
+              }
+              setPublishing(true);
+              // Flush the draft first: publish copies what the SERVER has
+              // stored, so publishing an unsaved edit would put the previous
+              // version live and look like the edit was lost.
+              await autosave.flush();
+              const res = await publishPage(pageId);
+              setPublishing(false);
+              toast.push(
+                res.ok ? "Published — your page is live" : res.error.message,
+                res.ok ? "success" : "danger",
+              );
             }}
-            className="rounded-lg bg-[#1D1D1F] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-black"
+            className="rounded-lg bg-[#1D1D1F] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-black disabled:opacity-50"
           >
-            Publish
+            {publishing ? "Publishing…" : "Publish"}
           </button>
         </div>
       </div>
