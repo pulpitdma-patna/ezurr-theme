@@ -73,7 +73,9 @@ function pincodeError(value: string): string | null {
   const pin = value.trim();
   if (isValidPincode(pin)) return null;
   if (pin.length === 0) return "Enter your 6-digit PIN code.";
-  if (pin.startsWith("0")) return "Indian PIN codes never start with 0 — check the first digit.";
+  // Leads with what is wrong, then why: the reason alone ("never starts with
+  // 0") reads like trivia if you have not realised the field was rejected.
+  if (pin.startsWith("0")) return "Not a valid PIN code — Indian PIN codes never start with 0.";
   if (pin.length < 6) return `A PIN code is 6 digits — you've entered ${pin.length}.`;
   return "Please enter a valid 6-digit PIN code (e.g. 400001).";
 }
@@ -724,6 +726,16 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   const productCategory = isCart ? "games" : checkoutProduct?.category_slug ?? "preorders";
 
   const subtotalBase = isCart ? cart.subtotal : unitPrice;
+
+  // The lines the coupon preview is priced against. Sent so the server values
+  // the cart from its own catalogue instead of trusting subtotalBase — the
+  // preview would otherwise advertise whatever discount a tampered subtotal
+  // implied, even though the order charges the real amount.
+  const couponItems = isCart
+    ? cart.items.map((i) => ({ productKey: i.productKey, qty: i.qty }))
+    : checkoutProduct?.key
+      ? [{ productKey: checkoutProduct.key, qty: 1 }]
+      : undefined;
   const orderLineItems = isCart
     ? cart.items.map((i) => ({ productKey: i.productKey, title: i.title, qty: i.qty }))
     : [{ productKey: checkoutProduct?.key ?? productKey, title: productTitle, qty: 1 }];
@@ -1081,6 +1093,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
       const res = await api.validateCoupon({
         code,
         subtotal: subtotalBase,
+        items: couponItems,
         mobile: form.mobile || session?.mobile || undefined,
         categorySlugs: productCategory ? [productCategory] : [],
         brandSlugs: [],
@@ -1108,6 +1121,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
       .validateCoupon({
         code,
         subtotal: subtotalBase,
+        items: couponItems,
         mobile: form.mobile || session?.mobile || undefined,
         categorySlugs: productCategory ? [productCategory] : [],
         brandSlugs: [],

@@ -823,6 +823,12 @@ export const api = {
   validateCoupon: (payload: {
     code: string;
     subtotal: number;
+    /**
+     * Send the cart lines whenever they are known: the server prices them from
+     * its own catalogue and ignores `subtotal`, so the previewed discount is
+     * the one the order will actually apply.
+     */
+    items?: { productKey: string; qty: number }[];
     mobile?: string | null;
     categorySlugs?: string[];
     brandSlugs?: string[];

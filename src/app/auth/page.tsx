@@ -442,6 +442,11 @@ function AuthPageContent() {
                         setMobile(normalizeMobile(event.target.value));
                         setError("");
                       }}
+                      // A red panel below the field says nothing to a screen
+                      // reader unless the field itself is marked invalid and
+                      // linked to the message that explains why.
+                      aria-invalid={error ? true : undefined}
+                      aria-describedby={error ? "auth-error" : undefined}
                       className="min-w-0 flex-1 border-none bg-transparent px-3.5 py-3.5 text-[15px] font-medium tracking-[0.01em] text-[var(--ez-ink)] outline-none"
                     />
                   </div>
@@ -451,7 +456,7 @@ function AuthPageContent() {
                 </div>
 
                 {error && (
-                  <p className="auth-error m-0 rounded-[10px] border border-[#f5c2c0] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] text-[#b42318]">
+                  <p id="auth-error" role="alert" className="auth-error m-0 rounded-[10px] border border-[#f5c2c0] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] text-[#b42318]">
                     {error}
                   </p>
                 )}
@@ -483,7 +488,7 @@ function AuthPageContent() {
                 />
 
                 {error && (
-                  <p className="auth-error m-0 rounded-[10px] border border-[#f5c2c0] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] text-[#b42318]">
+                  <p id="auth-error" role="alert" className="auth-error m-0 rounded-[10px] border border-[#f5c2c0] bg-[#fff5f5] px-3.5 py-2.5 text-[13px] text-[#b42318]">
                     {error}
                   </p>
                 )}

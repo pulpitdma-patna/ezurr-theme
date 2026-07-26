@@ -100,7 +100,13 @@ export function CartDrawer() {
     setChecking(true);
     setCouponMsg("Checking…");
     try {
-      const res = await api.validateCoupon({ code, subtotal: cart.subtotal });
+      const res = await api.validateCoupon({
+        code,
+        subtotal: cart.subtotal,
+        // Named lines let the server price the cart itself, so the previewed
+        // saving is the one checkout will apply.
+        items: cart.items.map((i) => ({ productKey: i.productKey, qty: i.qty })),
+      });
       if (res.valid) {
         cart.setCouponCode(res.code);
         setCouponOk(true);
