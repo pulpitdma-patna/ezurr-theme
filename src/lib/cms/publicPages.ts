@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getApiBaseUrl } from "@/lib/apiClient";
 import type { CmsBlock, PageRevisionSnapshot, PageVariantId } from "./types";
 
@@ -20,7 +21,29 @@ export type PublishedCmsPage = {
   path: string;
   title: string;
   snapshot: PageRevisionSnapshot;
+  /** The owner's own <head> fields; any of them may be null. */
+  seo?: {
+    metaTitle: string | null;
+    metaDescription: string | null;
+    ogImageUrl: string | null;
+    canonicalUrl: string | null;
+    robots: string;
+  } | null;
 };
+
+/**
+ * Widget blocks are resolved against the admin's widget catalog, which only
+ * exists in the browser store. A published widget carrying code ships a
+ * `sandboxRef` and renders in an iframe, so only code-free widgets still need
+ * the client path.
+ */
+export function needsClientWidgetCatalog(sections: CmsBlock[]): boolean {
+  return sections.some(
+    (section) =>
+      (section.type === "widget" && !section.sandboxRef) ||
+      needsClientWidgetCatalog(section.children ?? []),
+  );
+}
 
 /** CMS content changes rarely; a short shared cache keeps SSR cheap. */
 const REVALIDATE_SECONDS = 300;
@@ -72,6 +95,50 @@ export function sectionsFromSnapshot(
   const variant =
     snapshot.variants.find((v) => v.id === variantId) ?? snapshot.variants[0];
   return (variant?.sections ?? []).filter((s) => s?.enabled);
+}
+
+/**
+ * Next `Metadata` for a published CMS page.
+ *
+ * What the owner typed into the Page tab wins; the first-paragraph summary is
+ * the fallback for a page nobody has filled in yet. `robots` is honoured, so
+ * "Show in Google: off" actually reaches the crawler instead of being a
+ * checkbox that only moved a database column.
+ */
+export function metadataForPublishedPage(
+  page: PublishedCmsPage,
+  canonicalPath: string,
+  opts: {
+    /**
+     * Keep the layout's site-wide title and description when the owner hasn't
+     * set their own. For the homepage that matters: falling back to the CMS
+     * page's title puts "Homepage" in the browser tab instead of the store's
+     * name, and the root layout already ships a good default and OG card.
+     */
+    inheritSiteDefaults?: boolean;
+  } = {},
+): Metadata {
+  const seo = page.seo ?? null;
+  const summary = summarizeSections(sectionsFromSnapshot(page.snapshot));
+  const description =
+    seo?.metaDescription ?? (opts.inheritSiteDefaults ? null : summary);
+  const title = seo?.metaTitle ?? (opts.inheritSiteDefaults ? null : page.title);
+  const canonical = seo?.canonicalUrl ?? canonicalPath;
+  const noindex = Boolean(seo?.robots?.includes("noindex"));
+
+  return {
+    ...(title ? { title } : {}),
+    ...(description ? { description } : {}),
+    alternates: { canonical },
+    ...(noindex ? { robots: { index: false, follow: false } } : {}),
+    openGraph: {
+      type: "website",
+      url: canonical,
+      ...(title ? { title } : {}),
+      ...(description ? { description } : {}),
+      ...(seo?.ogImageUrl ? { images: [{ url: seo.ogImageUrl }] } : {}),
+    },
+  };
 }
 
 /**

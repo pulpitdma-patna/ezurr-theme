@@ -341,11 +341,15 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
       }
       setPublishing(false);
       setScheduling(false);
+      // Not "your page is live": the storefront caches published pages for five
+      // minutes (publicPages.ts REVALIDATE_SECONDS), so opening the store right
+      // after pressing this shows the old version. Saying "live" and then
+      // showing the previous page is how someone concludes publishing is broken.
       toast.push(
         res.ok
           ? publishAt
             ? "Scheduled — this version will go live then"
-            : "Published — your page is live"
+            : "Published — your store updates within 5 minutes"
           : res.error.message,
         res.ok ? "success" : "danger",
       );
