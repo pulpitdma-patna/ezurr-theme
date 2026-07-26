@@ -19,7 +19,7 @@ import {
 import type { CatalogProduct } from "@/lib/types";
 
 type CategoryPageProps = {
-  active: NavKey;
+  active?: NavKey;
   breadcrumb: string;
   title: string;
   count: number;

@@ -15,6 +15,7 @@ import { useApiSettings } from "@/hooks/useApiSettings";
 import type { ResolvedProduct } from "@/lib/productResolve";
 import { useCart } from "@/lib/cart";
 import { api } from "@/lib/apiClient";
+import { categoryLabel } from "@/lib/categoryRoutes";
 
 /** Wider than default storefront rails; keeps ez-page horizontal padding. */
 const PDP_PAGE =
@@ -114,6 +115,7 @@ export function ProductView({
     strike,
     badges,
     categorySlug = "preorders",
+    categoryHref,
     fulfillmentType,
   } = resolved;
   const discountPct =
@@ -167,16 +169,10 @@ export function ProductView({
     window.setTimeout(() => setAdded(false), 1800);
   }
 
-  const navActive =
-    categorySlug === "games"
-      ? "games"
-      : categorySlug === "consoles"
-        ? "consoles"
-        : categorySlug === "accessories"
-          ? "accessories"
-          : categorySlug === "game-cards"
-            ? "game-cards"
-            : "preorders";
+  // The five-branch ladder this replaces fell through to "preorders", so a
+  // product in any other category lit up Pre-orders in the header. The mega menu
+  // compares this against a category slug, so the slug IS the key.
+  const navActive = categorySlug || "preorders";
 
   const statusLabel = isPreorder
     ? "Pre-order open"
@@ -211,12 +207,22 @@ export function ProductView({
             <span aria-hidden className="text-[#D1D1D6]">
               /
             </span>
-            <Link
-              href={`/${categorySlug || "preorders"}`}
-              className="transition-colors hover:text-[#1D1D1F]"
-            >
-              {categorySlug || "Pre-orders"}
-            </Link>
+            {/* Three bugs here. `/${categorySlug}` sent every category outside
+                the five hand-written routes to a 404 (/holiday-sale); the label
+                printed the raw slug ("game-cards", not "Game cards"); and a
+                category with no page still got a link. The server decides
+                whether there is a page — same `listable` column the route reads —
+                so this is plain text when there is not. */}
+            {categoryHref ? (
+              <Link
+                href={categoryHref}
+                className="transition-colors hover:text-[#1D1D1F]"
+              >
+                {categoryLabel(categorySlug)}
+              </Link>
+            ) : (
+              <span>{categoryLabel(categorySlug)}</span>
+            )}
             <span aria-hidden className="text-[#D1D1D6]">
               /
             </span>

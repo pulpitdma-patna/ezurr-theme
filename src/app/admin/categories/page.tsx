@@ -20,6 +20,7 @@ import {
   upsertCategory,
 } from "@/lib/adminStore";
 import { api, isApiEnabled } from "@/lib/apiClient";
+import { categoryPath, slugifyCategory } from "@/lib/categoryRoutes";
 
 type DrawerMode = "add" | "edit" | null;
 type CategoryRow = AdminCategoryRecord & {
@@ -28,6 +29,12 @@ type CategoryRow = AdminCategoryRecord & {
   parentKey?: string | null;
   // Counted server-side in API mode; derived from the mock catalog otherwise.
   productCount?: number;
+  /** What a customer would actually see, vs the catalogue total above. */
+  visibleCount?: number;
+  /** Whether this category has a storefront page. */
+  listable?: boolean;
+  href?: string;
+  metaTitle?: string | null;
 };
 
 export default function AdminCategoriesPage() {
@@ -48,6 +55,11 @@ export default function AdminCategoriesPage() {
   const [image, setImage] = useState("");
   const [parentId, setParentId] = useState("");
   const [active, setActive] = useState(true);
+  const [listable, setListable] = useState(true);
+  const [metaTitle, setMetaTitle] = useState("");
+  // Where this category's page would live. The five pre-CMS slugs keep their own
+  // top-level paths; everything else lives under /categories/.
+  const pagePath = editing?.href ?? categoryPath(slugifyCategory(key || label) || "…");
 
   useEffect(() => {
     if (!apiOn) return;
@@ -66,6 +78,10 @@ export default function AdminCategoriesPage() {
             parentKey: c.parentKey ?? null,
             active: c.active,
             productCount: c.productCount ?? 0,
+            visibleCount: c.visibleCount ?? 0,
+            listable: c.listable ?? false,
+            href: c.href,
+            metaTitle: c.metaTitle ?? null,
           })),
         );
         setListError(null);
@@ -109,6 +125,10 @@ export default function AdminCategoriesPage() {
     setImage("");
     setParentId("");
     setActive(true);
+    // A category the owner just created was made on purpose, so it gets a page.
+    // Everything the Shopify import produced is backfilled off.
+    setListable(true);
+    setMetaTitle("");
     setDrawerMode("add");
   }
 
@@ -120,6 +140,8 @@ export default function AdminCategoriesPage() {
     setImage(row.image ?? "");
     setParentId(row.parentId ?? "");
     setActive(row.active);
+    setListable(row.listable ?? false);
+    setMetaTitle(row.metaTitle ?? "");
     setDrawerMode("edit");
   }
 
@@ -134,7 +156,20 @@ export default function AdminCategoriesPage() {
     if (!label.trim()) return;
     setFormError(null);
     if (apiOn) {
-      const slug = (key || label).toLowerCase().replace(/\s+/g, "-");
+      // Only whitespace was collapsed before, so every realistic category name
+      // with punctuation produced an invalid slug and a 422 the owner could do
+      // nothing with: "Holiday Sale!" -> "holiday-sale!", "Games & Gear" ->
+      // "games-&-gear", "PS5  Deals" -> "ps5--deals". The API rule is
+      // /^[a-z0-9]+(?:-[a-z0-9]+)*$/ (CategoryController), so strip everything
+      // else, collapse hyphen runs and trim — the same slugifier the CMS create
+      // form already uses.
+      const slug = slugifyCategory(key || label);
+      if (!slug) {
+        setFormError(
+          "Give this category a name with at least one letter or number.",
+        );
+        return;
+      }
       void api
         .upsertCategory({
           key: drawerMode === "edit" ? editing?.key : undefined,
@@ -144,6 +179,8 @@ export default function AdminCategoriesPage() {
           imageUrl: image || null,
           parentId: parentId || null,
           active,
+          listable,
+          metaTitle: metaTitle.trim() || null,
         })
         .then((saved) => {
           const record: CategoryRow = {
@@ -155,6 +192,9 @@ export default function AdminCategoriesPage() {
             parentId: saved.parentId ?? null,
             parentKey: saved.parentKey ?? null,
             active: saved.active,
+            listable: saved.listable ?? listable,
+            href: saved.href,
+            metaTitle: saved.metaTitle ?? null,
             // The upsert response is the bare category; only the list endpoint
             // counts products. Carry the known count so an edit doesn't reset
             // the column to 0 until the next reload.
@@ -390,6 +430,62 @@ export default function AdminCategoriesPage() {
             />
             Active in filters
           </label>
+
+          {/* The gate that decides whether customers can reach this category at
+              all. Off for everything the Shopify import produced — 7 "-copy"
+              duplicates, five platform facets of one 13-product parent, price
+              bands, and rows that are perfect subsets of Games — so the owner
+              turns on the ones they actually want. */}
+          <div className="rounded-xl border border-black/[0.08] bg-[#F7F7F8] p-3">
+            <label className="flex items-start gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={listable}
+                onChange={(e) => setListable(e.target.checked)}
+                className="mt-0.5 accent-[#1D1D1F]"
+              />
+              <span>
+                Give this category a page
+                <span className="mt-0.5 block text-[11px] font-normal leading-snug text-[#6E6E73]">
+                  {listable ? (
+                    <>
+                      Customers can visit{" "}
+                      <span className="ez-mono">yourstore.com{pagePath}</span> and it
+                      can appear in the menu.
+                    </>
+                  ) : (
+                    "No page, no menu entry, nothing in Google. Nothing links to it."
+                  )}
+                </span>
+              </span>
+            </label>
+
+            {listable && editing && (editing.visibleCount ?? 0) === 0 ? (
+              <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] leading-snug text-amber-900">
+                Nothing in this category is visible to customers yet, so the page
+                will be hidden from Google until you add products.
+              </p>
+            ) : null}
+
+            {listable ? (
+              <label className="mt-3 block">
+                <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+                  Search title
+                </span>
+                <input
+                  value={metaTitle}
+                  maxLength={70}
+                  onChange={(e) => setMetaTitle(e.target.value)}
+                  placeholder={label || "Holiday Sale — up to 40% off"}
+                  className="mt-1 h-10 w-full rounded-xl border border-black/[0.08] bg-white px-3 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+                />
+                <span className="ez-mono mt-1 block text-[10px] text-[#A1A1A6]">
+                  {metaTitle.length}/70 — what Google shows. Leave blank to use the
+                  name.
+                </span>
+              </label>
+            ) : null}
+          </div>
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="submit"

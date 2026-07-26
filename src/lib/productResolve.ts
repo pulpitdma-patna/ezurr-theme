@@ -23,6 +23,14 @@ export type ResolvedProduct = {
   strike?: string;
   badges: ProductBadge[];
   categorySlug?: string;
+  /**
+   * Where the category's page is, or undefined when it has none.
+   *
+   * Resolved server-side against the same `listable` column the route checks, so
+   * the breadcrumb cannot link to a 404. It linked to `/{category_slug}`, which
+   * 404s for every category outside the five hand-written paths.
+   */
+  categoryHref?: string;
   fulfillmentType?: string;
   source: "api" | "static";
 };
@@ -48,6 +56,7 @@ export function fromApi(product: ApiProduct): ResolvedProduct {
         : undefined,
     badges: product.badges ?? [],
     categorySlug: product.category_slug ?? undefined,
+    categoryHref: product.category_href ?? undefined,
     fulfillmentType: product.fulfillment_type,
     source: "api",
   };

@@ -148,6 +148,15 @@ export type ApiCategory = {
   parentId?: string | null;
   parentKey?: string | null;
   active: boolean;
+  /** Whether this category has a storefront page. */
+  listable?: boolean;
+  sortOrder?: number;
+  /** Where that page is — /games for the legacy five, /categories/<slug> otherwise. */
+  href?: string;
+  metaTitle?: string | null;
+  metaDescription?: string | null;
+  /** Admin list only — what a customer would actually see, vs the catalogue total. */
+  visibleCount?: number;
   /** Admin list only — the public /categories feed does not carry it. */
   productCount?: number;
 };
@@ -760,12 +769,26 @@ export const api = {
     imageUrl?: string | null;
     parentId?: string | null;
     active?: boolean;
+    /** Whether this category gets a storefront page at all. */
+    listable?: boolean;
+    metaTitle?: string | null;
+    metaDescription?: string | null;
   }) => {
     const parentId = payload.parentId ? Number(payload.parentId) : null;
+    // Only sent when the caller set them, so a screen that does not know about
+    // these fields cannot blank them.
+    const pageFields = {
+      ...(payload.listable !== undefined ? { listable: payload.listable } : {}),
+      ...(payload.metaTitle !== undefined ? { metaTitle: payload.metaTitle } : {}),
+      ...(payload.metaDescription !== undefined
+        ? { metaDescription: payload.metaDescription }
+        : {}),
+    };
     if (payload.key) {
       return apiFetch<ApiCategory>(`/admin/categories/${encodeURIComponent(payload.key)}`, {
         method: "PUT",
         body: JSON.stringify({
+          ...pageFields,
           name: payload.name,
           description: payload.description,
           imageUrl: payload.imageUrl,
@@ -1053,6 +1076,13 @@ export type ApiProduct = {
   title: string;
   description?: string | null;
   category_slug?: string | null;
+  /**
+   * Path of the primary category's storefront page, or null when it has none.
+   *
+   * Only the single-product endpoint sends it — resolving it costs a query, so
+   * appending it to a 250-row listing would fire 250.
+   */
+  category_href?: string | null;
   brand_slug?: string | null;
   /** As the merchant entered it — may be net of GST. Not for display. */
   price: number;

@@ -21,6 +21,9 @@ export function ApiCatalogCategoryPage({
   title,
   description,
   fallbackProducts,
+  initialProducts,
+  initialTotal,
+  remainingPages,
   categorySlug,
   brandSlug,
   collection,
@@ -30,6 +33,18 @@ export function ApiCatalogCategoryPage({
   title: string;
   description: string;
   fallbackProducts: CatalogProduct[];
+  /**
+   * Products already fetched on the server, so the grid is in the HTML.
+   *
+   * Without this every dynamic catalog route shipped an empty grid to crawlers:
+   * /brands/playstation has 151 products and zero `/products/` links in
+   * view-source. When present, the mount effect does not refetch page 1.
+   */
+  initialProducts?: CatalogProduct[];
+  /** Paginator total, so the heading says 187 rather than the 24 we rendered. */
+  initialTotal?: number;
+  /** Pages after the first, loaded client-side so facets end up complete. */
+  remainingPages?: number;
   categorySlug?: string;
   /** Brand landing pages (/brands/<slug>) reuse this same catalog shell. */
   brandSlug?: string;
@@ -39,13 +54,28 @@ export function ApiCatalogCategoryPage({
   const apiOn = isApiEnabled();
   // SSR the static fallback so the page has content on first paint; the effect
   // refreshes from the API on the client.
-  const [products, setProducts] = useState<CatalogProduct[]>(fallbackProducts);
+  const [products, setProducts] = useState<CatalogProduct[]>(
+    initialProducts?.length ? initialProducts : fallbackProducts,
+  );
+  const [total, setTotal] = useState<number>(initialTotal ?? 0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Server-rendered first page: keep it, and fetch only what is missing. Refetching
+  // page 1 here would replace identical rows and, because `fallbackProducts` is in
+  // the effect's dep array, a fresh array literal from a parent would loop.
+  const ssrCount = initialProducts?.length ?? 0;
+  const morePages = Math.max(0, remainingPages ?? 0);
 
   useEffect(() => {
     if (!apiOn) {
       setProducts(fallbackProducts);
+      setLoading(false);
+      return;
+    }
+
+    // Everything already arrived from the server and there is no page 2.
+    if (ssrCount > 0 && morePages === 0) {
       setLoading(false);
       return;
     }
@@ -64,7 +94,11 @@ export function ApiCatalogCategoryPage({
     // per_page at 100 — so page through rather than silently truncating. The
     // header count is derived from what we hold, so a short read would make the
     // page contradict the menu.
-    const wide = Boolean(brandSlug || collection);
+    // `morePages` is added because a CATEGORY can now span the catalogue too:
+    // holiday-sale holds 150 and games 187, and reading only the first page made
+    // the header say "24 titles" for a category with 187 — and left the brand and
+    // price facets derived from a quarter of the products.
+    const wide = Boolean(brandSlug || collection) || morePages > 0;
 
     void (async () => {
       try {
@@ -72,6 +106,7 @@ export function ApiCatalogCategoryPage({
           const res = await api.products(filters);
           if (cancelled) return;
           setProducts((Array.isArray(res.data) ? res.data : []).map(mapApiProductToCatalog));
+          if (typeof res.total === "number") setTotal(res.total);
           return;
         }
 
@@ -86,10 +121,17 @@ export function ApiCatalogCategoryPage({
           const lastPage = res.last_page ?? page;
           if (page >= lastPage || batch.length < perPage) break;
         }
-        if (!cancelled) setProducts(rows.map(mapApiProductToCatalog));
+        if (!cancelled) {
+          setProducts(rows.map(mapApiProductToCatalog));
+          // Once the whole set is in hand the count is the set. Leaving `total`
+          // at the paginator's figure would keep the header reading "150 of 150".
+          setTotal(rows.length);
+        }
       } catch (err) {
         if (cancelled) return;
-        setProducts([]);
+        // A failed refresh must not blank a grid the server already rendered —
+        // that turned a working page into an empty one on a flaky connection.
+        if (ssrCount === 0) setProducts([]);
         setError(err instanceof Error ? err.message : "Could not load catalog");
       } finally {
         if (!cancelled) setLoading(false);
@@ -99,7 +141,7 @@ export function ApiCatalogCategoryPage({
     return () => {
       cancelled = true;
     };
-  }, [apiOn, categorySlug, brandSlug, collection, fallbackProducts]);
+  }, [apiOn, categorySlug, brandSlug, collection, fallbackProducts, ssrCount, morePages]);
 
   return (
     <>
@@ -115,7 +157,10 @@ export function ApiCatalogCategoryPage({
           active={active}
           breadcrumb={breadcrumb}
           title={title}
-          count={products.length}
+          // The paginator's total, not the array length. The heading claimed
+          // "24 titles" for a category holding 187 — a lie the owner could see
+          // and not explain.
+          count={total || products.length}
           description={description}
           products={products}
         />

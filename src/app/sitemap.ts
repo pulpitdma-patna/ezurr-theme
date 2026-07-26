@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { api } from "@/lib/apiClient";
 import { fetchPublishedCmsPages } from "@/lib/cms/publicPages";
+import { categoryPath } from "@/lib/categoryRoutes";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://ezurr.com";
 
@@ -26,6 +27,29 @@ async function brandPaths(): Promise<string[]> {
     return (res.data ?? [])
       .filter((b) => b.active !== false)
       .map((b) => `/brands/${encodeURIComponent(b.slug)}`);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Category pages the owner has published.
+ *
+ * Gated on all three of active, listable and a non-zero product count: an empty
+ * category renders (the owner needs to see their own work) but emits noindex, and
+ * submitting a URL that says noindex is a Search Console error. Mapped through
+ * `categoryPath` so this can never list one of the five URLs that 308s.
+ *
+ * The four static entries below are deliberately NOT removed in favour of this —
+ * every fetch helper here swallows errors to [], so one failed /api/categories
+ * call would drop the store's biggest landing pages for a whole hourly window.
+ */
+async function categoryPaths(): Promise<string[]> {
+  try {
+    const { fetchCategories } = await import("@/lib/catalog/categoryProducts");
+    return (await fetchCategories())
+      .filter((c) => c.active && c.listable && c.productCount > 0)
+      .map((c) => categoryPath(c.key));
   } catch {
     return [];
   }
@@ -61,12 +85,13 @@ async function cmsPaths(): Promise<string[]> {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
-  const [cms, products, brands] = await Promise.all([
+  const [cms, products, brands, categories] = await Promise.all([
     cmsPaths(),
     productPaths(),
     brandPaths(),
+    categoryPaths(),
   ]);
-  const paths = [...STATIC_PATHS, ...brands, ...cms, ...products];
+  const paths = [...STATIC_PATHS, "/categories", ...categories, ...brands, ...cms, ...products];
   // De-dupe in case a product handle ever collides with a static path.
   const unique = Array.from(new Set(paths));
   return unique.map((path) => {

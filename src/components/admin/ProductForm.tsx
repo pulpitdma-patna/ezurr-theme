@@ -10,6 +10,7 @@ import {
   type AdminProductStatus,
 } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
+import { api, isApiEnabled } from "@/lib/apiClient";
 import { ImageUploadField } from "@/components/admin/ImageUploadField";
 
 
@@ -65,8 +66,49 @@ export function ProductForm({
   embedded?: boolean;
 }) {
   const store = useAdminStore();
-  const categoryOptions = store.categories.filter((c) => c.active);
+  const apiOn = isApiEnabled();
   const brandOptions = store.brands.filter((b) => b.active);
+
+  /**
+   * Categories come from the server in API mode.
+   *
+   * This read `store.categories` — the localStorage mock, seeded with the same
+   * five slugs the theme has always shipped. So an owner who created "Holiday
+   * Sale" in /admin/categories could not select it here: the category existed on
+   * the server and was absent from the only dropdown that assigns it. Same
+   * `apiOn ? fromApi : store` shape as /admin/categories itself.
+   */
+  const [apiCategories, setApiCategories] = useState<
+    { key: string; label: string }[]
+  >([]);
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    void api
+      .adminCategories()
+      .then((res) => {
+        if (cancelled) return;
+        setApiCategories(
+          (Array.isArray(res.data) ? res.data : [])
+            .filter((c) => c.active)
+            .map((c) => ({ key: c.key, label: c.label }))
+            .sort((a, b) => a.label.localeCompare(b.label)),
+        );
+      })
+      .catch(() => {
+        // Keep the mock list rather than an empty dropdown that would silently
+        // clear the product's category on save.
+        if (!cancelled) setApiCategories([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn]);
+
+  const categoryOptions =
+    apiOn && apiCategories.length > 0
+      ? apiCategories
+      : store.categories.filter((c) => c.active);
   const [errors, setErrors] = useState<Partial<Record<keyof ProductFormValues, string>>>({});
   const [dirty, setDirty] = useState(false);
   const initial = useRef(JSON.stringify(form));
