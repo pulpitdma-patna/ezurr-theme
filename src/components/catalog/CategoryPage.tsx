@@ -22,6 +22,8 @@ type CategoryPageProps = {
   active?: NavKey;
   breadcrumb: string;
   title: string;
+  /** Optional line above the heading, set once for every category in the CMS. */
+  eyebrow?: string;
   count: number;
   description: string;
   products: CatalogProduct[];
@@ -31,6 +33,7 @@ export function CategoryPage({
   active,
   breadcrumb,
   title,
+  eyebrow,
   count,
   description,
   products,
@@ -72,6 +75,11 @@ export function CategoryPage({
           </div>
 
           <div className="order-2 flex min-w-0 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-2.5">
+            {eyebrow ? (
+              <span className="ez-mono w-full text-[10px] uppercase tracking-[0.16em] text-[#86868B]">
+                {eyebrow}
+              </span>
+            ) : null}
             <h1 className="m-0 text-[clamp(1.65rem,3.5vw,2.5rem)] font-bold leading-[1.05] tracking-[-0.04em]">
               {title}
             </h1>

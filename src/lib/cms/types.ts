@@ -13,7 +13,15 @@ export type SectionType =
   | "legal_doc"
   | "overlay_stage"
   | "custom_html"
-  | "widget";
+  | "widget"
+  /**
+   * Category-template only: these render whichever category the route is for,
+   * taking their content from the `categories` row and the membership pivot
+   * rather than from the document. On an ordinary page they have no category to
+   * render and say so in the builder.
+   */
+  | "category_hero"
+  | "category_grid";
 
 export type ProductRailSource =
   | "preorders"

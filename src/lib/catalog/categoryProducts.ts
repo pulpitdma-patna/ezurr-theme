@@ -1,6 +1,7 @@
 import { getApiBaseUrl } from "@/lib/apiClient";
 import { mapApiProductToCatalog } from "@/lib/apiMappers";
 import type { ApiProduct } from "@/lib/apiClient";
+import type { CmsBlock, PageRevisionSnapshot } from "@/lib/cms/types";
 import type { CatalogProduct } from "@/lib/types";
 
 /**
@@ -72,6 +73,50 @@ export async function fetchCategory(slug: string): Promise<CategorySummary | nul
 export async function fetchCategories(): Promise<CategorySummary[]> {
   const body = await getJson<{ data?: CategorySummary[] }>("/categories");
   return Array.isArray(body?.data) ? body.data : [];
+}
+
+/**
+ * The one CMS page every category page renders.
+ *
+ * A category page is mostly a data-driven grid, so this is a template rather than
+ * a page per category: 29 rows would bury the six real pages in a flat,
+ * unpaginated Pages list. `category_grid` marks where the grid goes; anything the
+ * owner puts above or below it appears above or below the grid on every category.
+ *
+ * Null when unreachable or unpublished — the route then renders the grid alone,
+ * which is what it did before the template existed.
+ */
+export async function fetchCategoryTemplate(): Promise<{
+  before: CmsBlock[];
+  after: CmsBlock[];
+  eyebrow: string;
+  customCss: string;
+} | null> {
+  const body = await getJson<{ snapshot?: PageRevisionSnapshot }>(
+    `/cms/page?path=${encodeURIComponent("/categories/*")}`,
+  );
+  const variant = body?.snapshot?.variants?.[0];
+  if (!variant || !Array.isArray(variant.sections)) return null;
+
+  const sections = variant.sections.filter((s) => s?.enabled);
+  const gridAt = sections.findIndex((s) => s.type === "category_grid");
+  const hero = sections.find((s) => s.type === "category_hero");
+  const isMarker = (s: CmsBlock) =>
+    s.type === "category_grid" || s.type === "category_hero";
+
+  return {
+    // No grid block means the owner deleted it; treat everything as "before" so
+    // their content still renders rather than vanishing, and the grid follows.
+    before: (gridAt === -1 ? sections : sections.slice(0, gridAt)).filter(
+      (s) => !isMarker(s),
+    ),
+    after: (gridAt === -1 ? [] : sections.slice(gridAt + 1)).filter(
+      (s) => !isMarker(s),
+    ),
+    eyebrow: typeof hero?.props?.eyebrow === "string" ? hero.props.eyebrow : "",
+    customCss:
+      typeof body?.snapshot?.customCss === "string" ? body.snapshot.customCss : "",
+  };
 }
 
 export type CategoryProductPage = {

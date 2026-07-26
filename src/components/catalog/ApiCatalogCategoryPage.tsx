@@ -21,6 +21,7 @@ export function ApiCatalogCategoryPage({
   title,
   description,
   fallbackProducts,
+  eyebrow,
   initialProducts,
   initialTotal,
   remainingPages,
@@ -33,6 +34,8 @@ export function ApiCatalogCategoryPage({
   title: string;
   description: string;
   fallbackProducts: CatalogProduct[];
+  /** Set from the category template's `category_hero` block. */
+  eyebrow?: string;
   /**
    * Products already fetched on the server, so the grid is in the HTML.
    *
@@ -157,6 +160,7 @@ export function ApiCatalogCategoryPage({
           active={active}
           breadcrumb={breadcrumb}
           title={title}
+          eyebrow={eyebrow}
           // The paginator's total, not the array length. The heading claimed
           // "24 titles" for a category holding 187 — a lie the owner could see
           // and not explain.

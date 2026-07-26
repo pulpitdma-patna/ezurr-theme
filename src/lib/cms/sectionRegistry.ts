@@ -175,6 +175,37 @@ export const SECTION_REGISTRY: SectionRegistryEntry[] = [
     ],
   },
   {
+    type: "category_hero",
+    label: "Category heading",
+    description: "The category's name, blurb, image and product count.",
+    icon: "type",
+    nestable: false,
+    acceptsChildren: false,
+    defaults: {
+      eyebrow: "",
+    },
+    fields: [
+      {
+        key: "eyebrow",
+        label: "Eyebrow",
+        type: "text",
+        help: "Shown above every category name. Usually best left blank.",
+      },
+    ],
+  },
+  {
+    type: "category_grid",
+    label: "Category products",
+    description: "The products in this category, with filters and sorting.",
+    icon: "grid",
+    nestable: false,
+    acceptsChildren: false,
+    defaults: {},
+    // No fields: this block marks WHERE the product grid goes. Blocks you add
+    // above and below it appear above and below the grid on every category page.
+    fields: [],
+  },
+  {
     type: "row",
     label: "Columns row",
     description: "2–3 column layout for nested modules.",
