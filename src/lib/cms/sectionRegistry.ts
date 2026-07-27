@@ -111,6 +111,12 @@ export const SECTION_REGISTRY: SectionRegistryEntry[] = [
       { key: "badge", label: "Badge", type: "text", placeholder: "Automatically applied" },
       { key: "cta", label: "Button label", type: "text", placeholder: "Browse pre-orders" },
       { key: "href", label: "Button link", type: "url", placeholder: "/preorders" },
+      {
+        key: "image",
+        label: "Banner image",
+        type: "media-url",
+        help: "Leave empty to show the default product line-up.",
+      },
     ],
   },
   {

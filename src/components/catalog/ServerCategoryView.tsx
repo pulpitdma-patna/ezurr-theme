@@ -51,12 +51,7 @@ export async function ServerCategoryView({
   const label = title ?? category?.label ?? breadcrumb ?? slug;
 
   return (
-    <>
-      {template?.before.length ? (
-        <PageRenderer sections={template.before} pageCss={template.customCss} />
-      ) : null}
-
-      <ApiCatalogCategoryPage
+    <ApiCatalogCategoryPage
         active={slug}
         breadcrumb={breadcrumb ?? label}
         title={label}
@@ -70,12 +65,18 @@ export async function ServerCategoryView({
         initialProducts={page.products}
         initialTotal={page.total}
         remainingPages={Math.max(0, page.lastPage - 1)}
-        categorySlug={slug}
-      />
-
-      {template?.after.length ? (
-        <PageRenderer sections={template.after} />
-      ) : null}
-    </>
+      categorySlug={slug}
+      // Slots, not wrappers. CategoryPage renders the MicroBar, header and
+      // footer itself, so wrapping it put template blocks outside the page —
+      // one above the top bar, one below the footer.
+      beforeGrid={
+        template?.before.length ? (
+          <PageRenderer key="tpl-before" sections={template.before} pageCss={template.customCss} />
+        ) : null
+      }
+      afterGrid={
+        template?.after.length ? <PageRenderer key="tpl-after" sections={template.after} /> : null
+      }
+    />
   );
 }

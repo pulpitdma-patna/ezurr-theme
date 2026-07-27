@@ -377,6 +377,8 @@ function RenderBlock({
           badge={block.props.badge ? String(block.props.badge) : undefined}
           cta={block.props.cta ? String(block.props.cta) : undefined}
           href={block.props.href ? String(block.props.href) : undefined}
+          image={block.props.image ? String(block.props.image) : undefined}
+          imageAlt={block.props.imageAlt ? String(block.props.imageAlt) : undefined}
         />,
       );
     case "brand_explorer":

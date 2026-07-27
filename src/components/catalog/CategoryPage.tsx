@@ -24,6 +24,15 @@ type CategoryPageProps = {
   title: string;
   /** Optional line above the heading, set once for every category in the CMS. */
   eyebrow?: string;
+  /**
+   * CMS template blocks, rendered INSIDE the page chrome.
+   *
+   * These were wrapped around this component instead, so a block above the grid
+   * landed above the MicroBar and a block below it landed under the footer —
+   * outside the page entirely. They are slots now.
+   */
+  beforeGrid?: React.ReactNode;
+  afterGrid?: React.ReactNode;
   count: number;
   description: string;
   products: CatalogProduct[];
@@ -34,6 +43,8 @@ export function CategoryPage({
   breadcrumb,
   title,
   eyebrow,
+  beforeGrid,
+  afterGrid,
   count,
   description,
   products,
@@ -115,6 +126,8 @@ export function CategoryPage({
         </div>
       </section>
 
+      {beforeGrid}
+
       {/* Grid */}
       <section className="ez-page w-full flex-1 pt-6 sm:pt-8">
         {filteredProducts.length === 0 ? (
@@ -137,6 +150,8 @@ export function CategoryPage({
           <ProductGrid products={filteredProducts} />
         )}
       </section>
+
+      {afterGrid}
 
       </main>
 

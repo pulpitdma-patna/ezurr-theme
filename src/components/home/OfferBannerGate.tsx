@@ -36,6 +36,8 @@ export function OfferBannerGate({
   badge = "Automatically applied",
   cta = "Browse pre-orders",
   href = "/preorders",
+  image,
+  imageAlt,
 }: {
   eyebrow?: string;
   title?: string;
@@ -43,6 +45,9 @@ export function OfferBannerGate({
   badge?: string;
   cta?: string;
   href?: string;
+  /** The owner's own banner image. Empty keeps the stock product line-up. */
+  image?: string;
+  imageAlt?: string;
 } = {}) {
   const settings = useLiveThemeSettings();
   if (!settings.showOffer) return null;
@@ -56,9 +61,16 @@ export function OfferBannerGate({
       description={description}
       href={href}
       cta={cta}
-      image={PREPAID_BANNER_PRODUCTS[0].src}
-      imageAlt={PREPAID_BANNER_PRODUCTS.map((item) => item.alt).join(", ")}
-      productImages={[...PREPAID_BANNER_PRODUCTS]}
+      image={image || PREPAID_BANNER_PRODUCTS[0].src}
+      imageAlt={
+        image
+          ? (imageAlt ?? "")
+          : PREPAID_BANNER_PRODUCTS.map((item) => item.alt).join(", ")
+      }
+      // The three-shot collage is the DEFAULT dressing, not part of the layout.
+      // Once the owner supplies their own banner image, overlaying stock product
+      // shots on top of it would be the store fighting its own artwork.
+      productImages={image ? undefined : [...PREPAID_BANNER_PRODUCTS]}
       theme="violet"
       fullWidth
       prepaidPercent={pct}

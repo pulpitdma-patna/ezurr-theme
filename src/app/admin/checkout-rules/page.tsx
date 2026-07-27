@@ -25,6 +25,7 @@ import {
 import { api, isApiEnabled } from "@/lib/apiClient";
 import type { AdminCheckoutRule } from "@/lib/checkoutRules";
 import { mockExperimentStats, resolveCheckoutPolicy } from "@/lib/checkoutRules";
+import { adminErrorMessage } from "@/lib/adminError";
 import { formatInr } from "@/data/admin";
 
 const actionLabels: Record<string, string> = {
@@ -132,9 +133,9 @@ export default function AdminCheckoutRulesPage() {
         setApiSync("ok");
         setEditing(null);
         setToast(isNew ? "Rule created" : "Rule updated");
-      } catch {
+      } catch (err) {
         setApiSync("err");
-        setToast("Could not save rule");
+        setToast(adminErrorMessage(err, "Could not save rule"));
       }
       return;
     }
@@ -152,10 +153,10 @@ export default function AdminCheckoutRulesPage() {
         upsertCheckoutRule(saved as AdminCheckoutRule);
         setApiSync("ok");
         setToast(next ? "Enabled" : "Paused");
-      } catch {
+      } catch (err) {
         toggleCheckoutRule(rule.id, rule.enabled);
         setApiSync("err");
-        setToast("Could not update rule");
+        setToast(adminErrorMessage(err, "Could not update rule"));
       }
       return;
     }
@@ -171,10 +172,10 @@ export default function AdminCheckoutRulesPage() {
         await api.deleteCheckoutRule(id);
         setApiSync("ok");
         setToast("Rule deleted");
-      } catch {
+      } catch (err) {
         if (target) upsertCheckoutRule(target);
         setApiSync("err");
-        setToast("Could not delete rule");
+        setToast(adminErrorMessage(err, "Could not delete rule"));
       }
       return;
     }

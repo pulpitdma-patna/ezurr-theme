@@ -190,6 +190,26 @@ describe("every declared inspector field reaches the page", () => {
    * dead control survives an audit — so they are checked here.
    */
 
+  it("offer_banner: the owner's banner image replaces the stock line-up", () => {
+    const { container } = render(
+      <PageRenderer
+        sections={[
+          blockFor("offer_banner", {
+            title: "T",
+            image: "https://example.test/my-banner.png",
+            imageAlt: "My own banner",
+          }),
+        ]}
+      />,
+    );
+    const html = container.innerHTML;
+    expect(html, "the owner's image must reach the banner").toContain(
+      encodeURIComponent("https://example.test/my-banner.png").slice(0, 20),
+    );
+    // The stock three-shot collage must not sit on top of the owner's artwork.
+    expect(html).not.toContain("GAMPLAY540");
+  });
+
   it("editorial_banner: theme, fullWidth and imagePosition change the output", () => {
     const base = { title: "T", image: "/i.png" };
     const dark = render(
