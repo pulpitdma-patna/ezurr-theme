@@ -462,6 +462,37 @@ export interface ApiMediaAsset {
   created_at: string | null;
 }
 
+/**
+ * An UNCLAIMED store answers with every field. A claimed one answers with
+ * `needsSetup: false` and `storeName` alone — this route stays public forever,
+ * so it must stop describing the machine it runs on the moment it has an owner.
+ */
+export interface ApiInstallState {
+  needsSetup: boolean;
+  storeName: string | null;
+  ready?: { database: boolean; schema: boolean; content: boolean };
+  requiresClaimToken?: boolean;
+  simulating?: { name: string; variable: string }[];
+}
+
+export interface ApiSystemHealth {
+  version: {
+    code: string;
+    installed: string | null;
+    installedAt: string | null;
+    updateNeeded: boolean;
+  };
+  database: { connected: boolean; driver: string };
+  pendingMigrations: number;
+  owner: { exists: boolean; count: number };
+  writable: { env: boolean; envPath: string; storage: boolean; bootstrapCache: boolean };
+  queue: { connection: string; needsWorker: boolean; pendingJobs: number };
+  /** `healthy: null` means no heartbeat has ever been recorded — unknown, not fine. */
+  scheduler: { lastRunAt: string | null; healthy: boolean | null };
+  configWarnings: { id: string; title: string; detail: string; variable: string | null }[];
+  integrations: { name: string; live: boolean; driver: string; variable: string }[];
+}
+
 export const api = {
   health: () => apiFetch<{ ok: boolean }>("/health"),
   sendOtp: (mobile: string) =>
@@ -729,6 +760,26 @@ export const api = {
     apiFetch<{ id: string; path: string; title: string; snapshot: Record<string, unknown> }>(
       `/cms/page?path=${encodeURIComponent(path)}`,
     ),
+  // ---- Setup + system health ----
+  /** Public forever. A claimed store answers with needsSetup:false and nothing else. */
+  installState: () => apiFetch<ApiInstallState>("/install/state"),
+  /**
+   * Claims an unclaimed store: creates the owner and returns a working token.
+   * Refused permanently once an owner exists.
+   */
+  installComplete: (payload: {
+    storeName: string;
+    ownerName: string;
+    ownerMobile: string;
+    claimToken?: string;
+  }) =>
+    apiFetch<{ token: string; user: { id: number; name: string; mobile: string; role: string; staffRole: string } }>(
+      "/install/complete",
+      { method: "POST", body: JSON.stringify(payload) },
+    ),
+  /** Owner-only. Names the env path and every integration still simulating. */
+  systemHealth: () => apiFetch<ApiSystemHealth>("/admin/system/health"),
+
   adminSettings: () => apiFetch<Record<string, unknown>>("/admin/settings"),
   updateAdminSettings: (patch: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/admin/settings", {

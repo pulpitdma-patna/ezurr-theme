@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { useAdminStore } from "@/hooks/useAdminStore";
+import { useAdminSettingsSync } from "@/hooks/useAdminSettingsSync";
 import { getDerivedAlerts } from "@/lib/adminStore";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { CommandPalette } from "@/components/admin/CommandPalette";
@@ -309,7 +310,7 @@ const pageTitles: { match: (path: string) => boolean; title: string; crumb?: str
   { match: (p) => p.startsWith("/admin/cms/"), title: "Page builder", crumb: "Online store", crumbHref: "/admin/cms" },
   { match: (p) => p === "/admin/checkout-rules/templates", title: "Templates", crumb: "Online store", crumbHref: "/admin/checkout-rules" },
   { match: (p) => p.startsWith("/admin/checkout-rules"), title: "Checkout rules", crumb: "Online store", crumbHref: "/admin/checkout-rules" },
-  { match: (p) => p.startsWith("/admin/platform"), title: "Platform", crumb: "System", crumbHref: "/admin/settings" },
+  { match: (p) => p.startsWith("/admin/system"), title: "System health", crumb: "System", crumbHref: "/admin/settings" },
   { match: (p) => p.startsWith("/admin/team"), title: "Team", crumb: "System", crumbHref: "/admin/settings" },
   { match: (p) => p.startsWith("/admin/integrations"), title: "Integrations", crumb: "System", crumbHref: "/admin/settings" },
   { match: (p) => p.startsWith("/admin/automations"), title: "Automations", crumb: "System", crumbHref: "/admin/settings" },
@@ -420,7 +421,7 @@ const navSubmenus: NavGroup[] = [
     label: "System",
     icon: <IconGear />,
     items: [
-      { href: "/admin/platform", label: "Platform", icon: <IconPlatform /> },
+      { href: "/admin/system", label: "System health", icon: <IconPlatform /> },
       { href: "/admin/team", label: "Team", icon: <IconUsers /> },
       { href: "/admin/integrations", label: "Integrations", icon: <IconPlug /> },
       { href: "/admin/automations", label: "Automations", icon: <IconBolt /> },
@@ -1066,6 +1067,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { session, ready } = useAuthSession();
+  // Every admin page, not just Settings — the sidebar shows the store's name and
+  // used to show the seeded default until the owner happened to open Settings.
+  useAdminSettingsSync();
   const store = useAdminStore();
   const alerts = useMemo(() => getDerivedAlerts(store), [store]);
   const [drawerOpen, setDrawerOpen] = useState(false);

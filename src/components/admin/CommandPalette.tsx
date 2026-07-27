@@ -29,7 +29,7 @@ const NAV_ITEMS: PaletteItem[] = [
   { id: "nav-digital", label: "Digital codes", group: "Pages", href: "/admin/digital-codes" },
   { id: "nav-customers", label: "Customers", group: "Pages", href: "/admin/customers" },
   { id: "nav-coupons", label: "Coupons", group: "Pages", href: "/admin/coupons" },
-  { id: "nav-platform", label: "Platform", group: "Pages", href: "/admin/platform" },
+  { id: "nav-system", label: "System health", group: "Pages", href: "/admin/system" },
   { id: "nav-team", label: "Team", group: "Pages", href: "/admin/team" },
   { id: "nav-integrations", label: "Integrations", group: "Pages", href: "/admin/integrations" },
   { id: "nav-automations", label: "Automations", group: "Pages", href: "/admin/automations" },

@@ -19,7 +19,7 @@
 export const RESERVED_CMS_SLUGS = [
   "accessories", "account", "admin", "auth", "brands", "cart", "categories",
   "checkout", "consoles", "game-cards", "games", "preorders",
-  "price-guarantee", "products", "search", "track",
+  "price-guarantee", "products", "search", "setup", "track",
   // The old CMS prefix — it 308s to the top-level page now, so a page living
   // there would shadow its own redirect.
   "pages",

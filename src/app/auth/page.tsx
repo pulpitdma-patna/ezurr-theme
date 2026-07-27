@@ -245,6 +245,7 @@ function AuthPageContent() {
   const [resendIn, setResendIn] = useState(0);
   const [existingSession, setExistingSession] = useState<AuthSession | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   function destination(session: AuthSession) {
     if (isAdminSession(session)) return "/admin";
@@ -263,6 +264,25 @@ function AuthPageContent() {
     return () => {
       window.removeEventListener("storage", sync);
       window.removeEventListener("ezurr-auth-change", sync);
+    };
+  }, []);
+
+  // A store nobody has claimed cannot sign anyone in, so say so here rather than
+  // letting the owner request an OTP that goes to a log file. Failure is silent
+  // on purpose: an unreachable API is already reported by the sign-in attempt.
+  useEffect(() => {
+    if (!isApiEnabled()) return;
+    let cancelled = false;
+    api
+      .installState()
+      .then((s) => {
+        if (!cancelled) setNeedsSetup(s.needsSetup);
+      })
+      .catch(() => {
+        /* nothing to add — sign-in reports its own failure */
+      });
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -403,6 +423,23 @@ function AuthPageContent() {
             </div>
           ) : (
             <div className="auth-form-body">
+            {needsSetup ? (
+              // There is nobody to sign in as yet, and no OTP would reach anyone:
+              // on a fresh install MSG91 is gated to `log`, so the code goes to a
+              // file on the server. Point at setup rather than let them try.
+              <Link
+                href="/setup"
+                className="mb-7 block rounded-[10px] border border-[#F1C7B8] bg-[#FEF3EE] px-4 py-3.5 transition hover:border-[#E2A98F]"
+              >
+                <span className="ez-mono block text-[10px] font-bold uppercase tracking-[0.14em] text-[#9A3412]">
+                  Not set up yet
+                </span>
+                <span className="mt-1.5 block text-[13px] leading-relaxed text-[#7C3A16]">
+                  This store has no owner account. Set it up first — it takes a minute and
+                  signs you straight in. <span className="font-semibold underline">Start setup →</span>
+                </span>
+              </Link>
+            ) : null}
             <div className="mb-8">
               <AuthStepIndicator step={step} />
               <h2 className="mt-6 text-[clamp(1.75rem,3vw,2.35rem)] font-semibold leading-[1.02] tracking-[-0.045em] text-[var(--ez-ink)]">

@@ -14,6 +14,7 @@ import { SettingsSection } from "@/components/admin/settings/SettingsSection";
 import { SettingsToggle } from "@/components/admin/settings/SettingsToggle";
 import { defaultAdminSettings, formatInr, type AdminSettings } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
+import { ADMIN_SETTING_KEYS, useAdminSettingsSync } from "@/hooks/useAdminSettingsSync";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { formatReleaseLabel } from "@/hooks/useLiveThemeSettings";
 import { useStaffRole } from "@/hooks/useStaffRole";
@@ -50,18 +51,6 @@ function isValidTab(value: string | null): value is SettingsTabId {
   return SETTINGS_TABS.some((tab) => tab.id === value);
 }
 
-const SETTING_KEYS: (keyof AdminSettings)[] = [
-  "storeName", "supportEmail", "supportPhone", "city", "gstin",
-  "accentHue", "showOffer", "releaseDate", "prepaidDiscount", "codEnabled",
-  "codLimit", "freeShippingMin", "orderIdPrefix", "lowStockThreshold", "hideOutOfStock",
-  "timezone", "currencyLabel", "notifyNewOrder", "notifyLowStock", "notifyPreorderRelease",
-  "gaMeasurementId", "metaPixelId",
-  "codAdvance", "codAdvanceLabel", "codAdvanceUnlocksCap", "reservationAmount",
-  "whatsappWidgetEnabled", "whatsappNumber", "whatsappGreeting",
-  "docBusinessName", "docAddressLine1", "docAddressLine2", "docCity", "docState",
-  "docPincode", "docGstin", "docPan", "docLogoUrl", "docInvoicePrefix",
-  "docDeclaration", "docFooterNote", "docSignatureLine",
-];
 
 export default function AdminSettingsPage() {
   const { settings } = useAdminStore();
@@ -110,21 +99,9 @@ export default function AdminSettingsPage() {
     return () => document.removeEventListener("keydown", onKey);
   }, [tab, selectTab]);
 
-  useEffect(() => {
-    if (!isApiEnabled()) return;
-    void api.adminSettings().then((remote) => {
-      const next: Partial<AdminSettings> = {};
-      for (const k of SETTING_KEYS) {
-        if (k in remote && remote[k] !== null && remote[k] !== undefined) {
-          (next as Record<string, unknown>)[k] = remote[k];
-        }
-      }
-      updateSettings(next);
-      invalidateApiSettings();
-    }).catch(() => {
-      /* keep local */
-    });
-  }, []);
+  // The shell syncs these on every admin page now, so this screen no longer
+  // needs its own copy of the same fetch.
+  useAdminSettingsSync();
 
   // Accumulate changed keys and flush to the API once typing pauses, instead of
   // firing a PUT on every keystroke.
@@ -163,7 +140,7 @@ export default function AdminSettingsPage() {
       return;
     }
     let queued = false;
-    for (const k of SETTING_KEYS) {
+    for (const k of ADMIN_SETTING_KEYS) {
       if (k in partial) {
         pendingRef.current[k] = partial[k];
         queued = true;
