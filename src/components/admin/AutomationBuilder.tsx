@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import type {
   AdminAutomationRule,
@@ -11,6 +11,7 @@ import type {
 } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { testAutomation } from "@/lib/adminStore";
+import { api, isApiEnabled, type ApiMessageTemplate } from "@/lib/apiClient";
 
 const triggers: { value: AutomationTrigger; label: string }[] = [
   { value: "order_status_changed", label: "Order status changed" },
@@ -72,6 +73,33 @@ export function AutomationBuilder({
   const whatsapp = integrations.find((item) => item.id === "whatsapp");
   const webhooks = integrations.find((item) => item.id === "webhooks");
   const whatsappReady = Boolean(whatsapp?.enabled && whatsapp.status === "connected");
+
+  /**
+   * The wording this rule is allowed to send.
+   *
+   * MessageService refuses anything not both enabled AND approved by the
+   * provider, so offering the rest would be offering rules that silently do
+   * nothing — which is the bug this dropdown replaces.
+   */
+  const [sendableTemplates, setSendableTemplates] = useState<ApiMessageTemplate[]>([]);
+  useEffect(() => {
+    if (!isApiEnabled()) return;
+    let cancelled = false;
+    void api
+      .messageTemplates()
+      .then((res) => {
+        if (cancelled) return;
+        setSendableTemplates(
+          (res.data ?? []).filter((t) => t.enabled && t.status === "approved"),
+        );
+      })
+      .catch(() => {
+        /* the dropdown stays empty and says so */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const webhooksReady = Boolean(webhooks?.enabled && webhooks.status === "connected");
 
   function update(patch: Partial<AdminAutomationRule>) {
@@ -332,13 +360,45 @@ export function AutomationBuilder({
                     </option>
                   ))}
                 </select>
-                <input
-                  className={`${fieldClass} mt-2`}
-                  placeholder={actionValuePlaceholder(action.type)}
-                  value={action.value ?? ""}
-                  onChange={(e) => setAction(index, { value: e.target.value })}
-                  aria-label={`Action ${index + 1} value`}
-                />
+                {/* A DROPDOWN for the message channels, never a text box.
+                    This field was labelled "Message (optional)" and its value is
+                    passed straight into MessageTemplate::where('event_key', …) —
+                    the parameter on AutomationDispatcher::sendChannel is literally
+                    named $eventKey. So anything that reads like a message ("Your
+                    pre-order is ready") matched no template and every send was
+                    recorded as blocked. The owner had written a message and the
+                    shop sent nothing, with the rule showing as active. */}
+                {action.type === "send_whatsapp" || action.type === "send_email" ? (
+                  <>
+                    <select
+                      className={`${fieldClass} mt-2`}
+                      value={action.value ?? ""}
+                      onChange={(e) => setAction(index, { value: e.target.value })}
+                      aria-label={`Action ${index + 1} message wording`}
+                    >
+                      <option value="">Choose the wording to send…</option>
+                      {sendableTemplates.map((t) => (
+                        <option key={`${t.event_key}-${t.channel}`} value={t.event_key}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                    {sendableTemplates.length === 0 ? (
+                      <p className="mt-1.5 text-[11px] text-[#9A3412]">
+                        No message wording is approved yet, so this rule cannot send anything. Set
+                        one up under Message templates first.
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <input
+                    className={`${fieldClass} mt-2`}
+                    placeholder={actionValuePlaceholder(action.type)}
+                    value={action.value ?? ""}
+                    onChange={(e) => setAction(index, { value: e.target.value })}
+                    aria-label={`Action ${index + 1} value`}
+                  />
+                )}
                 {(action.type === "send_whatsapp" && !whatsappReady) ||
                 (action.type === "send_webhook" && !webhooksReady) ? (
                   <p className="mt-1.5 text-[11px] text-[#9A3412]">
@@ -461,10 +521,8 @@ function actionValuePlaceholder(type: AutomationActionType) {
       return "Tag name";
     case "update_order_status":
       return "Status (e.g. confirmed)";
-    case "send_email":
-    case "send_whatsapp":
     case "notify_internal":
-      return "Message (optional)";
+      return "Note to your team (optional)";
     case "send_webhook":
       return "Event key (e.g. inventory.low)";
     default:
