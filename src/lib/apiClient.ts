@@ -1051,13 +1051,31 @@ export const api = {
     apiFetch<{ ok: boolean }>(`/admin/checkout-rules/${id}`, {
       method: "DELETE",
     }),
-  adminOrders: (params?: { status?: string; page?: number; per_page?: number }) => {
+  /**
+   * `bucket` asks for a pile of work — the orders to accept, to pack, to send —
+   * rather than a status. The server groups the statuses that share one next
+   * move, which is what makes a bulk action legal for every row it can reach.
+   * Counts for every bucket come back on the same response as `buckets`.
+   */
+  adminOrders: (params?: {
+    bucket?: string;
+    status?: string;
+    search?: string;
+    mobile?: string;
+    page?: number;
+    per_page?: number;
+  }) => {
     const qs = new URLSearchParams();
+    if (params?.bucket) qs.set("bucket", params.bucket);
     if (params?.status) qs.set("status", params.status);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.mobile) qs.set("mobile", params.mobile);
     if (params?.page) qs.set("page", String(params.page));
     if (params?.per_page) qs.set("per_page", String(params.per_page));
     const suffix = qs.toString() ? `?${qs}` : "";
-    return apiFetch<ApiPaginated<Record<string, unknown>>>(`/admin/orders${suffix}`);
+    return apiFetch<ApiPaginated<Record<string, unknown>> & { buckets?: Record<string, number> }>(
+      `/admin/orders${suffix}`,
+    );
   },
   adminOrder: (publicId: string) =>
     apiFetch<Record<string, unknown>>(`/admin/orders/${encodeURIComponent(publicId)}`),

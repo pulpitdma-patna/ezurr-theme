@@ -292,6 +292,10 @@ export function mapApiOrderToAdmin(raw: Record<string, unknown>): AdminOrder {
     carrierName: raw.carrier_name ? String(raw.carrier_name) : undefined,
     eta: raw.eta ? String(raw.eta) : undefined,
     notes: raw.notes ? String(raw.notes) : undefined,
+    // Passed straight through — never recomputed here. See AdminOrder.money.
+    money: (raw.money as AdminOrder["money"]) ?? undefined,
+    next: (raw.next as AdminOrder["next"]) ?? undefined,
+    awb: raw.awb ? String(raw.awb) : undefined,
   };
 }
 

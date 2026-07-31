@@ -93,6 +93,8 @@ export type AdminOrder = {
   items: AdminOrderItem[];
   tracking?: string;
   trackingUrl?: string;
+  /** Courier air-waybill — shown on the row so "has it shipped?" needs no click. */
+  awb?: string;
   carrierName?: string;
   eta?: string;
   notes?: string;
@@ -101,6 +103,31 @@ export type AdminOrder = {
   stockDeducted?: boolean;
   /** COD cash collected on deliver */
   cashCollected?: boolean;
+  /**
+   * What this order still owes, decided by the server (OrderMoneyService), so
+   * the list, the order screen and the invoice cannot disagree. Working it out
+   * in the browser is how "Paid" ends up beside an unpaid order.
+   */
+  money?: {
+    method: string;
+    total: number;
+    depositAmount: number;
+    amountPaid: number;
+    balanceDue: number;
+    refundedTotal: number;
+    balanceLabel: string;
+    /** "To collect ₹4,499" · "Paid ₹500, collect ₹3,999" · "Not paid" */
+    sentence: string;
+  };
+  /**
+   * The one move this order needs next, and every move the server would accept.
+   * Replaces the theme's own status→action map, which had already drifted out of
+   * step with OrderController::TRANSITIONS.
+   */
+  next?: {
+    primary: { status: string; label: string } | null;
+    allowed: string[];
+  };
   /** Shipping address lines (mock) */
   addressLine1?: string;
   addressLine2?: string;
