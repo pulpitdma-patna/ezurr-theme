@@ -288,7 +288,7 @@ function IconSidebarToggle({ collapsed }: { collapsed: boolean }) {
 }
 
 const pageTitles: { match: (path: string) => boolean; title: string; crumb?: string; crumbHref?: string }[] = [
-  { match: (p) => p === "/admin", title: "Dashboard", crumb: "Overview", crumbHref: "/admin" },
+  { match: (p) => p === "/admin", title: "Today", crumb: "Overview", crumbHref: "/admin" },
   { match: (p) => p.startsWith("/admin/analytics"), title: "Analytics", crumb: "Overview", crumbHref: "/admin" },
   { match: (p) => p.startsWith("/admin/reports"), title: "Reports", crumb: "Overview", crumbHref: "/admin" },
   { match: (p) => p.startsWith("/admin/products"), title: "Products", crumb: "Catalog", crumbHref: "/admin/products" },
@@ -369,7 +369,9 @@ function IconPlatform() {
 
 /** Top-level links — never wrapped in a collapsible submenu. */
 const topLevelNav: NavItem[] = [
-  { href: "/admin", label: "Dashboard", icon: <IconDash /> },
+  // "Today" rather than "Dashboard": the screen answers what came in and
+  // what needs doing now, which is what he opens it for.
+  { href: "/admin", label: "Today", icon: <IconDash /> },
   { href: "/admin/analytics", label: "Analytics", icon: <IconChart /> },
   { href: "/admin/reports", label: "Reports", icon: <IconReports /> },
 ];

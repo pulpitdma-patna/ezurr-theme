@@ -12,7 +12,7 @@ type PaletteItem = {
 };
 
 const NAV_ITEMS: PaletteItem[] = [
-  { id: "nav-dash", label: "Dashboard", group: "Pages", href: "/admin" },
+  { id: "nav-dash", label: "Today", hint: "Dashboard", group: "Pages", href: "/admin" },
   { id: "nav-analytics", label: "Analytics", group: "Pages", href: "/admin/analytics" },
   { id: "nav-reports", label: "Reports", group: "Pages", href: "/admin/reports" },
   { id: "nav-products", label: "Products", group: "Pages", href: "/admin/products" },

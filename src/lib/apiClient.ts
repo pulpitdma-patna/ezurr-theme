@@ -582,8 +582,44 @@ function reportQuery(window?: ReportWindow): string {
   return `?from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`;
 }
 
+/** The first screen of the working day — see TodayController. */
+export interface ApiToday {
+  /** When this staff member last looked. Null on a first visit. */
+  since: string | null;
+  newOrders: {
+    id: string;
+    customerName: string;
+    what: string;
+    status: string;
+    placedAt: string | null;
+    total: number;
+    money: { sentence: string; amountPaid: number; balanceDue: number };
+  }[];
+  waiting: {
+    needsOk: number;
+    toPack: number;
+    toSend: number;
+    moneyProblem: number;
+    outOfStock: number;
+    lowStock: number;
+  };
+  money: {
+    receivedToday: number;
+    toCollectToday: number;
+    ordersToday: number;
+    monthToDate: number;
+  };
+  simulating: { messaging: boolean; payments: boolean };
+}
+
 export const api = {
   health: () => apiFetch<{ ok: boolean }>("/health"),
+  /**
+   * `seen: false` reads without moving the "last looked" marker, so a second tab
+   * cannot erase what the first one is showing.
+   */
+  today: (opts?: { seen?: boolean }) =>
+    apiFetch<ApiToday>(`/admin/today${opts?.seen === false ? "?seen=0" : ""}`),
   sendOtp: (mobile: string) =>
     apiFetch<{ ok: boolean; devCode?: string }>("/auth/otp/send", {
       method: "POST",
