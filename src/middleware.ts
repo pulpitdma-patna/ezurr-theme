@@ -110,6 +110,9 @@ export function middleware(request: NextRequest) {
     ? "'self' 'unsafe-inline' 'unsafe-eval'"
     : `'self' 'nonce-${nonce}' 'strict-dynamic' ${rzpScript}`;
 
+  // When the browser uses the same-origin API proxy, API calls need only
+  // 'self'. Keep the absolute API origin too so direct mode and image/beacon
+  // hosts that still point at Laravel stay allowed.
   const connectSrc = ["'self'", api, rzpConnect, geoConnect, analyticsConnect, isDev ? "ws: wss:" : ""]
     .filter(Boolean)
     .join(" ");

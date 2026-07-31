@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { MicroBar } from "@/components/layout/MicroBar";
 import { Header } from "@/components/layout/Header";
 import { FooterFull } from "@/components/layout/Footer";
@@ -10,6 +11,7 @@ import {
   needsClientWidgetCatalog,
   sectionsFromSnapshot,
 } from "@/lib/cms/publicPages";
+import { fetchInstallNeedsSetup, shouldRedirectHomeToSetup } from "@/lib/installState";
 
 /**
  * The homepage, rendered from the CMS.
@@ -37,6 +39,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
+  const install = await fetchInstallNeedsSetup();
+  if (shouldRedirectHomeToSetup(install)) {
+    redirect("/setup");
+  }
+
   const page = await fetchPublishedCmsPage("/");
   const sections = page ? sectionsFromSnapshot(page.snapshot) : [];
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getApiBaseUrl } from "@/lib/apiClient";
+import { getApiUpstreamUrl } from "@/lib/apiClient";
 
 /**
  * Renders admin-authored CMS custom code inside a cross-origin, opaque-origin
@@ -24,7 +24,9 @@ function sandboxOrigin(): string {
       /* fall through */
     }
   }
-  return getApiBaseUrl() ?? "";
+  // Must be the absolute Laravel origin — same-origin proxy would collapse the
+  // cross-origin sandbox (opaque origin) that keeps custom code isolated.
+  return getApiUpstreamUrl() ?? "";
 }
 
 export function CmsSandboxFrame({

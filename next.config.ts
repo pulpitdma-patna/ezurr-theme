@@ -51,9 +51,22 @@ if (apiUrl) {
   }
 }
 
+const apiUpstream = apiUrl ? apiUrl.replace(/\/$/, "") : "";
+
 const nextConfig: NextConfig = {
   images: {
     remotePatterns,
+  },
+  // Browser calls same-origin `/api/*`; Next forwards to the Laravel host so
+  // CORS is not required for storefront fetch when NEXT_PUBLIC_API_PROXY is on.
+  async rewrites() {
+    if (!apiUpstream) return [];
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiUpstream}/api/:path*`,
+      },
+    ];
   },
   // Legacy query-string → path redirects are handled in middleware.ts so the
   // stale query string is stripped (next.config redirects forward it, which

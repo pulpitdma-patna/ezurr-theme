@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, ApiError, isApiEnabled, setApiToken, type ApiInstallState } from "@/lib/apiClient";
+import { setStaffRole, type StaffRole } from "@/lib/adminPermissions";
 import { isValidMobile, normalizeMobile, setSession } from "@/lib/auth";
 
 /**
@@ -53,6 +54,32 @@ function ReadyRow({ ok, label, detail }: { ok: boolean; label: string; detail: s
   );
 }
 
+function initialsFromName(name: string, role: "admin" | "customer"): string {
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase() || (role === "admin" ? "AD" : "EZ");
+}
+
+function isCriticalSimulating(simulating: { name: string; variable: string }[]): boolean {
+  return simulating.some(
+    (item) =>
+      item.name.toLowerCase().includes("payment") ||
+      item.name.toLowerCase().includes("messaging") ||
+      item.variable.includes("RAZORPAY") ||
+      item.variable.includes("CASHFREE") ||
+      item.variable.includes("MSG91"),
+  );
+}
+
+function asStaffRole(value: string | undefined): StaffRole | null {
+  if (value === "owner" || value === "manager" || value === "support" || value === "viewer") {
+    return value;
+  }
+  return null;
+}
+
 export default function SetupPage() {
   const router = useRouter();
   const [state, setState] = useState<ApiInstallState | null>(null);
@@ -61,6 +88,7 @@ export default function SetupPage() {
   const [ownerName, setOwnerName] = useState("");
   const [ownerMobile, setOwnerMobile] = useState("");
   const [claimToken, setClaimToken] = useState("");
+  const [acknowledgedSimulating, setAcknowledgedSimulating] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,18 +97,29 @@ export default function SetupPage() {
       setLoadError("The store server is not configured, so there is nothing to set up yet.");
       return;
     }
+    let cancelled = false;
     api
       .installState()
       .then((s) => {
+        if (cancelled) return;
         setState(s);
         if (s.storeName) setStoreName(s.storeName);
       })
-      .catch(() =>
+      .catch(() => {
+        if (cancelled) return;
         setLoadError(
           "Couldn't reach the store server. Check that it is running and that its address is correct.",
-        ),
-      );
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const ready = state?.ready;
+  const hostNotReady = Boolean(ready && (!ready.database || !ready.schema));
+  const simulating = state?.simulating ?? [];
+  const needsAck = isCriticalSimulating(simulating);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -89,6 +128,15 @@ export default function SetupPage() {
     if (!ownerName.trim()) return setError("Enter your name.");
     if (!isValidMobile(mobile)) {
       return setError("Enter the 10-digit mobile number you will sign in with.");
+    }
+    if (state?.requiresClaimToken && !claimToken.trim()) {
+      return setError("Enter the setup code printed when the server was prepared.");
+    }
+    if (hostNotReady) {
+      return setError("The server is not ready yet. Fix the checklist below before continuing.");
+    }
+    if (needsAck && !acknowledgedSimulating) {
+      return setError("Confirm you understand that payments and messaging are still in practice mode.");
     }
 
     setError("");
@@ -103,13 +151,16 @@ export default function SetupPage() {
 
       // The server signs them in, so there is no OTP round trip to survive here.
       setApiToken(res.token);
+      const role = res.user.role === "admin" ? "admin" : "customer";
       setSession({
         mobile: res.user.mobile,
         name: res.user.name,
-        initials: "AD",
+        initials: initialsFromName(res.user.name, role),
         signedInAt: new Date().toISOString(),
-        role: "admin",
+        role,
       });
+      const staffRole = asStaffRole(res.user.staffRole);
+      if (staffRole) setStaffRole(staffRole);
       router.push("/admin");
     } catch (e) {
       // The server's own wording is better than anything generic here: it knows
@@ -169,8 +220,7 @@ export default function SetupPage() {
     );
   }
 
-  const ready = state.ready;
-  const simulating = state.simulating ?? [];
+  const submitDisabled = submitting || hostNotReady || (needsAck && !acknowledgedSimulating);
 
   return (
     <Panel>
@@ -184,6 +234,49 @@ export default function SetupPage() {
         Your server is running but nobody owns it yet. Fill this in and you&apos;ll be signed in
         as the owner — this page then closes for good.
       </p>
+
+      {simulating.length > 0 ? (
+        <section className="mt-6 rounded-[14px] border border-[#F1C7B8] bg-[#FEF3EE] p-5">
+          <h2 className="ez-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#9A3412]">
+            Not switched on yet
+          </h2>
+          <p className="mt-2.5 text-[13px] leading-relaxed text-[#7C3A16]">
+            These are running in practice mode: they write down what they would have done and
+            contact nobody. A payment will look like it succeeded without money moving, and an
+            order message will never arrive. Saving credentials in the admin does not lift this —
+            each one needs a setting changed on the server.
+          </p>
+          <ul className="mt-3.5 space-y-1.5">
+            {simulating.map((item) => (
+              <li key={item.variable} className="flex flex-wrap items-baseline gap-2 text-[13px] text-[#7C3A16]">
+                <span className="font-semibold">{item.name}</span>
+                <code className="ez-mono rounded bg-white/70 px-1.5 py-0.5 text-[11px]">
+                  {item.variable}=live
+                </code>
+              </li>
+            ))}
+          </ul>
+          {needsAck ? (
+            <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-[13px] leading-relaxed text-[#7C3A16]">
+              <input
+                type="checkbox"
+                checked={acknowledgedSimulating}
+                onChange={(e) => setAcknowledgedSimulating(e.target.checked)}
+                className="mt-1 h-4 w-4 shrink-0 rounded border-[#E2A98F]"
+              />
+              <span>
+                I understand payments and messaging are still in practice mode, and I can finish
+                setup now — this list also stays on Admin → System.
+              </span>
+            </label>
+          ) : (
+            <p className="mt-3.5 text-[12px] text-[#7C3A16]">
+              You can finish setup now — this list is also on Admin → System, so nothing here is
+              lost.
+            </p>
+          )}
+        </section>
+      ) : null}
 
       <form onSubmit={submit} className="mt-9 space-y-5">
         <label className="block">
@@ -251,7 +344,7 @@ export default function SetupPage() {
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitDisabled}
           className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2.5 rounded-[10px] bg-[var(--ez-ink)] px-6 text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-[#2a2a2d] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? "Setting up…" : "Create my owner account"}
@@ -284,34 +377,6 @@ export default function SetupPage() {
               detail={ready.content ? "installed" : "not installed yet"}
             />
           </ul>
-        </section>
-      ) : null}
-
-      {simulating.length > 0 ? (
-        <section className="mt-4 rounded-[14px] border border-[#F1C7B8] bg-[#FEF3EE] p-5">
-          <h2 className="ez-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#9A3412]">
-            Not switched on yet
-          </h2>
-          <p className="mt-2.5 text-[13px] leading-relaxed text-[#7C3A16]">
-            These are running in practice mode: they write down what they would have done and
-            contact nobody. A payment will look like it succeeded without money moving, and an
-            order message will never arrive. Saving credentials in the admin does not lift this —
-            each one needs a setting changed on the server.
-          </p>
-          <ul className="mt-3.5 space-y-1.5">
-            {simulating.map((item) => (
-              <li key={item.variable} className="flex flex-wrap items-baseline gap-2 text-[13px] text-[#7C3A16]">
-                <span className="font-semibold">{item.name}</span>
-                <code className="ez-mono rounded bg-white/70 px-1.5 py-0.5 text-[11px]">
-                  {item.variable}=live
-                </code>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3.5 text-[12px] text-[#7C3A16]">
-            You can finish setup now — this list is also on Admin → System, so nothing here is
-            lost.
-          </p>
         </section>
       ) : null}
     </Panel>

@@ -54,7 +54,7 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-async function fillAndSubmit() {
+async function fillForm() {
   fireEvent.change(screen.getByPlaceholderText("Pulpit Games"), {
     target: { value: "Pulpit Games" },
   });
@@ -62,6 +62,16 @@ async function fillAndSubmit() {
   fireEvent.change(screen.getByPlaceholderText("9876543210"), {
     target: { value: "9876543210" },
   });
+}
+
+async function acknowledgeSimulating() {
+  const box = await screen.findByRole("checkbox");
+  fireEvent.click(box);
+}
+
+async function fillAndSubmit() {
+  await fillForm();
+  await acknowledgeSimulating();
   fireEvent.click(screen.getByRole("button", { name: /create my owner account/i }));
 }
 
@@ -89,6 +99,52 @@ describe("setup wizard", () => {
     expect(screen.getByText("MSG91_DRIVER=live")).toBeTruthy();
   });
 
+  it("blocks submit until practice-mode payments/messaging are acknowledged", async () => {
+    installState.mockResolvedValue(UNCLAIMED);
+
+    render(<SetupPage />);
+    await screen.findByRole("button", { name: /create my owner account/i });
+    await fillForm();
+
+    expect(screen.getByRole("button", { name: /create my owner account/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /create my owner account/i }));
+    expect(installComplete).not.toHaveBeenCalled();
+
+    await acknowledgeSimulating();
+    expect(screen.getByRole("button", { name: /create my owner account/i })).not.toBeDisabled();
+  });
+
+  it("does not call the server when the host database or schema is not ready", async () => {
+    installState.mockResolvedValue({
+      ...UNCLAIMED,
+      ready: { database: false, schema: true, content: true },
+      simulating: [],
+    });
+
+    render(<SetupPage />);
+    const button = await screen.findByRole("button", { name: /create my owner account/i });
+    expect(button).toBeDisabled();
+    await fillForm();
+    fireEvent.click(button);
+    expect(installComplete).not.toHaveBeenCalled();
+  });
+
+  it("requires the setup code locally when the server issued one", async () => {
+    installState.mockResolvedValue({
+      ...UNCLAIMED,
+      requiresClaimToken: true,
+      simulating: [],
+    });
+
+    render(<SetupPage />);
+    await screen.findByRole("button", { name: /create my owner account/i });
+    await fillForm();
+    fireEvent.click(screen.getByRole("button", { name: /create my owner account/i }));
+
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(installComplete).not.toHaveBeenCalled();
+  });
+
   it("signs the owner in directly on success, because no OTP could reach them", async () => {
     installState.mockResolvedValue(UNCLAIMED);
     installComplete.mockResolvedValue({
@@ -105,10 +161,11 @@ describe("setup wizard", () => {
     expect(JSON.parse(window.localStorage.getItem("ezurr_auth_session") ?? "{}").role).toBe(
       "admin",
     );
+    expect(window.localStorage.getItem("ezurr_admin_staff_role")).toBe("owner");
   });
 
   it("shows a bad mobile number without calling the server", async () => {
-    installState.mockResolvedValue(UNCLAIMED);
+    installState.mockResolvedValue({ ...UNCLAIMED, simulating: [] });
 
     render(<SetupPage />);
     await screen.findByRole("button", { name: /create my owner account/i });

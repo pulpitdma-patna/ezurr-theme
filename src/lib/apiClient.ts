@@ -2,18 +2,50 @@
  * Laravel API client for Ezurr.
  * Enable with NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
  * When unset, callers should fall back to localStorage mocks.
+ *
+ * With NEXT_PUBLIC_API_PROXY=1 (default in production when the API URL is set),
+ * browser fetch goes same-origin `/api/...` and Next rewrites to the Laravel host.
+ * Server-side code still uses the absolute upstream via getApiUpstreamUrl().
  */
 
 const TOKEN_KEY = "ezurr_api_token";
 
-export function getApiBaseUrl(): string | null {
+/** Absolute Laravel origin (rewrite target, RSC fetches, image hosts). */
+export function getApiUpstreamUrl(): string | null {
   const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (!raw) return null;
   return raw.replace(/\/$/, "");
 }
 
+/**
+ * Whether the browser should call same-origin `/api` (proxied) instead of the
+ * Laravel origin directly. On in production when the API URL is set; override
+ * with NEXT_PUBLIC_API_PROXY=0|1.
+ */
+export function isApiProxyEnabled(): boolean {
+  const upstream = getApiUpstreamUrl();
+  if (!upstream) return false;
+  const flag = process.env.NEXT_PUBLIC_API_PROXY?.trim().toLowerCase();
+  if (flag === "0" || flag === "false" || flag === "off") return false;
+  if (flag === "1" || flag === "true" || flag === "on") return true;
+  return process.env.NODE_ENV === "production";
+}
+
+/**
+ * Base URL for apiFetch. Empty string means same-origin (proxy mode) in the
+ * browser. Server/RSC always gets the absolute upstream — Next rewrites only
+ * apply to requests that hit the UI origin.
+ * null means the API is not configured.
+ */
+export function getApiBaseUrl(): string | null {
+  const upstream = getApiUpstreamUrl();
+  if (!upstream) return null;
+  if (typeof window !== "undefined" && isApiProxyEnabled()) return "";
+  return upstream;
+}
+
 export function isApiEnabled(): boolean {
-  return Boolean(getApiBaseUrl());
+  return getApiUpstreamUrl() !== null;
 }
 
 export function getApiToken(): string | null {
@@ -59,7 +91,8 @@ export async function apiFetch<T = unknown>(
   init: RequestInit = {},
 ): Promise<T> {
   const base = getApiBaseUrl();
-  if (!base) {
+  // Empty string is valid: same-origin proxy mode.
+  if (base === null) {
     throw new ApiError("API URL not configured", 0, null);
   }
 
@@ -71,7 +104,8 @@ export async function apiFetch<T = unknown>(
   if (token) headers.set("Authorization", `Bearer ${token}`);
   headers.set("Accept", "application/json");
 
-  const res = await fetch(`${base}/api${path.startsWith("/") ? path : `/${path}`}`, {
+  const apiPath = `/api${path.startsWith("/") ? path : `/${path}`}`;
+  const res = await fetch(`${base}${apiPath}`, {
     ...init,
     headers,
   });
@@ -237,7 +271,8 @@ export async function uploadImage(
   folder?: "products" | "categories" | "brands" | "media",
 ): Promise<UploadResult> {
   const base = getApiBaseUrl();
-  if (!base) {
+  // Empty string is valid: same-origin proxy mode.
+  if (base === null) {
     throw new ApiError("API URL not configured", 0, null);
   }
   const form = new FormData();

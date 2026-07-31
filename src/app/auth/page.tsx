@@ -387,6 +387,49 @@ function AuthPageContent() {
             <div className="ez-mono text-xs uppercase tracking-[0.16em] text-[var(--ez-subtle)] animate-pulse">
               Checking session…
             </div>
+          ) : needsSetup ? (
+            // Nobody owns this store yet. OTP would go to a log file on a fresh
+            // install, so the form is hidden entirely — setup is the only path.
+            <div className="auth-form-body">
+              <div className="mb-8">
+                <span className="ez-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#9A3412]">
+                  Not set up yet
+                </span>
+                <h2 className="mt-5 text-[clamp(1.75rem,3vw,2.35rem)] font-semibold leading-[1.02] tracking-[-0.045em] text-[var(--ez-ink)]">
+                  Set up this store first
+                </h2>
+                <p className="mt-3 text-[13px] leading-relaxed text-[var(--ez-muted)] sm:text-sm">
+                  There is no owner account yet. Setup takes a minute and signs you
+                  straight in — a sign-in code cannot reach anyone until then.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <Link
+                  href="/setup"
+                  className="auth-submit inline-flex min-h-[3.25rem] items-center justify-center gap-2.5 rounded-[10px] bg-[var(--ez-ink)] px-5 text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-[#2a2a2d] hover:text-white"
+                >
+                  Start setup <span aria-hidden="true" className="text-white/70">→</span>
+                </Link>
+                {existingSession ? (
+                  <>
+                    <Link
+                      href={continueHref}
+                      className="inline-flex min-h-[3rem] items-center justify-center rounded-[10px] border border-[var(--ez-border)] bg-white px-5 text-sm font-semibold text-[var(--ez-muted)] transition hover:border-[#d2d2d7] hover:text-[var(--ez-ink)]"
+                    >
+                      {continueLabel}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={signOutExisting}
+                      className="inline-flex min-h-[3rem] items-center justify-center rounded-[10px] border border-[var(--ez-border)] bg-white px-5 text-sm font-semibold text-[var(--ez-muted)] transition hover:border-[#d2d2d7] hover:text-[var(--ez-ink)]"
+                    >
+                      Sign out
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
           ) : existingSession ? (
             <div className="auth-form-body">
               <div className="mb-8">
@@ -423,23 +466,6 @@ function AuthPageContent() {
             </div>
           ) : (
             <div className="auth-form-body">
-            {needsSetup ? (
-              // There is nobody to sign in as yet, and no OTP would reach anyone:
-              // on a fresh install MSG91 is gated to `log`, so the code goes to a
-              // file on the server. Point at setup rather than let them try.
-              <Link
-                href="/setup"
-                className="mb-7 block rounded-[10px] border border-[#F1C7B8] bg-[#FEF3EE] px-4 py-3.5 transition hover:border-[#E2A98F]"
-              >
-                <span className="ez-mono block text-[10px] font-bold uppercase tracking-[0.14em] text-[#9A3412]">
-                  Not set up yet
-                </span>
-                <span className="mt-1.5 block text-[13px] leading-relaxed text-[#7C3A16]">
-                  This store has no owner account. Set it up first — it takes a minute and
-                  signs you straight in. <span className="font-semibold underline">Start setup →</span>
-                </span>
-              </Link>
-            ) : null}
             <div className="mb-8">
               <AuthStepIndicator step={step} />
               <h2 className="mt-6 text-[clamp(1.75rem,3vw,2.35rem)] font-semibold leading-[1.02] tracking-[-0.045em] text-[var(--ez-ink)]">
