@@ -17,6 +17,8 @@ import {
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useListSavedViews } from "@/hooks/useListSavedViews";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
+import { adminErrorMessage } from "@/lib/adminError";
+import { looksLikeMobileQuery, mobileMatches } from "@/lib/mobileMatch";
 import { formatAdminDate } from "@/lib/adminFormat";
 import { formatMobileDisplay } from "@/lib/auth";
 import { bulkUpdateOrderStatus } from "@/lib/adminStore";
@@ -166,6 +168,10 @@ export default function AdminOrdersPage() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
+    // A phone number typed the way a customer says it — "98765 43210",
+    // "+91 98765 43210" — used to match nothing, because the filter compared the
+    // raw string. See lib/mobileMatch.
+    const searchingByPhone = looksLikeMobileQuery(q);
     const source = isApiEnabled() ? apiOrders : store.orders;
     let list = source.filter((order) => {
       if (status !== "all" && order.status !== status) return false;
@@ -175,7 +181,9 @@ export default function AdminOrdersPage() {
       return (
         order.id.toLowerCase().includes(q) ||
         order.customerName.toLowerCase().includes(q) ||
-        order.customerMobile.includes(q) ||
+        (searchingByPhone
+          ? mobileMatches(order.customerMobile, q)
+          : order.customerMobile.includes(q)) ||
         order.city.toLowerCase().includes(q)
       );
     });
@@ -530,27 +538,59 @@ export default function AdminOrdersPage() {
           if (!bulkConfirm) return;
           const count = selectedKeys.length;
           if (isApiEnabled()) {
-            void Promise.all(
+            // allSettled, not all. Promise.all rejects on the FIRST failure while
+            // every other request carries on and succeeds on the server — so one
+            // illegal transition in a batch of twenty (a COD order not accepted
+            // yet cannot go straight to packed) skipped the .then() entirely.
+            // The other nineteen were packed, the list still showed them
+            // unpacked, and the toast said "Could not update orders via API".
+            // The owner was told nothing happened, on the job they do every
+            // morning, and had to reload and compare rows by eye to find out
+            // what was true.
+            void Promise.allSettled(
               selectedKeys.map((id) =>
                 api.patchOrderStatus(id, { status: bulkConfirm }),
               ),
-            )
-              .then(() => {
-                setApiOrders((prev) =>
-                  prev.map((o) =>
-                    selectedKeys.includes(o.id) ? { ...o, status: bulkConfirm } : o,
-                  ),
-                );
-                toast.push(`Marked ${count} order(s) ${bulkConfirm}`, "success");
-              })
-              .catch(() => {
-                toast.push("Could not update orders via API", "danger");
+            ).then((results) => {
+              const done: string[] = [];
+              const failed: { id: string; reason: string }[] = [];
+              results.forEach((r, i) => {
+                const id = selectedKeys[i];
+                if (r.status === "fulfilled") done.push(id);
+                else failed.push({ id, reason: adminErrorMessage(r.reason, "Could not update it.") });
               });
+
+              // Apply what actually landed, so the list agrees with the server
+              // even when part of the batch was refused.
+              if (done.length) {
+                setApiOrders((prev) =>
+                  prev.map((o) => (done.includes(o.id) ? { ...o, status: bulkConfirm } : o)),
+                );
+              }
+
+              if (!failed.length) {
+                toast.push(`Marked ${done.length} order(s) ${bulkConfirm}`, "success");
+              } else if (!done.length) {
+                toast.push(failed[0].reason, "danger");
+              } else {
+                // Partial: say both halves. The count that moved is the useful
+                // number; the reason is why the rest did not.
+                toast.push(
+                  `${done.length} marked ${bulkConfirm}. ${failed.length} could not be — ${failed[0].reason}`,
+                  "warning",
+                );
+              }
+
+              // Keep the refused ones selected so they can be dealt with; only
+              // clear what succeeded. Clearing everything meant the owner could
+              // not even see which orders still needed attention.
+              setSelectedKeys(failed.map((f) => f.id));
+            });
           } else {
             bulkUpdateOrderStatus(selectedKeys, bulkConfirm);
             toast.push(`Marked ${count} order(s) ${bulkConfirm}`, "success");
+            setSelectedKeys([]);
           }
-          setSelectedKeys([]);
           setBulkConfirm(null);
         }}
       />
