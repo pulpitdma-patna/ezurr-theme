@@ -162,25 +162,47 @@ export function saveDraft(
   );
 }
 
+/**
+ * Drop the storefront's cached copy of the CMS.
+ *
+ * Published pages are cached for five minutes, so without this an owner who
+ * removed a section and reloaded the shop still saw it — with nothing to tell
+ * them whether the change had failed or was merely waiting. Best effort: the
+ * publish itself has already succeeded, and a cache that clears on its own
+ * timer is a slow success, not a failure worth reporting.
+ */
+async function clearStorefrontCache(): Promise<void> {
+  try {
+    await fetch("/api/cms/revalidate", { method: "POST", keepalive: true });
+  } catch {
+    /* the five-minute timer still applies */
+  }
+}
+
 /** Copy the stored draft into the live snapshot. */
-export function publishPage(
+export async function publishPage(
   publicId: string,
   when: { publishAt?: string; unpublishAt?: string } = {},
 ): Promise<CmsResult<CmsPageSummary>> {
-  return run(() =>
+  const result = await run(() =>
     apiFetch<CmsPageSummary>(`/admin/cms/pages/${encodeURIComponent(publicId)}/publish`, {
       method: "POST",
       body: JSON.stringify(when),
     }),
   );
+  if (result.ok) await clearStorefrontCache();
+  return result;
 }
 
-export function unpublishPage(publicId: string): Promise<CmsResult<CmsPageSummary>> {
-  return run(() =>
+export async function unpublishPage(publicId: string): Promise<CmsResult<CmsPageSummary>> {
+  const result = await run(() =>
     apiFetch<CmsPageSummary>(`/admin/cms/pages/${encodeURIComponent(publicId)}/unpublish`, {
       method: "POST",
     }),
   );
+  // Taking a page DOWN and having it linger is the worse direction to be wrong in.
+  if (result.ok) await clearStorefrontCache();
+  return result;
 }
 
 export function loadPage(publicId: string): Promise<CmsResult<CmsPageDocument>> {

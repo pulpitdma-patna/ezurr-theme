@@ -433,6 +433,22 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
 
   return (
     <div className="fixed inset-0 z-[80] flex flex-col bg-[#EFEFF2]">
+      {/* What this page does NOT control.
+          The category template contributes the sections above and below the
+          product list; the top bar, the category name, the products themselves
+          and the footer are built into the shop and cannot be removed here.
+          Without saying so, removing a section and finding it still on the
+          storefront reads as "the editor is broken" — the owner cannot tell that
+          the thing they deleted was never theirs to delete. */}
+      {pageId === "category-template" ? (
+        <div className="border-b border-[#F4D8A8] bg-[#FEF6E7] px-3 py-2 text-[11px] leading-relaxed text-[#8A5A00]">
+          <strong>One layout for every category page.</strong> Sections above the{" "}
+          <code className="rounded bg-white/70 px-1">Category products</code> block show above the
+          product list, and sections below it show underneath. The top bar, the category name and
+          the product list itself come from the shop and cannot be changed here.
+        </div>
+      ) : null}
+
       {/* Top bar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-3 py-2.5">
         {/* A Next <Link> never triggers beforeunload, and "go back to Pages"

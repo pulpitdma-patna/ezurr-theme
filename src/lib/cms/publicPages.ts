@@ -46,8 +46,19 @@ export function needsClientWidgetCatalog(sections: CmsBlock[]): boolean {
   );
 }
 
-/** CMS content changes rarely; a short shared cache keeps SSR cheap. */
+/**
+ * CMS content changes rarely, so a shared cache keeps SSR cheap.
+ *
+ * Five minutes is the ceiling, not the expectation: publishing clears this tag
+ * immediately (see app/api/cms/revalidate). Before that, an owner who removed a
+ * section and reloaded saw it still there with no way to tell whether the change
+ * had failed or was merely waiting — so they would remove it again, or conclude
+ * the editor was broken.
+ */
 const REVALIDATE_SECONDS = 300;
+
+/** Everything the storefront reads from the CMS, invalidated together on publish. */
+export const CMS_CACHE_TAG = "cms";
 
 async function getJson<T>(path: string): Promise<T | null> {
   const base = getApiBaseUrl();
@@ -55,7 +66,7 @@ async function getJson<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${base}/api${path}`, {
       headers: { Accept: "application/json" },
-      next: { revalidate: REVALIDATE_SECONDS },
+      next: { revalidate: REVALIDATE_SECONDS, tags: [CMS_CACHE_TAG] },
     });
     if (!res.ok) return null;
     return (await res.json()) as T;
