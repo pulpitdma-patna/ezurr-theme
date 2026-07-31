@@ -80,6 +80,7 @@ function productApiPayload(input: {
   stock: number;
   status: string;
   image: string;
+  taxInclusive: boolean;
   fulfilment: FulfilmentValues;
 }) {
   const key = input.key.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80);
@@ -94,6 +95,11 @@ function productApiPayload(input: {
     stock: input.stock,
     image_url: input.image || null,
     active: input.status === "active" || input.status === "published",
+    // The drawer has always shown a "Price includes GST" toggle and read it back
+    // from the product, but never sent it — so switching it saved nothing and
+    // reappeared unchanged on reload. It decides whether the catalogue price is
+    // grossed up at checkout, so the wrong value moves what the customer pays.
+    tax_inclusive: input.taxInclusive,
     // Fulfilment owns `fulfillment_type` now — spread last so it wins.
     ...fulfilmentToPayload(input.fulfilment),
   };
@@ -498,6 +504,7 @@ export default function AdminProductsPage() {
               stock: Number(form.stock) || 0,
               status: form.status,
               image: form.image,
+              taxInclusive: form.taxInclusive,
               fulfilment,
             }),
           );
@@ -549,6 +556,7 @@ export default function AdminProductsPage() {
             stock: nextStock,
             status: form.status,
             image: form.image,
+            taxInclusive: form.taxInclusive,
             fulfilment,
           }),
         );
