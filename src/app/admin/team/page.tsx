@@ -538,7 +538,17 @@ export default function AdminTeamPage() {
       <ConfirmDialog
         open={Boolean(revokeId)}
         title="Revoke seat?"
-        description="UI-only revoke. They would lose HQ access when authZ is live."
+        // This copy said "UI-only revoke. They would lose HQ access when authZ is
+        // live" — written before the route existed and never updated. It now
+        // really does demote the account and delete its sessions, so describing
+        // that as cosmetic is the more dangerous direction to be wrong in: an
+        // owner removing a departed employee would read it as "this did nothing"
+        // and go looking for another way to do what they had already done.
+        description={
+          apiOn
+            ? "They lose admin access immediately and are signed out everywhere. Their customer account and past orders are kept."
+            : "Demo data only — this store is not connected to the API, so nobody's real access changes."
+        }
         confirmLabel="Revoke"
         danger
         onConfirm={() => {
