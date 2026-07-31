@@ -115,6 +115,8 @@ export type AdminOrder = {
     amountPaid: number;
     balanceDue: number;
     refundedTotal: number;
+    /** What can be sent back through the gateway — excludes the cash-on-delivery leg. */
+    refundable: number;
     balanceLabel: string;
     /** "To collect ₹4,499" · "Paid ₹500, collect ₹3,999" · "Not paid" */
     sentence: string;

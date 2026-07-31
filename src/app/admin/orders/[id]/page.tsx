@@ -170,6 +170,7 @@ export default function AdminOrderDetailPage({
   // `payment_failed` key, so an order whose payment failed showed nothing to do
   // while OrderController::TRANSITIONS would happily accept `cancelled`. In API
   // mode the server answers; the map is the fallback for demo data only.
+  const refundable = order.money?.refundable ?? 0;
   const actions = (order.next?.allowed as AdminOrderStatus[] | undefined)
     ?? nextActions[order.status]
     ?? [];
@@ -493,9 +494,13 @@ export default function AdminOrderDetailPage({
             ) : (
               <p className="mt-2 text-sm text-[#86868B]">No further fulfillment actions.</p>
             )}
-            {(["paid", "confirmed", "shipped", "delivered"] as AdminOrderStatus[]).includes(
-              order.status,
-            ) ? (
+            {/* Gated on what can actually be sent back, not on status.
+                RefundService excludes the cash-on-delivery leg — money handed to
+                a courier was never taken online and cannot be returned that way
+                — so this button used to render on a pure cash order and 422 with
+                nothing the owner could do about it. When there is nothing to
+                send back, say why rather than hiding the option silently. */}
+            {refundable > 0 ? (
               <button
                 type="button"
                 onClick={() => {
@@ -507,8 +512,12 @@ export default function AdminOrderDetailPage({
                 }}
                 className="mt-2 h-9 w-full rounded-xl border border-[#F5C2C0] text-xs font-semibold text-[#B42318] hover:bg-[#FFF5F5]"
               >
-                Record refund
+                Send back {formatInr(refundable)}
               </button>
+            ) : order.money && order.money.amountPaid === 0 ? (
+              <p className="mt-2 text-[11px] text-[#86868B]">
+                Cash order — nothing was paid online, so there is nothing to send back here.
+              </p>
             ) : null}
             {apiOn &&
             (["confirmed", "paid", "packed"] as AdminOrderStatus[]).includes(order.status) ? (
@@ -659,8 +668,8 @@ export default function AdminOrderDetailPage({
       />
       <ConfirmDialog
         open={confirmRefund}
-        title="Refund via payment provider?"
-        description={`Refunds ${order.total} through Razorpay/Cashfree and restocks when the refund is full. Partial amounts can be sent from the API.`}
+        title="Send the money back?"
+        description={`${formatInr(refundable)} goes back to the card or UPI it was paid with, usually in 3–5 working days. A full refund also puts the items back into your stock and closes the order.`}
         confirmLabel="Refund"
         danger
         onConfirm={() => {
