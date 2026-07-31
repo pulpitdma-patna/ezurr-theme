@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { adjustStock } from "@/lib/adminStore";
 import { apiUpdateProduct, isApiEnabled } from "@/lib/apiClient";
 
@@ -20,12 +20,20 @@ export function StockEditor({
   name,
   stock,
   onSaved,
+  children,
 }: {
   productKey: string;
   name: string;
   stock: number;
   /** Called with the persisted quantity so the list can refresh the row. */
   onSaved: (productKey: string, stock: number) => void;
+  /**
+   * Custom trigger content — pass the stock badge itself, so the number the
+   * operator is looking at is the thing they click. The default "± Stock"
+   * button sat NEXT TO that badge, which meant two controls per row for one
+   * job and a label that has to be decoded before it can be used.
+   */
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(String(stock));
@@ -138,9 +146,14 @@ export function StockEditor({
             return true;
           });
         }}
-        className="rounded-md border border-black/10 px-2 py-1 text-[11px] font-semibold text-[#1D1D1F] transition hover:bg-[#F5F5F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+        title={`Stock: ${stock} — click to change`}
+        className={
+          children
+            ? "rounded-full transition hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+            : "rounded-md border border-black/10 px-2 py-1 text-[11px] font-semibold text-[#1D1D1F] transition hover:bg-[#F5F5F7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+        }
       >
-        ± Stock
+        {children ?? "± Stock"}
       </button>
 
       <span aria-live="polite" className="inline-flex">

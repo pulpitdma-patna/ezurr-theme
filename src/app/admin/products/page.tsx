@@ -701,33 +701,31 @@ export default function AdminProductsPage() {
         );
       },
     },
-    {
-      key: "sku",
-      header: "SKU",
-      sortable: true,
-      hideOnMobile: true,
-      render: (row) => <span className="ez-mono text-[11px]">{row.sku}</span>,
-    },
-    {
-      key: "platform",
-      header: "Platform",
-      hideOnMobile: true,
-      render: (row) => <span className="text-xs text-[#6E6E73]">{row.platform}</span>,
-    },
+    // The SKU and Platform columns are gone.
+    //
+    // "SKU" rendered the URL slug — "dualsense-wireless-controller-chrome-indigo-
+    // accplay265" — which wrapped over five lines and forced every row to ~130px.
+    // Five products fitted on a 900px screen, so a 298-product catalogue was
+    // sixty screens of scrolling, all to display an identifier nobody reads off a
+    // shelf. It lives on the product page now, as its web address.
+    //
+    // "Platform" read "Hardware" for every row in the catalogue: a column whose
+    // job was to be the same word 298 times.
     {
       key: "stock",
       header: "Stock",
       sortable: true,
+      // One control, not two. The badge and a separate "± Stock" button used to
+      // sit side by side for the same job — click the number you are looking at.
       render: (row) => (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <StockEditor
+          productKey={row.key}
+          name={row.name}
+          stock={row.stock}
+          onSaved={handleStockSaved}
+        >
           <StockBadge stock={row.stock} />
-          <StockEditor
-            productKey={row.key}
-            name={row.name}
-            stock={row.stock}
-            onSaved={handleStockSaved}
-          />
-        </div>
+        </StockEditor>
       ),
     },
     {
@@ -776,17 +774,14 @@ export default function AdminProductsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Products"
-        description="Stock, fulfilment and pre-orders all live here — edit stock inline, or open the drawer for the rest."
+        description="Everything you sell. Click a stock number to change it, or a product to edit the rest."
         breadcrumbs={[
           { label: "Catalog", href: "/admin/products" },
           { label: "Products" },
         ]}
-        actions={
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-black/[0.06] bg-[#FAFAFB] px-2.5 py-1 ez-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--ez-accent)]" aria-hidden />
-            {productSource.length} SKUs
-          </span>
-        }
+        // The "298 SKUs" pill that lived here said the same number as the count
+        // beside the search box 200px below, in a word he does not use. The one
+        // below survives because it responds to the filters.
       />
 
       {listError ? (
