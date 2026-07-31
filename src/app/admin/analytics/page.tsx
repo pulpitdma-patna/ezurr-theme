@@ -32,8 +32,11 @@ export default function AdminAnalyticsPage() {
   const filters = useReportFilters(store.orders, "7d");
   const priorRange = useMemo(() => previousPeriodRange(filters.range), [filters.range]);
 
-  const days = useMemo(
-    () => Math.max(1, eachDayInRange(filters.range.start, filters.range.end).length),
+  // The dates the owner actually picked, not just how many there are. Sending a
+  // count made the server answer about the last N days ending today, so a range
+  // in the past came back with today's numbers under yesterday's label.
+  const window = useMemo(
+    () => ({ from: filters.range.start, to: filters.range.end }),
     [filters.range],
   );
 
@@ -45,7 +48,7 @@ export default function AdminAnalyticsPage() {
   useEffect(() => {
     if (!apiOn) return;
     let cancelled = false;
-    void Promise.all([api.reportSummary(days), api.reportSeries(days), api.reportTopSkus()])
+    void Promise.all([api.reportSummary(window), api.reportSeries(window), api.reportTopSkus()])
       .then(([summary, series, skus]) => {
         if (cancelled) return;
         setApiSummary(summary);
@@ -56,7 +59,7 @@ export default function AdminAnalyticsPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiOn, days]);
+  }, [apiOn, window]);
 
   // --- Mock fallback derivations ---
   const periodOrders = useMemo(

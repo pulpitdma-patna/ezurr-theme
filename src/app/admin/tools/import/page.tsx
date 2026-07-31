@@ -6,7 +6,8 @@ import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { logActivity, setAdminState } from "@/lib/adminStore";
-import { apiImport, isApiEnabled } from "@/lib/apiClient";
+import { api, apiImport, isApiEnabled } from "@/lib/apiClient";
+import { adminErrorMessage } from "@/lib/adminError";
 import type { AdminCatalogRow, AdminDigitalCode } from "@/data/admin";
 
 function parseCsv(text: string): string[][] {
@@ -26,7 +27,10 @@ export default function AdminImportPage() {
     const content =
       kind === "products"
         ? "key,name,brand,sku,price,strike,stock,platform,category,status\ncustom-sku,Demo Game,Ezurr,EZ-DEMO-0001,2999,3499,10,PS5,games,published\n"
-        : "id,code,platform,productName,status\nDC-IMPORT-1,PSN-AAAA-BBBB-CCCC,PS5,Demo Title,available\n";
+        // productKey names the product each code belongs to — the vault is keyed
+        // on it, and a template without it produces a file the importer has to
+        // reject.
+        : "productKey,code,platform,productName,status\nps-plus-12m,PSN-AAAA-BBBB-CCCC,PS5,Demo Title,available\n";
     const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -149,6 +153,53 @@ export default function AdminImportPage() {
       const [header, ...body] = rows;
       const idx = (name: string) => header.findIndex((h) => h.toLowerCase() === name);
       let imported = 0;
+
+      // API mode sends the codes to the vault on the server. This branch used to
+      // be the only one: the codes went into localStorage, the screen said
+      // "Digital codes import: 500", and the server had none of them — so the
+      // owner would list a product as in stock and the first buyer's order would
+      // find an empty vault. The products importer above already had this branch;
+      // this one was simply never given it.
+      if (isApiEnabled()) {
+        const byProduct = new Map<string, string[]>();
+        for (const cells of body) {
+          const code = cells[idx("code")];
+          // productKey is what the vault is keyed on; productName is a label.
+          const key = cells[idx("productkey")] || cells[idx("productKey".toLowerCase())];
+          if (!code || !key) continue;
+          byProduct.set(key, [...(byProduct.get(key) ?? []), code]);
+          imported += 1;
+        }
+
+        if (byProduct.size === 0) {
+          setReport([
+            "No usable rows. The CSV needs a `code` column and a `productKey` column naming the product each code belongs to.",
+          ]);
+          toast.push("Nothing imported — check the columns", "warning");
+          return;
+        }
+
+        void Promise.all(
+          [...byProduct.entries()].map(([key, codes]) =>
+            api.importDigitalCodes(key, codes.join("\n")),
+          ),
+        )
+          .then((results) => {
+            const added = results.reduce((n, r) => n + (r.imported ?? 0), 0);
+            const skipped = results.reduce((n, r) => n + (r.skipped ?? 0), 0);
+            setReport([
+              `Imported ${added} code(s) into the vault${skipped ? `, skipped ${skipped} already present` : ""}.`,
+            ]);
+            toast.push(`Digital codes import: ${added}`, "success");
+          })
+          .catch((err) => {
+            const message = adminErrorMessage(err, "Could not import the codes.");
+            setReport([message]);
+            toast.push(message, "warning");
+          });
+        return;
+      }
+
       setAdminState((prev) => {
         const digitalCodes = [...prev.digitalCodes];
         for (const cells of body) {
@@ -166,7 +217,7 @@ export default function AdminImportPage() {
         }
         return { ...prev, digitalCodes };
       });
-      setReport([`Imported ${imported} digital code(s). Raw codes stay vaulted in local store.`]);
+      setReport([`Imported ${imported} digital code(s) into this browser only — this store is not connected to the API.`]);
       logActivity({
         actor: "Admin",
         action: "import.digital_codes",

@@ -573,6 +573,15 @@ export interface ApiSystemHealth {
   integrations: { name: string; live: boolean; driver: string; variable: string }[];
 }
 
+/** Either an explicit date range or a rolling number of days. */
+export type ReportWindow = { from: string; to: string } | { days: number };
+
+function reportQuery(window?: ReportWindow): string {
+  if (!window) return "";
+  if ("days" in window) return `?days=${window.days}`;
+  return `?from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`;
+}
+
 export const api = {
   health: () => apiFetch<{ ok: boolean }>("/health"),
   sendOtp: (mobile: string) =>
@@ -822,10 +831,15 @@ export const api = {
     const suffix = qs.toString() ? `?${qs}` : "";
     return apiFetch<ApiPaginated<ApiActivityEntry>>(`/admin/activity${suffix}`);
   },
-  reportSummary: (days?: number) =>
-    apiFetch<ApiReportSummary>(`/admin/reports/summary${days ? `?days=${days}` : ""}`),
-  reportSeries: (days?: number) =>
-    apiFetch<{ data: ApiReportSeriesPoint[] }>(`/admin/reports/series${days ? `?days=${days}` : ""}`).then(
+  /**
+   * `window` sends the actual dates the owner picked. Passing only a day COUNT
+   * asked the server for a rolling window ending today, so choosing "1-31 May"
+   * returned the last 31 days under a May label.
+   */
+  reportSummary: (window?: ReportWindow) =>
+    apiFetch<ApiReportSummary>(`/admin/reports/summary${reportQuery(window)}`),
+  reportSeries: (window?: ReportWindow) =>
+    apiFetch<{ data: ApiReportSeriesPoint[] }>(`/admin/reports/series${reportQuery(window)}`).then(
       (r) => r.data,
     ),
   reportTopSkus: () =>

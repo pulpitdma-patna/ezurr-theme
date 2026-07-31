@@ -52,7 +52,7 @@ export default function AdminReportDetailPage() {
   useEffect(() => {
     if (!apiOn) return;
     let cancelled = false;
-    void Promise.all([api.reportSummary(30), api.reportSeries(30), api.reportTopSkus()])
+    void Promise.all([api.reportSummary({ days: 30 }), api.reportSeries({ days: 30 }), api.reportTopSkus()])
       .then(([summary, series, skus]) => {
         if (cancelled) return;
         setLiveSummary({

@@ -30,7 +30,7 @@ export default function AdminReportsHubPage() {
     if (!apiOn) return;
     let cancelled = false;
     void api
-      .reportSummary(30)
+      .reportSummary({ days: 30 })
       .then((s) => {
         if (!cancelled) {
           setSummary({
