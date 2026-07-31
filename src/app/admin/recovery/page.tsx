@@ -26,11 +26,29 @@ type Session = {
 type OrderRow = { id: string; mobile: string; total: string; status: string; placedAt: string };
 
 function ageLabel(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "Not known";
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 60) return `${mins}m`;
-  if (mins < 1440) return `${Math.round(mins / 60)}h`;
-  return `${Math.round(mins / 1440)}d`;
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)} hr ago`;
+  const days = Math.round(mins / 1440);
+  return `${days} ${days === 1 ? "day" : "days"} ago`;
+}
+
+/**
+ * The stored word for where a basket stands. It used to be printed straight out
+ * of the server in capitals — "ABANDONED", "RECOVERED" — which is the database
+ * shouting at him, not a shop telling him what happened.
+ */
+const BASKET_WORDS: Record<string, string> = {
+  active: "Still shopping",
+  abandoned: "Walked away",
+  recovered: "Came back and bought",
+  placed: "Ordered",
+  expired: "Too old to chase",
+};
+
+function basketWords(status: string): string {
+  return BASKET_WORDS[status] ?? status;
 }
 
 export default function AdminRecoveryPage() {
@@ -63,7 +81,7 @@ export default function AdminRecoveryPage() {
         ...((pending.data as Array<Record<string, unknown>>) ?? []).map(mapOrder),
       ]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load recovery data");
+      setError(e instanceof Error ? e.message : "Could not load the baskets left behind.");
     }
   }, [apiOn]);
 
@@ -81,10 +99,10 @@ export default function AdminRecoveryPage() {
   async function sendRecovery(s: Session) {
     try {
       await api.recoverCheckoutSession(s.id);
-      toast.push("Recovery message queued", "success");
+      toast.push("Reminder is on its way", "success");
       await load();
     } catch (e) {
-      toast.push(e instanceof Error ? e.message : "Could not send recovery", "warning");
+      toast.push(e instanceof Error ? e.message : "The reminder did not go out", "warning");
     }
   }
 
@@ -93,27 +111,29 @@ export default function AdminRecoveryPage() {
       await api.patchCheckoutSession(s.id, "recovered");
       await load();
     } catch {
-      toast.push("Could not update", "warning");
+      toast.push("That did not save", "warning");
     }
   }
 
   return (
     <div>
       <AdminPageHeader
-        title="Recovery"
-        description="Win back abandoned carts and rescue failed or unpaid orders."
+        title="Baskets left behind"
+        description="Customers who filled a basket and walked away, and orders where the money never arrived. Nudge them."
       />
 
       {!apiOn ? (
-        <AdminNotice tone="demo">Recovery requires the live store API.</AdminNotice>
+        <AdminNotice tone="demo">
+          Practice shop. Nobody real has left a basket behind here.
+        </AdminNotice>
       ) : null}
       {error ? <AdminNotice tone="error">{error}</AdminNotice> : null}
 
       <div className="mb-4 grid gap-2 sm:grid-cols-3">
         {[
-          ["Abandoned carts", String(stats.abandoned)],
-          ["Recovered carts", String(stats.recovered)],
-          ["Recovered value", formatInr(stats.recoveredValue)],
+          ["Left behind", String(stats.abandoned)],
+          ["Came back and bought", String(stats.recovered)],
+          ["Money that came back", formatInr(stats.recoveredValue)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-xl border border-black/[0.07] bg-white px-4 py-3">
             <div className="ez-mono text-[10px] uppercase tracking-[0.12em] text-[#86868B]">{label}</div>
@@ -124,16 +144,18 @@ export default function AdminRecoveryPage() {
 
       <ListToolbar
         resultLabel={
-          tab === "carts" ? `${sessions.length} carts` : `${orders.length} orders`
+          tab === "carts"
+            ? `${sessions.length} ${sessions.length === 1 ? "basket" : "baskets"}`
+            : `${orders.length} ${orders.length === 1 ? "order" : "orders"}`
         }
         filters={
           <AdminSelect
-            label="View"
+            label="Show"
             value={tab}
             onChange={(value) => setTab(value as "carts" | "payments")}
             options={[
-              { value: "carts", label: `Abandoned carts (${sessions.length})` },
-              { value: "payments", label: `Payment issues (${orders.length})` },
+              { value: "carts", label: `Baskets left behind (${sessions.length})` },
+              { value: "payments", label: `Money never arrived (${orders.length})` },
             ]}
           />
         }
@@ -144,19 +166,20 @@ export default function AdminRecoveryPage() {
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="border-b border-black/[0.06] bg-[#F8F8FA] text-[11px] uppercase tracking-[0.1em] text-[#86868B]">
               <tr>
-                <th className="px-4 py-2.5">Mobile</th>
-                <th className="px-4 py-2.5">Items</th>
-                <th className="px-4 py-2.5">Value</th>
-                <th className="px-4 py-2.5">Age</th>
-                <th className="px-4 py-2.5">Status</th>
-                <th className="px-4 py-2.5 text-right">Actions</th>
+                <th className="px-4 py-2.5">Phone</th>
+                <th className="px-4 py-2.5">In the basket</th>
+                <th className="px-4 py-2.5">Worth</th>
+                <th className="px-4 py-2.5">Left</th>
+                <th className="px-4 py-2.5">Where it stands</th>
+                <th className="px-4 py-2.5 text-right">What you can do</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/[0.05]">
               {sessions.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-[#86868B]">
-                    No captured carts yet.
+                    Nobody has left a basket behind. A basket lands here when someone
+                    fills it, gives you their number, and then leaves without paying.
                   </td>
                 </tr>
               ) : (
@@ -169,9 +192,11 @@ export default function AdminRecoveryPage() {
                     <td className="ez-mono px-4 py-2.5">{formatInr(s.total || 0)}</td>
                     <td className="px-4 py-2.5 text-[#6E6E73]">{ageLabel(s.last_activity_at)}</td>
                     <td className="px-4 py-2.5">
-                      <span className="ez-mono text-[10px] uppercase tracking-[0.1em] text-[#6E6E73]">
-                        {s.status}
-                        {s.reminders_sent > 0 ? ` · ${s.reminders_sent} sent` : ""}
+                      <span className="text-[11px] text-[#6E6E73]">
+                        {basketWords(s.status)}
+                        {s.reminders_sent > 0
+                          ? ` · ${s.reminders_sent} ${s.reminders_sent === 1 ? "reminder" : "reminders"} sent`
+                          : ""}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-right">
@@ -182,18 +207,18 @@ export default function AdminRecoveryPage() {
                             onClick={() => void sendRecovery(s)}
                             className="h-7 rounded-md bg-[#1D1D1F] px-2.5 text-[11px] font-semibold text-white"
                           >
-                            Send recovery
+                            Send a reminder
                           </button>
                           <button
                             type="button"
                             onClick={() => void markRecovered(s)}
                             className="ml-2 h-7 rounded-md border border-black/10 px-2.5 text-[11px] font-semibold"
                           >
-                            Mark recovered
+                            They bought it
                           </button>
                         </>
                       ) : (
-                        <span className="text-[11px] text-[#2D6B3C]">✓ recovered</span>
+                        <span className="text-[11px] text-[#2D6B3C]">✓ they came back</span>
                       )}
                     </td>
                   </tr>
@@ -206,16 +231,17 @@ export default function AdminRecoveryPage() {
             <thead className="border-b border-black/[0.06] bg-[#F8F8FA] text-[11px] uppercase tracking-[0.1em] text-[#86868B]">
               <tr>
                 <th className="px-4 py-2.5">Order</th>
-                <th className="px-4 py-2.5">Mobile</th>
-                <th className="px-4 py-2.5">Total</th>
-                <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5">Phone</th>
+                <th className="px-4 py-2.5">Worth</th>
+                <th className="px-4 py-2.5">Where it stands</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/[0.05]">
               {orders.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center text-[#86868B]">
-                    No failed or unpaid orders.
+                    Every payment has gone through. Orders show up here only when the
+                    money did not arrive.
                   </td>
                 </tr>
               ) : (

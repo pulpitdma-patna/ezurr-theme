@@ -45,7 +45,7 @@ export default function AdminImportPage() {
     reader.onload = () => {
       const rows = parseCsv(String(reader.result ?? ""));
       if (rows.length < 2) {
-        setReport(["No data rows found"]);
+        setReport(["That file had a heading row and nothing under it."]);
         return;
       }
       const [header, ...body] = rows;
@@ -77,18 +77,19 @@ export default function AdminImportPage() {
           .filter((p): p is NonNullable<typeof p> => p !== null);
 
         if (products.length === 0) {
-          setReport(["No valid rows (each row needs a name)"]);
+          setReport(["Nothing could be used — every row needs a name."]);
           return;
         }
 
         void apiImport({ products, dryRun: false })
           .then((res) => {
-            setReport([`Imported / upserted ${res.summary.products} product row(s) via API`]);
-            toast.push(`Products import: ${res.summary.products} rows`, "success");
+            const n = res.summary.products;
+            setReport([`${n} ${n === 1 ? "product" : "products"} added or updated.`]);
+            toast.push(`${n} ${n === 1 ? "product" : "products"} brought in`, "success");
           })
           .catch((err: Error) => {
-            setReport([`Import failed: ${err.message}`]);
-            toast.push("Import failed", "warning");
+            setReport([`Nothing was brought in — ${err.message}`]);
+            toast.push("Nothing was brought in", "warning");
           });
         return;
       }
@@ -101,7 +102,7 @@ export default function AdminImportPage() {
           const key = cells[idx("key")] || `import-${Date.now()}-${imported}`;
           const name = cells[idx("name")];
           if (!name) {
-            notes.push(`Skipped row without name`);
+            notes.push("Skipped a row with no name in it.");
             continue;
           }
           const stock = Number(cells[idx("stock")] ?? 0) || 0;
@@ -128,7 +129,7 @@ export default function AdminImportPage() {
         }
         return { ...prev, products };
       });
-      notes.unshift(`Imported / upserted ${imported} product row(s)`);
+      notes.unshift(`${imported} ${imported === 1 ? "product" : "products"} added or updated.`);
       setReport(notes);
       logActivity({
         actor: "Admin",
@@ -137,7 +138,7 @@ export default function AdminImportPage() {
         entityId: "bulk",
         detail: `${imported} rows`,
       });
-      toast.push(`Products import: ${imported} rows`, "success");
+      toast.push(`${imported} ${imported === 1 ? "product" : "products"} brought in`, "success");
     };
     reader.readAsText(file);
   }
@@ -147,7 +148,7 @@ export default function AdminImportPage() {
     reader.onload = () => {
       const rows = parseCsv(String(reader.result ?? ""));
       if (rows.length < 2) {
-        setReport(["No data rows found"]);
+        setReport(["That file had a heading row and nothing under it."]);
         return;
       }
       const [header, ...body] = rows;
@@ -173,9 +174,9 @@ export default function AdminImportPage() {
 
         if (byProduct.size === 0) {
           setReport([
-            "No usable rows. The CSV needs a `code` column and a `productKey` column naming the product each code belongs to.",
+            "None of those rows could be used. Each one needs the code itself, and the name of the product it belongs to — the blank spreadsheet has both columns already.",
           ]);
-          toast.push("Nothing imported — check the columns", "warning");
+          toast.push("Nothing came in — check the columns", "warning");
           return;
         }
 
@@ -188,12 +189,14 @@ export default function AdminImportPage() {
             const added = results.reduce((n, r) => n + (r.imported ?? 0), 0);
             const skipped = results.reduce((n, r) => n + (r.skipped ?? 0), 0);
             setReport([
-              `Imported ${added} code(s) into the vault${skipped ? `, skipped ${skipped} already present` : ""}.`,
+              `${added} ${added === 1 ? "code is" : "codes are"} ready to sell${
+                skipped ? `. ${skipped} were already here, so they were left alone` : ""
+              }.`,
             ]);
-            toast.push(`Digital codes import: ${added}`, "success");
+            toast.push(`${added} ${added === 1 ? "code" : "codes"} added`, "success");
           })
           .catch((err) => {
-            const message = adminErrorMessage(err, "Could not import the codes.");
+            const message = adminErrorMessage(err, "The codes did not go in.");
             setReport([message]);
             toast.push(message, "warning");
           });
@@ -217,7 +220,9 @@ export default function AdminImportPage() {
         }
         return { ...prev, digitalCodes };
       });
-      setReport([`Imported ${imported} digital code(s) into this browser only — this store is not connected to the API.`]);
+      setReport([
+        `Practice shop — ${imported} ${imported === 1 ? "code" : "codes"} were read, but they stay in this browser only and no customer can be sent one.`,
+      ]);
       logActivity({
         actor: "Admin",
         action: "import.digital_codes",
@@ -225,7 +230,7 @@ export default function AdminImportPage() {
         entityId: "digital-codes",
         detail: `${imported} codes`,
       });
-      toast.push(`Digital codes import: ${imported}`, "success");
+      toast.push(`${imported} ${imported === 1 ? "code" : "codes"} read`, "success");
     };
     reader.readAsText(file);
   }
@@ -233,19 +238,20 @@ export default function AdminImportPage() {
   return (
     <div>
       <AdminPageHeader
-        title="Import"
-        description="CSV templates for catalog and digital vault. Validation runs in-browser against the mock store."
+        title="Bring in a list"
+        description="Add a lot of products or game codes at once, from a spreadsheet."
         breadcrumbs={[
-          { label: "System", href: "/admin/settings" },
-          { label: "Import" },
+          { label: "Setup", href: "/admin/settings" },
+          { label: "Bring in a list" },
         ]}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-black/[0.06] bg-white p-5 shadow-[0_8px_30px_rgba(17,17,19,0.04)]">
-          <h2 className="text-sm font-semibold tracking-[-0.02em]">Products CSV</h2>
+          <h2 className="text-sm font-semibold tracking-[-0.02em]">Products</h2>
           <p className="mt-1 text-xs text-[#6E6E73]">
-            Upserts by key/SKU. Current catalog: {store.products.length} SKUs.
+            A row already in your shop is updated, not added twice. You sell{" "}
+            {store.products.length} {store.products.length === 1 ? "thing" : "things"} today.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <button
@@ -253,10 +259,10 @@ export default function AdminImportPage() {
               onClick={() => downloadTemplate("products")}
               className="inline-flex h-9 items-center rounded-lg border border-black/[0.1] bg-white px-3 text-xs font-semibold"
             >
-              Download template
+              Get the blank spreadsheet
             </button>
             <label className="inline-flex h-9 cursor-pointer items-center rounded-lg bg-[#1D1D1F] px-3 text-xs font-semibold text-white">
-              Upload CSV
+              Send your file
               <input
                 type="file"
                 accept=".csv,text/csv"
@@ -272,9 +278,10 @@ export default function AdminImportPage() {
         </section>
 
         <section className="rounded-2xl border border-black/[0.06] bg-white p-5 shadow-[0_8px_30px_rgba(17,17,19,0.04)]">
-          <h2 className="text-sm font-semibold tracking-[-0.02em]">Digital codes CSV</h2>
+          <h2 className="text-sm font-semibold tracking-[-0.02em]">Game codes</h2>
           <p className="mt-1 text-xs text-[#6E6E73]">
-            Appends available codes to the vault. Current vault: {store.digitalCodes.length}.
+            New codes are added to the ones you already hold. You have{" "}
+            {store.digitalCodes.length} unsold right now.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <button
@@ -282,10 +289,10 @@ export default function AdminImportPage() {
               onClick={() => downloadTemplate("codes")}
               className="inline-flex h-9 items-center rounded-lg border border-black/[0.1] bg-white px-3 text-xs font-semibold"
             >
-              Download template
+              Get the blank spreadsheet
             </button>
             <label className="inline-flex h-9 cursor-pointer items-center rounded-lg bg-[#1D1D1F] px-3 text-xs font-semibold text-white">
-              Upload CSV
+              Send your file
               <input
                 type="file"
                 accept=".csv,text/csv"
@@ -304,12 +311,12 @@ export default function AdminImportPage() {
       <div className="mt-5">
         {report.length === 0 ? (
           <AdminEmptyState
-            title="No import run yet"
-            description="Download a template, fill rows, then upload to validate against this workspace."
+            title="You haven't brought anything in yet"
+            description="Get the blank spreadsheet, fill in one row per thing, then send it back here. What happened will be listed on this spot."
           />
         ) : (
           <div className="rounded-2xl border border-black/[0.06] bg-white p-5">
-            <h3 className="text-sm font-semibold">Last import report</h3>
+            <h3 className="text-sm font-semibold">What happened last time</h3>
             <ul className="mt-3 space-y-1.5 text-sm text-[#424245]">
               {report.map((line) => (
                 <li key={line}>· {line}</li>

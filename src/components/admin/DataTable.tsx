@@ -44,7 +44,10 @@ export function DataTable<T>({
   columns,
   rows,
   rowKey,
-  emptyMessage = "No results.",
+  // A default that never tells him anything is a default nobody overrides. Every
+  // list that can be empty should say what would put a row in it — this is the
+  // last resort for one that forgot.
+  emptyMessage = "Nothing here yet.",
   emptyAction,
   onRowClick,
   selectable,

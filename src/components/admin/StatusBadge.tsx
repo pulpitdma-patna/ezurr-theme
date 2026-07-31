@@ -1,5 +1,5 @@
 import type { AdminCustomerStatus, AdminOrderStatus, AdminProductStatus } from "@/data/admin";
-import { orderStatusLabels, productStatusLabels } from "@/data/admin";
+import { customerStatusLabels, orderStatusLabels, productStatusLabels } from "@/data/admin";
 
 const orderTones: Record<AdminOrderStatus, string> = {
   pending: "text-[#92400E] bg-[#FEF3C7]",
@@ -48,10 +48,13 @@ export function StatusBadge(props: StatusBadgeProps) {
   }
 
   if (props.kind === "customer") {
+    // Was `{props.status}` with a CSS capitalize, so this badge printed the
+    // stored value: "Vip", "Banned". The map is the only place those words are
+    // decided now.
     return (
-      <span className={`${base} capitalize ${customerTones[props.status]}`}>
+      <span className={`${base} ${customerTones[props.status]}`}>
         <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" aria-hidden />
-        {props.status}
+        {customerStatusLabels[props.status]}
       </span>
     );
   }

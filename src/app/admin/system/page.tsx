@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminNotice } from "@/components/admin/AdminNotice";
@@ -77,6 +78,40 @@ function Command({ children }: { children: string }) {
   );
 }
 
+/**
+ * A command chip is only honest when the person reading it genuinely has to ask
+ * somebody else. Anything the owner can now do himself gets a link to the screen
+ * that does it, not the name of a setting on a machine he cannot reach.
+ */
+function AskYourServer({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[12px] text-[#6E6E73]">
+      Ask whoever runs your server for {children}
+    </div>
+  );
+}
+
+/**
+ * The integration this gate belongs to. The API sends it, but `ApiSystemHealth`
+ * in lib/apiClient.ts — another agent's file — does not carry it yet, so it is
+ * read structurally and falls back to the list.
+ */
+function integrationKeyOf(item: { variable: string }): string | null {
+  const key = (item as { key?: string | null }).key;
+  return typeof key === "string" && key !== "" ? key : null;
+}
+
+function CardLink({ integrationKey }: { integrationKey: string | null }) {
+  return (
+    <Link
+      href={integrationKey ? `/admin/integrations#${integrationKey}` : "/admin/integrations"}
+      className="text-[12px] font-semibold text-[#1D1D1F] underline underline-offset-2"
+    >
+      Switch it on →
+    </Link>
+  );
+}
+
 function StatTile({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
     <div className="rounded-xl border border-black/[0.06] bg-[#FAFAFB] px-3.5 py-3">
@@ -94,7 +129,7 @@ export default function AdminSystemPage() {
 
   useEffect(() => {
     if (!isApiEnabled()) {
-      setError("The store server is not configured, so there is nothing to report.");
+      setError("Practice shop. There is no real server to check yet.");
       setLoading(false);
       return;
     }
@@ -111,7 +146,7 @@ export default function AdminSystemPage() {
         // this") would be wrong — there is nothing to change on this page.
         if (e instanceof ApiError && e.status === 403) {
           setError(
-            "Only the store owner can see this page — it names server settings and connection keys.",
+            "Only the shop's owner can see this page — it names server settings and the keys other companies gave you.",
           );
           return;
         }
@@ -131,9 +166,9 @@ export default function AdminSystemPage() {
   return (
     <div>
       <AdminPageHeader
-        title="System"
-        description="Your store's version, and anything that is not working but does not say so."
-        breadcrumbs={[{ label: "System", href: "/admin/settings" }, { label: "System health" }]}
+        title="What's working"
+        description="Which version of the shop you are on, and anything that is broken but does not say so."
+        breadcrumbs={[{ label: "Setup", href: "/admin/settings" }, { label: "What's working" }]}
       />
 
       {error ? <AdminNotice tone="error">{error}</AdminNotice> : null}
@@ -149,25 +184,33 @@ export default function AdminSystemPage() {
           <section className={panelClass}>
             <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">
               <StatTile
-                label="Store version"
-                value={health.version.installed ?? "not recorded"}
+                label="Your version"
+                value={health.version.installed ?? "not written down"}
                 detail={
                   health.version.installed === health.version.code
                     ? "up to date"
-                    : `code is ${health.version.code}`
+                    : `the newer one is ${health.version.code}`
+                }
+              />
+              {/* The tile under "Database" used to print `health.database.driver`
+                  — the bare word "mysql" or "pgsql". He is not choosing one; he
+                  needs to know whether his shop can reach where its records are
+                  kept, which is the line above it. */}
+              <StatTile
+                label="Where your records are kept"
+                value={health.database.connected ? "Reachable" : "Cannot be reached"}
+                detail={
+                  health.database.connected
+                    ? "Orders and products are being saved."
+                    : "Nothing can be saved until this is fixed."
                 }
               />
               <StatTile
-                label="Database"
-                value={health.database.connected ? "Connected" : "Not reachable"}
-                detail={health.database.driver}
-              />
-              <StatTile
-                label="Set up on"
+                label="Shop set up on"
                 value={
                   health.version.installedAt
                     ? formatAdminDateTime(health.version.installedAt)
-                    : "—"
+                    : "Not written down"
                 }
               />
             </div>
@@ -181,11 +224,11 @@ export default function AdminSystemPage() {
                 </h2>
                 <p className="mt-1.5 max-w-2xl text-[12px] leading-relaxed text-[#8A5A00]">
                   {health.pendingMigrations > 0
-                    ? `${health.pendingMigrations} database change${
-                        health.pendingMigrations === 1 ? "" : "s"
-                      } from this release have not been applied. Until they are, parts of the admin can error or silently save nothing.`
-                    : `This code is version ${health.version.code} but the store was last updated to ${
-                        health.version.installed ?? "an unknown version"
+                    ? `${health.pendingMigrations} ${
+                        health.pendingMigrations === 1 ? "change" : "changes"
+                      } to where your records are kept never finished. Until they do, parts of this admin can break, or look like they saved and quietly save nothing.`
+                    : `This shop is running version ${health.version.code}, but it was last set up as ${
+                        health.version.installed ?? "a version nobody wrote down"
                       }.`}
                 </p>
                 <p className="mt-3 text-[12px] text-[#8A5A00]">
@@ -193,16 +236,16 @@ export default function AdminSystemPage() {
                   {getApiUpstreamUrl() ? (
                     <>
                       {" "}
-                      or open the API{" "}
+                      or{" "}
                       <a
                         href={`${getApiUpstreamUrl()}/update`}
                         target="_blank"
                         rel="noreferrer"
                         className="font-semibold underline underline-offset-2"
                       >
-                        /update
+                        open the update page
                       </a>{" "}
-                      console (status only — it does not migrate from the browser).
+                      on your server — that page only reports; it cannot finish the update for you.
                     </>
                   ) : null}
                 </p>
@@ -238,11 +281,11 @@ export default function AdminSystemPage() {
           <section className={panelClass}>
             <header className="border-b border-black/[0.06] bg-[#FAFAFB] px-5 py-4 sm:px-6">
               <h2 className="text-[15px] font-semibold tracking-[-0.03em] text-[#1D1D1F]">
-                Background work
+                Work that happens on its own
               </h2>
               <p className="mt-1 max-w-2xl text-xs text-[#6E6E73]">
-                Order messages, cart recovery and scheduled pages all run here rather than while
-                a customer waits.
+                Order messages, chasing baskets left behind, and pages set to go live later all
+                happen here rather than while a customer waits.
               </p>
             </header>
             <ul>
@@ -250,15 +293,24 @@ export default function AdminSystemPage() {
                 tone={health.queue.needsWorker ? "warn" : "good"}
                 title={
                   health.queue.needsWorker
-                    ? "A worker must be running"
-                    : "Messages are sent immediately"
+                    ? "Something has to be left running to send these"
+                    : "Messages are sent straight away"
                 }
+                // This used to print the raw setting — `Queue is "sync"` — and
+                // the word "webhooks". Neither is something he can act on; the
+                // number of messages piling up is.
                 detail={
                   health.queue.needsWorker
-                    ? `Queued jobs waiting: ${health.queue.pendingJobs}. If that number keeps climbing, nothing is processing them — order messages and webhooks are being stored and never sent.`
-                    : `Queue is "${health.queue.connection}", so work happens during the request. Nothing extra to run, but checkout is slower.`
+                    ? `${health.queue.pendingJobs} ${health.queue.pendingJobs === 1 ? "message is" : "messages are"} waiting to go out. If that number keeps climbing, nothing is sending them — order updates and anything you send to your own software are being written down and never sent.`
+                    : "Messages go out while the customer waits instead of afterwards. Nothing extra has to be running, but checkout is a little slower."
                 }
-                action={health.queue.needsWorker ? <Command>php artisan queue:work</Command> : undefined}
+                action={
+                  health.queue.needsWorker ? (
+                    <AskYourServer>
+                      <Command>php artisan queue:work</Command>
+                    </AskYourServer>
+                  ) : undefined
+                }
               />
               <StatusLine
                 tone={
@@ -270,22 +322,26 @@ export default function AdminSystemPage() {
                 }
                 title={
                   health.scheduler.healthy === null
-                    ? "Scheduled tasks have never run"
+                    ? "The timed jobs have never run"
                     : health.scheduler.healthy
-                      ? "Scheduled tasks are running"
-                      : "Scheduled tasks have stopped"
+                      ? "The timed jobs are running"
+                      : "The timed jobs have stopped"
                 }
                 detail={
                   health.scheduler.lastRunAt
-                    ? `Last run ${formatAdminDateTime(health.scheduler.lastRunAt)}.${
+                    ? `Last ran ${formatAdminDateTime(health.scheduler.lastRunAt)}.${
                         health.scheduler.healthy
                           ? ""
-                          : " Abandoned-cart recovery, scheduled publishing and payment timeouts are not happening."
+                          : " Baskets left behind are not being chased, pages set to go live later will not, and unpaid orders are not being closed off."
                       }`
-                    : "No run has ever been recorded. Either cron was never set up, or this store was updated moments ago — check again in five minutes."
+                    : "Nothing has ever run. Either this was never set up on your server, or the shop was updated moments ago — look again in five minutes."
                 }
                 action={
-                  health.scheduler.healthy ? undefined : <Command>php artisan schedule:run</Command>
+                  health.scheduler.healthy ? undefined : (
+                    <AskYourServer>
+                      <Command>php artisan schedule:run</Command>
+                    </AskYourServer>
+                  )
                 }
               />
             </ul>
@@ -294,12 +350,20 @@ export default function AdminSystemPage() {
           <section className={panelClass}>
             <header className="border-b border-black/[0.06] bg-[#FAFAFB] px-5 py-4 sm:px-6">
               <h2 className="text-[15px] font-semibold tracking-[-0.03em] text-[#1D1D1F]">
-                Connections
+                Other companies
               </h2>
+              {/*
+                This paragraph used to say the opposite — that saving credentials
+                here changed nothing and each of these needed a setting edited on
+                the server — and every row printed a variable name as a command
+                chip. Both were written before the switch moved into the database.
+                They are now not merely jargon but false, and they were telling an
+                owner who had just switched their payments on that they were still
+                pretending.
+              */}
               <p className="mt-1 max-w-2xl text-xs text-[#6E6E73]">
                 Anything in practice mode writes down what it would have done and contacts
-                nobody. Saving credentials on the Integrations screen does not change this — each
-                one needs the setting below changed on the server.
+                nobody. You change that yourself, on that company&rsquo;s card.
               </p>
             </header>
             <ul>
@@ -312,14 +376,14 @@ export default function AdminSystemPage() {
                     item.name.startsWith("payments")
                       ? "A payment will appear to succeed and no money will move."
                       : item.name.startsWith("messaging")
-                        ? "OTP codes and order updates are written to a log file instead of being sent."
-                        : "Requests are logged instead of sent."
+                        ? "Sign-in codes and order updates are written down instead of being sent, so a customer cannot sign in."
+                        : "Written down instead of sent."
                   }
-                  action={<Command>{`${item.variable}=live`}</Command>}
+                  action={<CardLink integrationKey={integrationKeyOf(item)} />}
                 />
               ))}
               {live.map((item) => (
-                <StatusLine key={item.variable} tone="good" title={`${item.name} — live`} detail="Sending for real." />
+                <StatusLine key={item.variable} tone="good" title={`${item.name} — live`} detail="Doing it for real." />
               ))}
             </ul>
           </section>
@@ -327,39 +391,43 @@ export default function AdminSystemPage() {
           <section className={panelClass}>
             <header className="border-b border-black/[0.06] bg-[#FAFAFB] px-5 py-4 sm:px-6">
               <h2 className="text-[15px] font-semibold tracking-[-0.03em] text-[#1D1D1F]">
-                Server
+                Your server
               </h2>
             </header>
             <ul>
               <StatusLine
                 tone={health.writable.storage ? "good" : "bad"}
-                title={health.writable.storage ? "Uploads folder is writable" : "Uploads will fail"}
+                title={
+                  health.writable.storage
+                    ? "Pictures and invoices can be saved"
+                    : "Pictures and invoices cannot be saved"
+                }
                 detail={
                   health.writable.storage
-                    ? "Product images and invoices can be written."
-                    : "The storage folder is read-only, so image uploads and generated invoices will error."
+                    ? "Product photos you upload and invoices the shop makes both have somewhere to go."
+                    : "The folder they go in is locked, so uploading a photo and printing an invoice will both fail."
                 }
               />
               <StatusLine
                 tone={health.writable.env ? "good" : "unknown"}
                 title={
                   health.writable.env
-                    ? "Settings file can be edited on this server"
-                    : "Settings must be changed in your hosting dashboard"
+                    ? "Server settings can be edited here"
+                    : "Server settings live with your hosting company"
                 }
                 detail={
                   health.writable.env
                     ? `Whoever runs your server can edit ${health.writable.envPath} directly.`
-                    : "This is normal on managed hosting and in containers. The settings named on this page go into your host's environment-variables screen instead of a file."
+                    : "This is normal, and nothing is wrong. Anything named on this page has to be changed in your hosting company's own control panel rather than in a file."
                 }
               />
               <StatusLine
                 tone={health.owner.exists ? "good" : "bad"}
-                title={`Staff owners: ${health.owner.count}`}
+                title={`${health.owner.count} ${health.owner.count === 1 ? "person is" : "people are"} an owner`}
                 detail={
                   health.owner.exists
-                    ? "Owners can change payment settings and manage the team."
-                    : "No owner account exists, which should be impossible from this screen."
+                    ? "An owner is the only one who can change payment settings and add people."
+                    : "Nobody is an owner, which should not be possible — nobody can change payment settings."
                 }
               />
             </ul>

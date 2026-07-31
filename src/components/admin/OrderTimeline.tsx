@@ -1,13 +1,9 @@
 import type { AdminOrderEvent } from "@/data/admin";
+import { formatAdminDateTime } from "@/lib/adminFormat";
 
-function formatAt(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+// Was its own toLocaleString with no time zone, so history on this screen could
+// disagree by a day with the same order's date in the list beside it.
+const formatAt = formatAdminDateTime;
 
 export function OrderTimeline({ events }: { events: AdminOrderEvent[] }) {
   if (events.length === 0) {

@@ -25,8 +25,9 @@ export function mapApiCustomer(c: ApiCustomer): AdminCustomer {
     orders: c.orders_count,
     spent: formatInr(c.lifetime_value),
     lastOrderAt: c.last_order_at ?? "",
-    // Derived server-side from the default address or the latest order.
-    city: c.city ?? "—",
+    // Derived server-side from the default address or the latest order. An em
+    // dash in the City column told him nothing; the sentence says which it is.
+    city: c.city ?? "No address yet",
     status: statusOfCustomer(c),
     notes: c.notes ?? undefined,
     banned: c.banned,

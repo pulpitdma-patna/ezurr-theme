@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
+import { formatAdminDateTime } from "@/lib/adminFormat";
 import {
   listRevisions,
   restoreRevision,
@@ -31,13 +32,7 @@ const KIND_LABEL: Record<CmsRevisionSummary["kind"], string> = {
 };
 
 function formatWhen(iso: string | null): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatAdminDateTime(iso, "");
 }
 
 type Group =
@@ -82,7 +77,7 @@ export function RevisionHistory({
       if (!res.ok) {
         setError(
           res.error.kind === "offline"
-            ? "Version history needs the store server. It's off right now."
+            ? "Practice shop. Earlier versions of a page are kept on your server, and there isn't one yet."
             : res.error.message,
         );
         setRevs([]);
@@ -148,7 +143,7 @@ export function RevisionHistory({
   return (
     <div className="absolute inset-y-0 left-[260px] z-20 flex w-[340px] flex-col border-r border-black/[0.08] bg-white shadow-xl">
       <div className="flex items-center justify-between border-b border-black/[0.06] px-3 py-2.5">
-        <p className="m-0 text-sm font-semibold">Version history</p>
+        <p className="m-0 text-sm font-semibold">Earlier versions</p>
         <button
           type="button"
           onClick={onClose}

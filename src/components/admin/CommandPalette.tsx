@@ -11,36 +11,55 @@ type PaletteItem = {
   href: string;
 };
 
+/**
+ * Everything reachable, including what the sidebar no longer lists.
+ *
+ * The nav is now 14 entries; this is the safety net for the rest, and it is the
+ * reason a screen can leave the sidebar without becoming typed-URL-only. It also
+ * carries the OLD vocabulary as `hint` — the words are searched too, so a person
+ * who learnt "Inventory", "Fulfillment" or "CMS" last month still finds the
+ * screen after it was renamed to something a shopkeeper would say.
+ */
 const NAV_ITEMS: PaletteItem[] = [
-  { id: "nav-dash", label: "Today", hint: "Dashboard", group: "Pages", href: "/admin" },
-  { id: "nav-analytics", label: "Analytics", group: "Pages", href: "/admin/analytics" },
-  { id: "nav-reports", label: "Reports", group: "Pages", href: "/admin/reports" },
-  { id: "nav-products", label: "Products", group: "Pages", href: "/admin/products" },
-  { id: "nav-categories", label: "Categories", group: "Pages", href: "/admin/categories" },
-  { id: "nav-brands", label: "Brands", group: "Pages", href: "/admin/brands" },
-  // Inventory and pre-orders were folded into Products. Their old routes still
-  // redirect for bookmarks' sake, but the palette links straight to the filtered
-  // destination — searching "inventory" should land you there, not bounce.
-  { id: "nav-inventory", label: "Inventory (in Products)", group: "Pages", href: "/admin/products?stock=low" },
-  { id: "nav-media", label: "Media library", group: "Pages", href: "/admin/media" },
-  { id: "nav-orders", label: "Orders", group: "Pages", href: "/admin/orders" },
-  { id: "nav-preorders", label: "Pre-orders (in Products)", group: "Pages", href: "/admin/products?fulfillment=preorder" },
-  { id: "nav-digital", label: "Digital codes", group: "Pages", href: "/admin/digital-codes" },
-  { id: "nav-customers", label: "Customers", group: "Pages", href: "/admin/customers" },
-  { id: "nav-coupons", label: "Coupons", group: "Pages", href: "/admin/coupons" },
-  { id: "nav-system", label: "System health", group: "Pages", href: "/admin/system" },
-  { id: "nav-team", label: "Team", group: "Pages", href: "/admin/team" },
-  { id: "nav-integrations", label: "Integrations", group: "Pages", href: "/admin/integrations" },
-  { id: "nav-automations", label: "Automations", group: "Pages", href: "/admin/automations" },
-  { id: "nav-activity", label: "Activity", group: "Pages", href: "/admin/activity" },
-  { id: "nav-import", label: "Import tools", group: "Pages", href: "/admin/tools/import" },
-  { id: "nav-settings", label: "Settings", group: "Pages", href: "/admin/settings" },
-  { id: "nav-cms", label: "CMS Pages", group: "Online store", href: "/admin/cms" },
-  { id: "nav-cms-home", label: "Homepage builder", group: "Online store", href: "/admin/cms/home" },
-  { id: "nav-cms-code", label: "Custom code", group: "Online store", href: "/admin/cms/code" },
-  { id: "nav-checkout-rules", label: "Checkout rules", group: "Online store", href: "/admin/checkout-rules" },
-  { id: "nav-appearance", label: "Appearance", group: "Online store", href: "/admin/settings#appearance" },
+  // The daily five, same as the sidebar.
+  { id: "nav-dash", label: "Today", hint: "dashboard home", group: "Every day", href: "/admin" },
+  { id: "nav-orders", label: "Orders", hint: "fulfilment shipping packing", group: "Every day", href: "/admin/orders" },
+  { id: "nav-products", label: "Products", hint: "catalog inventory stock", group: "Every day", href: "/admin/products" },
+  { id: "nav-customers", label: "Customers", hint: "buyers people", group: "Every day", href: "/admin/customers" },
+  { id: "nav-reports", label: "Money", hint: "reports analytics revenue GST sales", group: "Every day", href: "/admin/reports" },
+
+  { id: "nav-analytics", label: "Charts", hint: "analytics graphs trends", group: "Every day", href: "/admin/analytics" },
+
+  // Reachable from a screen, not from the sidebar. Each is here so that nothing
+  // is typed-URL-only.
+  { id: "nav-orders-tosend", label: "Orders to pack", group: "Orders", href: "/admin/orders?tab=to-pack" },
+  { id: "nav-orders-print", label: "Print labels and invoices", hint: "packing slip documents", group: "Orders", href: "/admin/orders/print" },
+  { id: "nav-codes", label: "Game codes", hint: "digital codes vault keys", group: "Orders", href: "/admin/digital-codes" },
+
+  { id: "nav-categories", label: "Categories", hint: "collections", group: "Products", href: "/admin/categories" },
+  { id: "nav-brands", label: "Brands", hint: "makers publishers", group: "Products", href: "/admin/brands" },
+  { id: "nav-lowstock", label: "Products running low", hint: "inventory stock", group: "Products", href: "/admin/products?stock=low" },
+  { id: "nav-preorders", label: "Pre-orders", group: "Products", href: "/admin/preorders" },
+  { id: "nav-import", label: "Import products from a file", hint: "csv bulk upload tools", group: "Products", href: "/admin/tools/import" },
+
+  { id: "nav-coupons", label: "Discount codes", hint: "coupons offers promo", group: "Selling more", href: "/admin/coupons" },
+  { id: "nav-automations", label: "Automatic messages", hint: "automations whatsapp sms flows", group: "Selling more", href: "/admin/automations" },
+  { id: "nav-templates", label: "Message wording", hint: "templates msg91 dlt", group: "Selling more", href: "/admin/message-templates" },
+  { id: "nav-recovery", label: "Baskets left behind", hint: "abandoned cart recovery", group: "Selling more", href: "/admin/recovery" },
+
+  { id: "nav-cms", label: "Website", hint: "cms pages content builder", group: "Website", href: "/admin/cms" },
+  { id: "nav-cms-home", label: "Home page", hint: "homepage builder landing", group: "Website", href: "/admin/cms/home" },
+  { id: "nav-media", label: "Pictures", hint: "media library images uploads", group: "Website", href: "/admin/media" },
+  { id: "nav-cms-code", label: "Custom code", hint: "css javascript head script", group: "Website", href: "/admin/cms/code" },
+
+  { id: "nav-settings", label: "Shop settings", hint: "store address gst tax delivery", group: "Setup", href: "/admin/settings" },
+  { id: "nav-checkout-rules", label: "Checkout rules", hint: "delivery charge free shipping cod", group: "Setup", href: "/admin/checkout-rules" },
+  { id: "nav-integrations", label: "Other companies", hint: "integrations razorpay shiprocket msg91 shopify keys", group: "Setup", href: "/admin/integrations" },
+  { id: "nav-team", label: "People", hint: "team staff users roles", group: "Setup", href: "/admin/team" },
+  { id: "nav-system", label: "What's working", hint: "system health status queue", group: "Setup", href: "/admin/system" },
+  { id: "nav-activity", label: "What changed", hint: "activity audit log history", group: "Setup", href: "/admin/activity" },
 ];
+
 
 export function CommandPalette({
   open,

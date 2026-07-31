@@ -10,6 +10,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatInr, type AdminOrderStatus } from "@/data/admin";
 import { adminErrorMessage } from "@/lib/adminError";
+import { formatAdminTime } from "@/lib/adminFormat";
 import { api, isApiEnabled, type ApiToday } from "@/lib/apiClient";
 
 /**
@@ -32,9 +33,7 @@ function timeAgo(iso: string | null): string {
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return "";
   const sameDay = then.toDateString() === new Date().toDateString();
-  const time = then
-    .toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })
-    .toLowerCase();
+  const time = formatAdminTime(iso).toLowerCase();
   return sameDay
     ? time
     : `${then.toLocaleDateString("en-IN", { weekday: "short" })} ${time}`;
@@ -88,7 +87,7 @@ export default function AdminTodayPage() {
 
   useEffect(() => {
     if (!isApiEnabled()) {
-      setError("The store server is not connected, so there is nothing to show yet.");
+      setError("Practice shop. Your real day's takings appear once your shop is connected.");
       setLoading(false);
       return;
     }
@@ -243,7 +242,7 @@ export default function AdminTodayPage() {
           <p className="px-1 text-[12px] text-[#86868B]">
             This month so far {formatInr(m?.monthToDate ?? 0)} —{" "}
             <Link href="/admin/reports" className="underline">
-              see reports
+              open Money
             </Link>
           </p>
         </div>

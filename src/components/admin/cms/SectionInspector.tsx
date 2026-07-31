@@ -67,7 +67,7 @@ function ProductKeysPicker({
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Search catalog…"
+        placeholder="Search what you sell"
         className="w-full rounded-lg border border-black/[0.1] px-2.5 py-2 text-xs"
       />
       <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-black/[0.08] p-2">

@@ -30,6 +30,23 @@ export const ADMIN_SETTING_KEYS: Extract<keyof AdminSettings, string>[] = [
   "docDeclaration", "docFooterNote", "docSignatureLine",
 ];
 
+/**
+ * Settings keys with an edit that is not on the server yet.
+ *
+ * This sync runs on every admin page and copies the server's values in
+ * wholesale. On the Settings screen that raced the owner's own typing: the
+ * fetch started at mount, he typed a shop name, and the response landed and put
+ * the old one back — his change silently reverted by our own background call,
+ * and then a queued PUT saved whichever of the two happened to be in the store.
+ * Anything being edited, saving or failed is left alone until it settles.
+ */
+const held = new Set<string>();
+
+export function holdSettingKeys(keys: string[]) {
+  held.clear();
+  for (const key of keys) held.add(key);
+}
+
 export function useAdminSettingsSync() {
   useEffect(() => {
     if (!isApiEnabled()) return;
@@ -41,6 +58,7 @@ export function useAdminSettingsSync() {
         if (cancelled) return;
         const next: Partial<AdminSettings> = {};
         for (const k of ADMIN_SETTING_KEYS) {
+          if (held.has(k)) continue;
           if (k in remote && remote[k] !== null && remote[k] !== undefined) {
             (next as Record<string, unknown>)[k] = remote[k];
           }

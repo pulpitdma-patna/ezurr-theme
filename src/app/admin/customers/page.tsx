@@ -9,18 +9,22 @@ import { AdminSelect } from "@/components/admin/AdminSelect";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { parsePrice, type AdminCustomer } from "@/data/admin";
+import { customerStatusLabels, parsePrice, type AdminCustomer } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 import { formatMobileDisplay } from "@/lib/auth";
 import { mapApiCustomer } from "./customerModel";
 
+/**
+ * The same four words as the badge on the row, so a filter and the thing it
+ * filters cannot disagree. "Banned" was the database's word; he blocks people.
+ */
 const filters = [
-  { value: "all", label: "All" },
-  { value: "vip", label: "VIP" },
-  { value: "active", label: "Active" },
-  { value: "new", label: "New" },
-  { value: "banned", label: "Banned" },
+  { value: "all", label: "Everyone" },
+  { value: "vip", label: customerStatusLabels.vip },
+  { value: "active", label: customerStatusLabels.active },
+  { value: "new", label: customerStatusLabels.new },
+  { value: "banned", label: customerStatusLabels.banned },
 ];
 
 export default function AdminCustomersPage() {
@@ -94,7 +98,7 @@ export default function AdminCustomersPage() {
     },
     {
       key: "mobile",
-      header: "Mobile",
+      header: "Phone",
       render: (row) => (
         <span className="ez-mono text-[11px]">{formatMobileDisplay(row.mobile)}</span>
       ),
@@ -114,7 +118,7 @@ export default function AdminCustomersPage() {
     },
     {
       key: "status",
-      header: "Status",
+      header: "Type",
       render: (row) => <StatusBadge kind="customer" status={row.status} />,
     },
     {
@@ -129,24 +133,25 @@ export default function AdminCustomersPage() {
     <div>
       {!apiOn ? (
         <AdminNotice tone="demo">
-          Customer data here is a local demo — enable the store API for live data.
+          Practice shop. These customers are made up — your real ones appear once your shop is
+          connected.
         </AdminNotice>
       ) : null}
       <AdminPageHeader
         title="Customers"
-        description="Who is buying — open a profile for order history and lifetime value."
+        description="Everyone who has bought from you. Open a name to see their orders and what they have spent."
       />
 
       <ListToolbar
-        resultLabel={`${rows.length} customers`}
+        resultLabel={`${rows.length} ${rows.length === 1 ? "customer" : "customers"}`}
         search={{
           value: query,
           onChange: setQuery,
-          placeholder: "Search name, mobile, city, or ID…",
+          placeholder: "Search by name, phone, or city",
         }}
         filters={
           <AdminSelect
-            label="Status"
+            label="Show"
             value={status}
             onChange={setStatus}
             options={filters}
@@ -158,7 +163,13 @@ export default function AdminCustomersPage() {
         columns={columns}
         rows={rows}
         rowKey={(row) => row.id}
-        emptyMessage="No customers match this filter."
+        emptyMessage={
+          query.trim()
+            ? `Nobody matched "${query.trim()}". Try their phone number.`
+            : status === "all"
+              ? "Nobody yet. A customer appears here the first time someone orders."
+              : `Nobody is a ${filters.find((f) => f.value === status)?.label.toLowerCase() ?? "match"} customer yet.`
+        }
         onRowClick={(row) => router.push(`/admin/customers/${row.id}`)}
         sortKey={sortKey}
         sortDir={sortDir}

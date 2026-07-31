@@ -96,7 +96,9 @@ export default function AdminCustomerDetailPage({
     return (
       <div>
         <AdminPageHeader
-          title={apiOn && !remote && !loadError ? "Loading customer…" : "Customer not found"}
+          title={
+            apiOn && !remote && !loadError ? "Opening this customer…" : "That customer isn't here"
+          }
           breadcrumbs={[
             { label: "Customers", href: "/admin/customers" },
             { label: id },
@@ -122,7 +124,7 @@ export default function AdminCustomerDetailPage({
    */
   function apply(patch: CustomerPatch, done: string) {
     if (!canWrite) {
-      toast.push("Read-only role — ask an owner or manager", "warning");
+      toast.push("You can look at customers but not change them — ask the owner", "warning");
       return;
     }
     if (!apiOn) {
@@ -175,7 +177,8 @@ export default function AdminCustomerDetailPage({
 
       {apiOn && !canWrite ? (
         <AdminNotice tone="info">
-          Your role can view customers but not edit them — tags, notes and ban are read-only here.
+          You can look at this customer but not change anything — labels, notes and blocking are
+          the owner&apos;s to set.
         </AdminNotice>
       ) : null}
 
@@ -188,7 +191,9 @@ export default function AdminCustomerDetailPage({
           </div>
           <ul className="divide-y divide-black/[0.05]">
             {orders.length === 0 ? (
-              <li className="px-4 py-8 text-center text-sm text-[#86868B]">No orders linked.</li>
+              <li className="px-4 py-8 text-center text-sm text-[#86868B]">
+                They haven&apos;t ordered anything yet. Their first order will show up here.
+              </li>
             ) : (
               orders.map((order) => (
                 <li key={order.id}>
@@ -216,22 +221,28 @@ export default function AdminCustomerDetailPage({
         <aside className="space-y-3">
           <div className="rounded-lg border border-black/[0.08] bg-white p-4">
             <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-              Lifetime
+              Spent with you
             </div>
             <div className="mt-2 text-xl font-semibold tracking-[-0.04em]">{customer.spent}</div>
-            <div className="mt-1 text-xs text-[#6E6E73]">{customer.orders} orders</div>
+            <div className="mt-1 text-xs text-[#6E6E73]">
+              over {customer.orders} {customer.orders === 1 ? "order" : "orders"}
+            </div>
             <div className="mt-1 text-xs text-[#86868B]">
-              Last · {formatAdminDate(customer.lastOrderAt, "No orders yet")}
+              Last bought {formatAdminDate(customer.lastOrderAt, "never")}
             </div>
           </div>
 
           <div className="rounded-lg border border-black/[0.08] bg-white p-4">
+            {/* "Tags" is a software word. He puts a label on a customer —
+                "wholesale", "always late" — so that is what the panel calls it. */}
             <div className="ez-mono mb-3 text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-              Tags
+              Labels
             </div>
             <div className="flex flex-wrap gap-1.5">
               {tags.length === 0 ? (
-                <span className="text-xs text-[#86868B]">No tags yet</span>
+                <span className="text-xs text-[#86868B]">
+                  No labels. Add one to find this customer again later.
+                </span>
               ) : (
                 tags.map((tag) => (
                   <button
@@ -239,10 +250,10 @@ export default function AdminCustomerDetailPage({
                     type="button"
                     disabled={controlsDisabled}
                     onClick={() =>
-                      apply({ tags: tags.filter((t) => t !== tag) }, `Removed tag · ${tag}`)
+                      apply({ tags: tags.filter((t) => t !== tag) }, `Took off the label “${tag}”`)
                     }
                     className="inline-flex items-center gap-1 rounded-full bg-[#F0F0F2] px-2.5 py-1 text-[11px] font-semibold text-[#424245] hover:bg-[#E8E8ED] disabled:opacity-40"
-                    title="Remove tag"
+                    title="Take this label off"
                   >
                     {tag}
                     <span aria-hidden>×</span>
@@ -257,13 +268,13 @@ export default function AdminCustomerDetailPage({
                 const next = tagDraft.trim().toLowerCase().replace(/\s+/g, "-");
                 if (!next) return;
                 setTagDraft("");
-                apply({ tags: [...new Set([...tags, next])] }, `Added tag · ${next}`);
+                apply({ tags: [...new Set([...tags, next])] }, `Added the label “${next}”`);
               }}
             >
               <input
                 value={tagDraft}
                 onChange={(e) => setTagDraft(e.target.value)}
-                placeholder="Add tag"
+                placeholder="e.g. wholesale"
                 disabled={controlsDisabled}
                 className="h-8 min-w-0 flex-1 rounded-md border border-black/[0.08] bg-[#F7F7F8] px-2.5 text-xs outline-none disabled:opacity-40"
               />
@@ -279,7 +290,7 @@ export default function AdminCustomerDetailPage({
 
           <div className="rounded-lg border border-black/[0.08] bg-white p-4">
             <div className="ez-mono mb-3 text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-              Actions
+              What you can do
             </div>
             <div className="flex flex-col gap-1.5">
               {/*
@@ -292,23 +303,23 @@ export default function AdminCustomerDetailPage({
                 disabled={controlsDisabled}
                 onClick={() =>
                   isVip
-                    ? apply({ tags: tags.filter((t) => t !== VIP_TAG) }, "VIP removed")
-                    : apply({ tags: [...new Set([...tags, VIP_TAG])] }, "Marked VIP")
+                    ? apply({ tags: tags.filter((t) => t !== VIP_TAG) }, "No longer a VIP")
+                    : apply({ tags: [...new Set([...tags, VIP_TAG])] }, "Marked as a VIP")
                 }
                 className="h-8 rounded-md bg-[#1D1D1F] text-xs font-semibold text-white disabled:opacity-40"
               >
-                {isVip ? "Remove VIP" : "Mark VIP"}
+                {isVip ? "Not a VIP any more" : "Mark as a VIP"}
               </button>
               <button
                 type="button"
                 disabled={controlsDisabled}
                 onClick={() => {
-                  if (isBanned) apply({ banned: false }, "Customer unbanned");
+                  if (isBanned) apply({ banned: false }, "Unblocked");
                   else setBanOpen(true);
                 }}
                 className="h-8 rounded-md border border-[#F5C2C0] text-xs font-semibold text-[#B42318] disabled:opacity-40"
               >
-                {isBanned ? "Unban" : "Ban customer"}
+                {isBanned ? "Unblock this customer" : "Block this customer"}
               </button>
             </div>
           </div>
@@ -345,16 +356,17 @@ export default function AdminCustomerDetailPage({
 
       <ConfirmDialog
         open={banOpen}
-        title="Ban this customer?"
+        title={`Block ${customer.name}?`}
         // Deliberately narrow: `banned` is a CRM flag today. It does not block
         // sign-in or checkout, so promising more here would be the same lie the
         // no-op buttons used to tell.
-        description="They will be flagged as banned across the admin panel. This does not by itself block them from signing in or ordering. You can unban later."
-        confirmLabel="Ban customer"
+        description="They get a red Blocked mark everywhere you see them. It does not stop them signing in or placing an order — it is a warning for you and your staff. You can unblock them any time."
+        confirmLabel="Block them"
+        cancelLabel="Leave them alone"
         danger
         onConfirm={() => {
           setBanOpen(false);
-          apply({ banned: true }, "Customer banned");
+          apply({ banned: true }, "Blocked");
         }}
         onCancel={() => setBanOpen(false)}
       />

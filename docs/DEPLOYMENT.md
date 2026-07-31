@@ -98,28 +98,13 @@ Admin → Integrations** — not in `.env`. Only drivers (and base URLs) stay in
 
 ### 2b. Install code & prepare the database
 
-**Preferred (Cloudways / cPanel):** after `.env` has real `DB_*` from the host
-panel, from the Laravel root (folder with `artisan`):
+**Preferred:** open **`https://your-api-host/ezurr-install.php`** (web root must
+be Laravel `public/`). Fill DB, URLs, and owner fields — it writes `.env`,
+migrates, creates the owner, starts a queue worker, and prints the cron line.
+Then set Vercel `NEXT_PUBLIC_API_URL` and sign in at storefront `/auth`.
 
-```bash
-bash deploy/hosting-deploy.sh
-# Optional: bash deploy/hosting-deploy.sh --claim-token
-```
-
-See `ezurr-api/deploy/README.md`. The script refuses empty DB credentials, runs
-`composer install`, then `ezurr:install` or `ezurr:update`.
-
-Manual equivalent:
-
-```bash
-composer install --no-dev --optimize-autoloader
-php artisan ezurr:install
-php artisan config:cache
-php artisan route:cache
-```
-
-If you used `--claim-token`, **copy the printed code** into your password
-manager. You will type it on `/setup`.
+See `ezurr-api/deploy/README.md`. SSH alternative: `bash deploy/hosting-deploy.sh`
+or `php artisan ezurr:bootstrap --store=… --name=… --mobile=… --start-worker`.
 
 ### 2c. Processes (do not skip)
 

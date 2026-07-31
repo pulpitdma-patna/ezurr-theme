@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { formatAdminDateTime, formatAdminTime } from "@/lib/adminFormat";
 import {
   DndContext,
   closestCenter,
@@ -422,10 +423,13 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
           ? { label: "Unsaved changes", tone: "busy" }
           : autosave.savedAt
             ? {
-                label: `Saved ${autosave.savedAt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`,
+                label: `Saved ${formatAdminTime(autosave.savedAt)}`,
                 tone: "ok",
               }
-            : { label: localDirty ? "Draft" : "Published matches draft", tone: "ok" };
+            : {
+                label: localDirty ? "Not up yet" : "Live page matches what you see",
+                tone: "ok",
+              };
 
   // A page left mid-A/B-test would otherwise have B's layout silently orphaned
   // once the switcher is gone, since the editor and the storefront both use A.
@@ -599,13 +603,7 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
           <span>
             Scheduled to go live{" "}
             <strong>
-              {new Date(page.publishAt).toLocaleString("en-IN", {
-                day: "numeric",
-                month: "short",
-                hour: "numeric",
-                minute: "2-digit",
-              })}{" "}
-              IST
+              {formatAdminDateTime(page.publishAt)}
             </strong>{" "}
             — the version you approved then, not any edits since.
           </span>
@@ -657,7 +655,7 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
                 leftTab === "modules" ? "bg-[#F0F0F2] text-[#1D1D1F]" : "text-[#86868B]"
               }`}
             >
-              Palette
+              Blocks
             </button>
             <button
               type="button"
@@ -666,18 +664,18 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
                 leftTab === "tree" ? "bg-[#F0F0F2] text-[#1D1D1F]" : "text-[#86868B]"
               }`}
             >
-              Structure
+              Layout
             </button>
           </div>
           {nestParentId ? (
             <div className="flex items-center justify-between border-b border-violet-100 bg-violet-50 px-3 py-2 text-[11px] text-violet-900">
-              <span>Nesting into selection</span>
+              <span>Adding inside the block you picked</span>
               <button
                 type="button"
                 className="font-semibold underline"
                 onClick={() => setSelectedId(null)}
               >
-                Exit (Esc)
+                Stop
               </button>
             </div>
           ) : null}
@@ -811,7 +809,7 @@ export function PageBuilder({ pageId }: PageBuilderProps) {
         {showCode ? (
           <div className="absolute inset-y-0 right-[300px] z-20 flex w-[360px] flex-col border-l border-black/[0.08] bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-black/[0.06] px-3 py-2.5">
-              <p className="text-sm font-semibold">Page CSS / JS</p>
+              <p className="text-sm font-semibold">Code for this page</p>
               <button
                 type="button"
                 onClick={() => setShowCode(false)}

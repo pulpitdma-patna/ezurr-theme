@@ -1,67 +1,103 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminSelect } from "@/components/admin/AdminSelect";
+import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import {
   IntegrationConfigForm,
   type IntegrationConfigSubmit,
 } from "@/components/admin/IntegrationConfigForm";
-import { formatAdminDateTime } from "@/lib/adminFormat";
-import { api, isApiEnabled, type ApiIntegration } from "@/lib/apiClient";
-import { ListToolbar } from "@/components/admin/ListToolbar";
 import {
-  type AdminIntegration,
-  type AdminIntegrationCategory,
-  type AdminIntegrationField,
-  type AdminIntegrationStatus,
-} from "@/data/admin";
+  ShopifyConnectPanel,
+  shopifyFailureMessage,
+  SHOPIFY_UPDATES_DELAYED,
+} from "@/components/admin/ShopifyConnectPanel";
+import { formatAdminDateTime, formatAdminTime } from "@/lib/adminFormat";
+import { adminErrorMessage } from "@/lib/adminError";
+import { api, isApiEnabled, type ApiIntegration, type ApiIntegrationPatch } from "@/lib/apiClient";
+import { type AdminIntegration, type AdminIntegrationField } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
-import { useAutoBanner } from "@/hooks/useAutoBanner";
-import { updateIntegration } from "@/lib/adminStore";
+import { useStaffRole } from "@/hooks/useStaffRole";
+import { can } from "@/lib/adminPermissions";
 
-const categories: { id: AdminIntegrationCategory | "all"; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "payments", label: "Payments" },
-  { id: "shipping", label: "Shipping" },
-  { id: "messaging", label: "Messaging" },
-  { id: "analytics", label: "Analytics" },
-  { id: "other", label: "Other" },
+/**
+ * The companies this shop pays, and what each of them is doing right now.
+ *
+ * Every card used to carry two switches, and neither of them was the one that
+ * mattered. "Enable integration" and a "Connected" badge said nothing about
+ * whether a payment would really be taken; that was decided by a `driver`
+ * setting on a server the owner cannot reach, and the drawer's advice — "flip
+ * its driver to live on the server" — was both unfollowable and, since the mode
+ * moved into the database, false.
+ *
+ * One control now, with three positions, and the position IS the status. Two
+ * states sit outside it, because a mode is meaningless before the credentials
+ * exist and a broken connection has to shout louder than either: Not set up,
+ * and Something's wrong.
+ */
+
+/**
+ * `mode` is a first-class input on PUT /admin/integrations/{key}: the server
+ * validates it, refuses `live` until the required credentials are stored, and
+ * writes its own audit line for it. It is missing from `ApiIntegrationPatch` in
+ * lib/apiClient.ts, which another agent owns — this local shape is what that
+ * type should gain, and nothing else here depends on the difference.
+ */
+type IntegrationPatch = ApiIntegrationPatch & { mode?: "log" | "live" };
+
+/**
+ * The result of the last "Check it works", kept on the row by the API so a red
+ * card can still say why after a reload — or on the owner's phone, having been
+ * checked on the shop laptop. Read structurally for the same reason as above.
+ */
+type LastCheck = { ok: boolean; simulated: boolean; message: string; at: string };
+
+type Card = AdminIntegration & { lastCheck?: LastCheck | null };
+
+type Position = "off" | "practice" | "live";
+
+/** What each position means, in the words of the thing it does. */
+const POSITIONS: { id: Position; label: string }[] = [
+  { id: "off", label: "Off" },
+  { id: "practice", label: "Practice" },
+  { id: "live", label: "Live" },
 ];
 
-const statusOptions: { value: AdminIntegrationStatus | "all"; label: string }[] = [
-  { value: "all", label: "All statuses" },
-  { value: "connected", label: "Connected" },
-  { value: "not_connected", label: "Not connected" },
-  { value: "needs_attention", label: "Needs attention" },
-];
+const PAYMENT_KEYS = ["razorpay", "cashfree"];
 
-const statusMeta: Record<AdminIntegrationStatus, { label: string; className: string }> = {
-  connected: { label: "Connected", className: "bg-[#EAF6ED] text-[#2D6B3C]" },
-  not_connected: { label: "Not connected", className: "bg-[#F0F0F2] text-[#6E6E73]" },
-  needs_attention: { label: "Needs attention", className: "bg-[#FFF1E5] text-[#9A3412]" },
-};
+function positionOf(card: Card): Position {
+  if (!card.enabled) return "off";
+  return card.driver === "live" ? "live" : "practice";
+}
 
-const categoryMeta: Record<AdminIntegrationCategory, { label: string; accent: string }> = {
-  payments: { label: "Payments", accent: "bg-[#E8E8ED] text-[#1D1D1F]" },
-  shipping: { label: "Shipping", accent: "bg-[#EAF6ED] text-[#2D6B3C]" },
-  messaging: { label: "Messaging", accent: "bg-[#DBEAFE] text-[#1D4ED8]" },
-  analytics: { label: "Analytics", accent: "bg-[#F3E8FF] text-[#6B21A8]" },
-  other: { label: "Other", accent: "bg-[#F0F0F2] text-[#6E6E73]" },
-};
+function offSentence(card: Card): string {
+  if (PAYMENT_KEYS.includes(card.id)) return "Checkout won't offer this way of paying at all.";
+  if (card.id === "whatsapp") return "No WhatsApp or SMS goes out, including sign-in codes.";
+  if (card.id === "shiprocket") return "You'll book couriers yourself and type the tracking number in.";
+  return "Switched off completely.";
+}
 
-const fieldClass =
-  "w-full rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 py-2.5 text-sm outline-none transition hover:border-black/[0.12] focus:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
+function liveSentence(card: Card): string {
+  if (PAYMENT_KEYS.includes(card.id)) return "Really taking money from customers.";
+  if (card.id === "whatsapp") return "Really sending messages to customers, and charging you for them.";
+  if (card.id === "shiprocket") return "Really booking pickups on your Shiprocket account.";
+  if (card.id === "shopify") return "Really reading your Shopify shop.";
+  return "Really doing this for you.";
+}
 
-function apiToIntegration(i: ApiIntegration): AdminIntegration {
+const PRACTICE_SENTENCE =
+  "Nothing leaves your shop. Everything is written down so you can see what would have happened.";
+
+function apiToCard(i: ApiIntegration): Card {
+  const raw = i as ApiIntegration & { lastCheck?: LastCheck | null };
   return {
     id: i.id,
     name: i.name,
-    category: i.category as AdminIntegrationCategory,
+    category: i.category as AdminIntegration["category"],
     description: i.description ?? "",
-    status: i.status as AdminIntegrationStatus,
+    status: i.status as AdminIntegration["status"],
     enabled: i.enabled,
     lastSync: i.lastSync ?? undefined,
     accountLabel: i.accountLabel ?? undefined,
@@ -69,30 +105,65 @@ function apiToIntegration(i: ApiIntegration): AdminIntegration {
     driver: i.driver,
     fields: (i.fields ?? []) as AdminIntegrationField[],
     missingRequired: i.missingRequired ?? [],
+    oauth: i.oauth,
+    lastCheck: raw.lastCheck ?? null,
   };
 }
 
-function missingFieldLabels(integration: AdminIntegration): string[] {
-  const byKey = Object.fromEntries((integration.fields ?? []).map((f) => [f.key, f.label]));
-  return (integration.missingRequired ?? []).map((key) => byKey[key] ?? key);
+/**
+ * Whether this card gets the press-a-button path instead of the boxes.
+ *
+ * Both halves matter. `supported` is the provider having one at all; `available`
+ * is THIS shop's server actually holding the app the owner would approve. On a
+ * server that does not, the boxes have to stay — a Connect button that cannot
+ * work is a worse afternoon than the long way round.
+ */
+function connectsByButton(card: Card): boolean {
+  return Boolean(card.oauth?.supported && card.oauth?.available);
+}
+
+function missingFieldLabels(card: Card): string[] {
+  const byKey = Object.fromEntries((card.fields ?? []).map((f) => [f.key, f.label]));
+  return (card.missingRequired ?? []).map((key) => byKey[key] ?? key);
+}
+
+/** "Key ID and Key Secret" — the owner's own labels, joined the way he'd say it. */
+function listLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels[0] ?? "";
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
 export default function AdminIntegrationsPage() {
   const store = useAdminStore();
   const apiOn = isApiEnabled();
-  const [apiIntegrations, setApiIntegrations] = useState<AdminIntegration[]>([]);
+  const { role } = useStaffRole();
+  // At render, never on press: the write routes ask for settings.write, and an
+  // admin with no staff role written down now holds nothing at all.
+  const canWrite = !apiOn || can("settings.write", role);
 
+  const [cards, setCards] = useState<Card[]>([]);
   const [loadError, setLoadError] = useState("");
+  const [returnNotice, setReturnNotice] = useState<{ ok: boolean; message: string } | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [rowMessage, setRowMessage] = useState<Record<string, string>>({});
+  const [rowError, setRowError] = useState<Record<string, string>>({});
+  const [undoFor, setUndoFor] = useState<string | null>(null);
+  const [drawerError, setDrawerError] = useState("");
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [confirmLive, setConfirmLive] = useState<Card | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadIntegrations = useCallback(async () => {
     if (!apiOn) return;
     try {
       const res = await api.integrations();
-      setApiIntegrations((res.data ?? []).map(apiToIntegration));
+      setCards((res.data ?? []).map(apiToCard));
       setLoadError("");
     } catch (error) {
-      // Keep previous rows so a blip does not look like an empty catalog.
-      setLoadError(errorMessage(error, "Could not load integrations"));
+      // Keep the previous rows: a blip must not look like "you have no accounts".
+      setLoadError(adminErrorMessage(error, "Couldn't load your other companies."));
     }
   }, [apiOn]);
 
@@ -100,153 +171,191 @@ export default function AdminIntegrationsPage() {
     void loadIntegrations();
   }, [loadIntegrations]);
 
-  const integrations = apiOn ? apiIntegrations : store.integrations;
-  const [category, setCategory] = useState<AdminIntegrationCategory | "all">("all");
-  const [status, setStatus] = useState<AdminIntegrationStatus | "all">("all");
-  const [query, setQuery] = useState("");
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useAutoBanner(4200);
+  useEffect(() => () => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+  }, []);
 
-  const active = integrations.find((integration) => integration.id === activeId) ?? null;
+  // The trip back from Shopify. He approved us on somebody else's website and
+  // arrives here on a plain link, so the outcome can only travel in the address —
+  // and the address is then wiped, or the same "it worked" would greet him again
+  // every time he opened this page from a bookmark.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get("shopify");
+    if (outcome !== "connected" && outcome !== "failed") return;
+
+    setReturnNotice(
+      outcome === "connected"
+        ? {
+            ok: true,
+            // Connected-with-a-caveat is still connected. The server used to send
+            // this case back as a failure reading "nothing has changed", next to a
+            // card that said Connected — with his token stored, his shop live and
+            // his catalogue already coming in. He had no way to tell which of the
+            // two was telling the truth, and the red one's advice (press it again)
+            // was the one thing that could not help.
+            message:
+              params.get("updates") === "delayed"
+                ? SHOPIFY_UPDATES_DELAYED
+                : "Shopify is connected. Your shop can bring your products and collections across now.",
+          }
+        : { ok: false, message: shopifyFailureMessage(params.get("reason")) },
+    );
+
+    params.delete("shopify");
+    params.delete("reason");
+    params.delete("updates");
+    const rest = params.toString();
+    window.history.replaceState(null, "", `/admin/integrations${rest ? `?${rest}` : ""}`);
+  }, []);
+
   const rows = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return integrations.filter((integration) => {
-      if (category !== "all" && integration.category !== category) return false;
-      if (status !== "all" && integration.status !== status) return false;
-      return (
-        !needle ||
-        integration.name.toLowerCase().includes(needle) ||
-        integration.description.toLowerCase().includes(needle) ||
-        categoryMeta[integration.category].label.toLowerCase().includes(needle)
-      );
-    });
-  }, [category, integrations, query, status]);
+    const source: Card[] = apiOn
+      ? cards
+      : store.integrations.map((i) => ({ ...i, lastCheck: null }));
+    // Outbound webhooks has no shop-owner story: it is only meaningful once
+    // somebody else's system is already expecting the messages.
+    return source.filter((card) => card.id !== "webhooks" || Boolean(card.webhookUrl));
+  }, [apiOn, cards, store.integrations]);
 
-  const connectedCount = integrations.filter((integration) => integration.status === "connected").length;
-  const attentionCount = integrations.filter(
-    (integration) => integration.status === "needs_attention",
-  ).length;
-  const simulatedCount = integrations.filter((integration) => integration.driver === "log").length;
+  const active = rows.find((card) => card.id === activeId) ?? null;
 
-  function openManage(integration: AdminIntegration) {
-    setActiveId(integration.id);
-    setToast("");
+  async function patchCard(card: Card, patch: IntegrationPatch): Promise<Card | null> {
+    setBusyId(card.id);
+    setRowError((prev) => ({ ...prev, [card.id]: "" }));
+    try {
+      const updated = apiToCard(await api.updateIntegration(card.id, patch));
+      setCards((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+      return updated;
+    } catch (error) {
+      // Stays on the card, never in a toast: this one is about money moving.
+      setRowError((prev) => ({
+        ...prev,
+        [card.id]: adminErrorMessage(error, "That didn't change."),
+      }));
+      return null;
+    } finally {
+      setBusyId(null);
+    }
   }
 
-  async function connect(integration: AdminIntegration) {
-    if (apiOn) {
-      // Connecting means the provider can actually be called — so send the admin
-      // to the config form rather than POSTing {} and flipping to "connected".
-      if (integration.missingRequired?.length) {
-        openManage(integration);
-        setToast(
-          `${integration.name} needs ${missingFieldLabels(integration).join(", ")} first`,
-        );
+  /** Runs the real check and prints its own sentence on the card. */
+  async function check(card: Card, prefix = "") {
+    setBusyId(card.id);
+    try {
+      const res = await api.testIntegration(card.id);
+      setRowMessage((prev) => ({ ...prev, [card.id]: `${prefix}${res.message}` }));
+      await loadIntegrations();
+    } catch (error) {
+      setRowError((prev) => ({
+        ...prev,
+        [card.id]: adminErrorMessage(error, "Couldn't check it just now."),
+      }));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function goTo(card: Card, position: Position) {
+    if (position === positionOf(card)) return;
+    setRowMessage((prev) => ({ ...prev, [card.id]: "" }));
+
+    if (position === "live") {
+      // An accidental real WhatsApp is embarrassing and recoverable. An
+      // accidental real charge is neither, so payments — and only payments —
+      // stop and ask.
+      if (PAYMENT_KEYS.includes(card.id)) {
+        setConfirmLive(card);
         return;
       }
-      try {
-        await api.connectIntegration(integration.id, {});
-        await loadIntegrations();
-        setToast(`${integration.name} connected`);
-      } catch (error) {
-        openManage(integration);
-        setToast(errorMessage(error, "Could not connect"));
+      await goLive(card);
+      return;
+    }
+
+    if (position === "practice") {
+      const wasLive = positionOf(card) === "live";
+      const updated = await patchCard(card, { enabled: true, mode: "log" });
+      if (updated && wasLive) {
+        // Switching real money off is the safe direction, so it does not stop
+        // and ask — but a mis-click costs sales, so it is undoable for ten
+        // seconds by the reverse call that really exists.
+        setUndoFor(card.id);
+        if (undoTimer.current) clearTimeout(undoTimer.current);
+        undoTimer.current = setTimeout(() => setUndoFor(null), 10000);
       }
       return;
     }
-    updateIntegration(integration.id, {
-      enabled: true,
-      status: "connected",
-      lastSync: new Date().toISOString(),
-    });
-    setToast(`${integration.name} connected`);
+
+    await patchCard(card, { enabled: false });
   }
 
-  async function toggle(integration: AdminIntegration, enabled: boolean) {
-    if (apiOn) {
-      try {
-        await api.updateIntegration(integration.id, { enabled });
-        await loadIntegrations();
-      } catch (error) {
-        setToast(errorMessage(error, "Could not update"));
-        return;
-      }
-    } else {
-      updateIntegration(integration.id, { enabled });
-    }
-    setToast(`${integration.name} ${enabled ? "enabled" : "paused"}`);
+  async function goLive(card: Card) {
+    const updated = await patchCard(card, { enabled: true, mode: "live" });
+    if (!updated) return;
+    // Going live is exactly when "is it actually working?" has to be answered,
+    // and it is the one moment the owner is definitely looking at the card.
+    await check(updated, "Switched on. ");
   }
 
   async function saveConfig(patch: IntegrationConfigSubmit) {
     if (!active) return;
-    if (!apiOn) {
-      setToast("Configuration needs a running API");
-      throw new Error("Configuration needs a running API");
-    }
     setSaving(true);
+    setDrawerError("");
     try {
-      await api.updateIntegration(active.id, patch);
-      await loadIntegrations();
-      setToast(`${active.name} configuration saved (secrets encrypted server-side)`);
+      const updated = apiToCard(await api.updateIntegration(active.id, patch));
+      setCards((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+      setSavedAt(new Date());
     } catch (error) {
-      setToast(errorMessage(error, "Could not save configuration"));
+      // Rethrown so the form keeps what was typed. A half-pasted key is not
+      // something to make somebody find again.
+      setDrawerError(adminErrorMessage(error, "That didn't save."));
       throw error;
     } finally {
       setSaving(false);
     }
   }
 
-  async function saveAccountLabel(accountLabel: string) {
-    if (!active || (active.accountLabel ?? "") === accountLabel) return;
-    if (apiOn) {
-      try {
-        await api.updateIntegration(active.id, { accountLabel });
-        await loadIntegrations();
-      } catch (error) {
-        setToast(errorMessage(error, "Could not save the label"));
-      }
-      return;
-    }
-    updateIntegration(active.id, { accountLabel });
+  /** Asks our own server where on Shopify to send him. The panel does the going. */
+  async function startShopifyConnect(shop: string): Promise<string> {
+    const res = await api.startShopifyConnect(shop);
+    return res.authorizeUrl;
   }
 
-  async function testConnection() {
-    if (!active) return;
-    if (apiOn) {
-      try {
-        const res = await api.testIntegration(active.id);
-        await loadIntegrations();
-        setToast(`${active.name}: ${res.message}`);
-      } catch (error) {
-        setToast(errorMessage(error, "Test failed"));
-      }
-      return;
-    }
-    setToast(`${active.name}: simulated locally — no provider was contacted`);
+  /**
+   * Stops the shop reading Shopify, and leaves everything already brought
+   * across exactly where it is — those are ordinary products in this shop now,
+   * and nothing in the import ever removes one.
+   */
+  async function disconnectShopify() {
+    const updated = apiToCard(
+      await api.updateIntegration("shopify", { enabled: false, status: "not_connected" }),
+    );
+    setCards((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
   }
 
   return (
     <div>
       <AdminPageHeader
-        title="Integrations"
-        description="Connect the services that keep checkout, fulfillment, and customer updates moving."
-        actions={
-          <div className="flex items-center gap-2">
-            <span className="hidden rounded-lg border border-black/[0.08] bg-white px-3 py-2 ez-mono text-[10px] text-[#6E6E73] sm:inline">
-              {connectedCount} live · {attentionCount} attention
-            </span>
-          </div>
-        }
+        title="Other companies"
+        description="Accounts you hold somewhere else. Every card has one switch, and where it sits is what that company is doing right now."
       />
 
-      {apiOn ? (
+      {!apiOn ? (
+        <AdminNotice tone="demo">
+          Practice shop. These are sample cards — nothing here is connected to a real account.
+        </AdminNotice>
+      ) : null}
+
+      {!canWrite ? (
         <AdminNotice tone="info">
-          Credentials are stored encrypted and are write-only — they are never sent
-          back to this page.
-          {simulatedCount
-            ? ` ${simulatedCount} provider${simulatedCount === 1 ? " is" : "s are"} in simulated (log) mode: requests are built and logged, but nothing is sent.`
-            : ""}
+          Only the owner can set these up or switch them on. You can see where each one is.
+        </AdminNotice>
+      ) : null}
+
+      {returnNotice ? (
+        <AdminNotice tone={returnNotice.ok ? "info" : "error"}>
+          {returnNotice.message}
         </AdminNotice>
       ) : null}
 
@@ -258,288 +367,249 @@ export default function AdminIntegrationsPage() {
             onClick={() => void loadIntegrations()}
             className="font-semibold underline underline-offset-2"
           >
-            Retry
+            Try again
           </button>
         </AdminNotice>
       ) : null}
 
-      <ListToolbar
-        resultLabel={`${rows.length} integrations`}
-        search={{
-          value: query,
-          onChange: setQuery,
-          placeholder: "Search services and categories…",
-        }}
-        filters={
-          <>
-            <AdminSelect
-              label="Category"
-              value={category}
-              onChange={(value) => setCategory(value as AdminIntegrationCategory | "all")}
-              options={categories.map((item) => ({
-                value: item.id,
-                label: item.label,
-              }))}
-            />
-            <AdminSelect
-              label="Status"
-              value={status}
-              onChange={(value) => setStatus(value as AdminIntegrationStatus | "all")}
-              options={statusOptions}
-            />
-          </>
-        }
-      />
-
-      {rows.length ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {rows.map((integration) => (
-            <IntegrationCard
-              key={integration.id}
-              integration={integration}
-              onManage={() => openManage(integration)}
-              onConnect={() => connect(integration)}
-              onToggle={(enabled) => toggle(integration, enabled)}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-black/[0.12] bg-white px-5 py-14 text-center">
-          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#F0F0F2] text-[#6E6E73]">
-            <PlugIcon />
-          </div>
-          <h2 className="mt-4 text-sm font-semibold text-[#1D1D1F]">No integrations found</h2>
-          <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-[#86868B]">
-            Try another category, status, or search term.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setCategory("all");
-              setStatus("all");
-              setQuery("");
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {rows.map((card) => (
+          <IntegrationCard
+            key={card.id}
+            card={card}
+            canWrite={canWrite && apiOn}
+            busy={busyId === card.id}
+            message={rowMessage[card.id]}
+            error={rowError[card.id]}
+            undoable={undoFor === card.id}
+            onUndo={() => {
+              setUndoFor(null);
+              void goLive(card);
             }}
-            className="mt-4 h-9 rounded-lg border border-black/[0.1] bg-[#F7F7F8] px-3.5 text-xs font-semibold text-[#1D1D1F]"
-          >
-            Clear filters
-          </button>
-        </div>
-      )}
+            onSelect={(position) => void goTo(card, position)}
+            onOpen={() => setActiveId(card.id)}
+            onCheck={() => void check(card)}
+          />
+        ))}
+      </div>
 
       <AdminDrawer
         open={Boolean(active)}
-        title={active?.name ?? "Integration"}
-        subtitle={active ? `${categoryMeta[active.category].label} · ${statusMeta[active.status].label}` : undefined}
-        onClose={() => setActiveId(null)}
+        title={active?.name ?? "Set up"}
+        subtitle={active ? "Copied from your account with them" : undefined}
+        onClose={() => {
+          setActiveId(null);
+          setDrawerError("");
+          setSavedAt(null);
+        }}
         widthClassName="max-w-lg sm:max-w-xl"
       >
         {active ? (
-          <IntegrationDrawer
-            key={active.id}
-            integration={active}
-            saving={saving}
-            toastMessage={toast}
-            onSaveConfig={saveConfig}
-            onSaveAccountLabel={saveAccountLabel}
-            onTest={testConnection}
-            onToggle={(enabled) => toggle(active, enabled)}
-          />
+          <div className="space-y-4">
+            <p className="text-xs leading-relaxed text-[#6E6E73]">{active.description}</p>
+            {connectsByButton(active) ? (
+              // One box and a button, instead of the three boxes one of which
+              // asks for a token that is ten screens deep in somebody else's
+              // developer settings. The boxes are still what a server without a
+              // Shopify app of its own shows — see connectsByButton.
+              <ShopifyConnectPanel
+                key={active.id}
+                integration={active}
+                readOnly={!canWrite}
+                onStart={startShopifyConnect}
+                onDisconnect={disconnectShopify}
+              />
+            ) : (
+              <IntegrationConfigForm
+                key={active.id}
+                integration={active}
+                saving={saving}
+                readOnly={!canWrite}
+                onSave={saveConfig}
+              />
+            )}
+            {drawerError ? (
+              <p role="alert" className="text-[11px] font-medium leading-relaxed text-[#B42318]">
+                Not saved — {drawerError}
+              </p>
+            ) : savedAt ? (
+              <p className="text-[11px] font-semibold text-[#2D6B3C]">
+                Saved · {formatAdminTime(savedAt)}
+              </p>
+            ) : null}
+          </div>
         ) : null}
       </AdminDrawer>
+
+      <ConfirmDialog
+        open={Boolean(confirmLive)}
+        title={`Start taking real money through ${confirmLive?.name ?? ""}?`}
+        description={`From the moment you press this, a customer paying at checkout is really charged and the money goes to your ${confirmLive?.name ?? ""} account. Nothing that already happened changes, and no order is re-charged. You can put it back to practice at any time.`}
+        confirmLabel="Take real money"
+        cancelLabel="Stay in practice"
+        danger
+        onConfirm={() => {
+          const card = confirmLive;
+          setConfirmLive(null);
+          if (card) void goLive(card);
+        }}
+        onCancel={() => setConfirmLive(null)}
+      />
     </div>
   );
 }
 
 function IntegrationCard({
-  integration,
-  onManage,
-  onConnect,
-  onToggle,
+  card,
+  canWrite,
+  busy,
+  message,
+  error,
+  undoable,
+  onUndo,
+  onSelect,
+  onOpen,
+  onCheck,
 }: {
-  integration: AdminIntegration;
-  onManage: () => void;
-  onConnect: () => void;
-  onToggle: (enabled: boolean) => void;
+  card: Card;
+  canWrite: boolean;
+  busy: boolean;
+  message?: string;
+  error?: string;
+  undoable: boolean;
+  onUndo: () => void;
+  onSelect: (position: Position) => void;
+  onOpen: () => void;
+  onCheck: () => void;
 }) {
-  const meta = categoryMeta[integration.category];
-  const status = statusMeta[integration.status];
+  const missing = missingFieldLabels(card);
+  const setUp = missing.length === 0;
+  // Before he has approved us, the missing values are the ones the connect
+  // button is about to fetch on his behalf. Naming them here would put "Admin
+  // API access token" back on the card — the exact errand this removes.
+  const byButton = connectsByButton(card) && !setUp;
+  const position = positionOf(card);
+  const broken = setUp && (card.status === "needs_attention" || card.lastCheck?.ok === false);
+
   return (
-    <article className="group flex min-h-[230px] flex-col rounded-2xl border border-black/[0.06] bg-white p-4 shadow-[0_1px_2px_rgba(17,17,19,0.03)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(17,17,19,0.08)]">
-      <div className="flex items-start justify-between gap-3">
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[11px] font-bold ${meta.accent}`}>
-          {integration.name
-            .split(" ")
-            .map((part) => part[0])
-            .join("")
-            .slice(0, 2)}
+    <article
+      // Named so System health can send the owner straight to the card that
+      // fixes what it is reporting, instead of naming a server setting.
+      id={card.id}
+      className="flex flex-col scroll-mt-24 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-[0_1px_2px_rgba(17,17,19,0.03)]"
+    >
+      <h2 className="text-sm font-semibold tracking-[-0.02em] text-[#1D1D1F]">{card.name}</h2>
+      <p className="mt-1 text-xs leading-relaxed text-[#6E6E73]">{card.description}</p>
+
+      {broken ? (
+        <div className="mt-3 rounded-lg border border-[#F5C2C0] bg-[#FDECEC] px-3 py-2 text-[11px] leading-relaxed text-[#B42318]">
+          <span className="font-semibold">Something&rsquo;s wrong.</span>{" "}
+          {card.lastCheck?.message ??
+            "The last check didn't get through. Press Check it works to see why."}
+          {card.lastCheck?.at ? (
+            <span className="mt-0.5 block text-[10px] font-medium text-[#B42318]/70">
+              Last checked {formatAdminDateTime(card.lastCheck.at)}
+            </span>
+          ) : null}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <DriverBadge driver={integration.driver} />
-          <span className={`inline-flex rounded px-2 py-0.5 text-[10px] font-semibold ${status.className}`}>
-            {status.label}
-          </span>
-        </div>
-      </div>
-      <div className="mt-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold tracking-[-0.02em] text-[#1D1D1F]">{integration.name}</h2>
-          <span className="ez-mono text-[8px] uppercase tracking-[0.12em] text-[#AEAEB2]">{meta.label}</span>
-        </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-[#6E6E73]">{integration.description}</p>
-        {integration.missingRequired?.length ? (
-          <p className="mt-2 text-[11px] font-medium leading-relaxed text-[#9A3412]">
-            Needs {missingFieldLabels(integration).join(", ")}
-          </p>
-        ) : null}
-      </div>
-      <div className="mt-auto flex items-center justify-between gap-3 border-t border-black/[0.06] pt-3.5">
-        <div className="min-w-0">
-          <div className="ez-mono text-[8px] uppercase tracking-[0.12em] text-[#AEAEB2]">Last sync</div>
-          <div className="mt-0.5 truncate text-[11px] font-medium text-[#6E6E73]">
-            {formatSync(integration.lastSync)}
+      ) : null}
+
+      {setUp ? (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold text-[#424245]">
+            What {card.name} does right now
           </div>
+          <div
+            role="radiogroup"
+            aria-label={`What ${card.name} does right now`}
+            className="mt-1.5 flex rounded-lg border border-black/[0.06] bg-[#F0F0F2] p-1"
+          >
+            {POSITIONS.map((option) => {
+              const on = option.id === position;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  disabled={!canWrite || busy}
+                  onClick={() => onSelect(option.id)}
+                  className={`flex-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] disabled:cursor-not-allowed disabled:opacity-60 ${
+                    on
+                      ? option.id === "live"
+                        ? "bg-[#1D7A4C] text-white shadow-[0_1px_2px_rgba(17,17,19,0.12)]"
+                        : "bg-white text-[#1D1D1F] shadow-[0_1px_2px_rgba(17,17,19,0.08)]"
+                      : "text-[#6E6E73] hover:text-[#1D1D1F]"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-[#6E6E73]">
+            {position === "off"
+              ? offSentence(card)
+              : position === "practice"
+                ? PRACTICE_SENTENCE
+                : liveSentence(card)}
+          </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {integration.status === "not_connected" ? (
-            <button type="button" onClick={onConnect} className="h-8 rounded-lg bg-[#1D1D1F] px-3 text-[11px] font-semibold text-white">
-              Connect
-            </button>
-          ) : (
-            <Toggle checked={integration.enabled} onChange={onToggle} label={`Toggle ${integration.name}`} />
-          )}
-          <button type="button" onClick={onManage} className="h-8 rounded-lg border border-black/[0.1] px-3 text-[11px] font-semibold text-[#1D1D1F]">
-            Manage
+      ) : (
+        <div className="mt-3 rounded-lg border border-black/[0.06] bg-[#FAFAFB] px-3 py-2.5">
+          <div className="text-[11px] font-semibold text-[#424245]">
+            {byButton ? "Not connected" : "Not set up"}
+          </div>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-[#6E6E73]">
+            {byButton
+              ? `Type the name of your ${card.name} shop and approve it there. It takes a minute and there is nothing to copy.`
+              : `Add ${listLabels(missing)} first. Until then there is nothing for this to do.`}
+          </p>
+        </div>
+      )}
+
+      {undoable ? (
+        <div className="mt-2 rounded-lg border border-black/[0.06] bg-[#FAFAFB] px-3 py-2 text-[11px] text-[#6E6E73]">
+          Back in practice mode.{" "}
+          <button
+            type="button"
+            onClick={onUndo}
+            className="font-semibold text-[#1D1D1F] underline underline-offset-2"
+          >
+            Undo
           </button>
         </div>
-      </div>
-    </article>
-  );
-}
+      ) : null}
 
-function IntegrationDrawer({
-  integration,
-  saving,
-  toastMessage,
-  onSaveConfig,
-  onSaveAccountLabel,
-  onTest,
-  onToggle,
-}: {
-  integration: AdminIntegration;
-  saving: boolean;
-  toastMessage: string;
-  onSaveConfig: (patch: IntegrationConfigSubmit) => void;
-  onSaveAccountLabel: (value: string) => void;
-  onTest: () => void;
-  onToggle: (enabled: boolean) => void;
-}) {
-  const meta = categoryMeta[integration.category];
-  const status = statusMeta[integration.status];
-  const [label, setLabel] = useState(integration.accountLabel ?? "");
-
-  return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-black/[0.06] bg-[#FAFAFB] p-4">
-        <div className="flex items-start gap-3">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[11px] font-bold ${meta.accent}`}>
-            {integration.name.slice(0, 2).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`inline-flex rounded px-2 py-0.5 text-[10px] font-semibold ${status.className}`}>{status.label}</span>
-              <DriverBadge driver={integration.driver} />
-              <span className="ez-mono text-[8px] uppercase tracking-[0.12em] text-[#86868B]">{meta.label}</span>
-            </div>
-            <p className="mt-2 text-xs leading-relaxed text-[#6E6E73]">{integration.description}</p>
-            {integration.driver === "log" ? (
-              <p className="mt-2 text-[11px] leading-relaxed text-[#9A3412]">
-                This provider is in log mode: its client builds and logs every
-                request but contacts nobody. Flip its driver to live on the server
-                before relying on it.
-              </p>
-            ) : null}
-          </div>
-        </div>
-        <div className="mt-4 flex items-center justify-between border-t border-black/[0.06] pt-3">
-          <span className="text-xs font-semibold text-[#424245]">Enable integration</span>
-          <Toggle checked={integration.enabled} onChange={onToggle} label={`Enable ${integration.name}`} />
-        </div>
-      </div>
-
-      <Field label="Account label">
-        <input
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          onBlur={() => onSaveAccountLabel(label.trim())}
-          className={fieldClass}
-          placeholder="Live workspace"
-        />
-      </Field>
-
-      <IntegrationConfigForm integration={integration} saving={saving} onSave={onSaveConfig} />
-
-      <div className="rounded-xl border border-dashed border-black/[0.12] bg-[#FAFAFB] p-4">
-        <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">Connection health</div>
-        <p className="mt-1.5 text-xs leading-relaxed text-[#6E6E73]">
-          Last verified {formatSync(integration.lastSync)}.{" "}
-          {integration.driver === "log"
-            ? "A test in log mode is simulated and proves nothing about the provider."
-            : "The test calls the provider for real."}
+      {error ? (
+        <p role="alert" className="mt-2 text-[11px] font-medium leading-relaxed text-[#B42318]">
+          {error}
         </p>
-        <button type="button" onClick={onTest} className="mt-3 h-9 rounded-lg border border-black/[0.1] bg-white px-3.5 text-xs font-semibold text-[#1D1D1F]">
-          Test connection
+      ) : null}
+
+      {message && !error ? (
+        <p className="mt-2 text-[11px] leading-relaxed text-[#424245]">{message}</p>
+      ) : null}
+
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-3.5">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="h-8 rounded-lg border border-black/[0.1] px-3 text-[11px] font-semibold text-[#1D1D1F]"
+        >
+          {setUp ? "Change what's saved" : byButton ? `Connect ${card.name}` : "Set it up"}
         </button>
-        {toastMessage ? (
-          <div role="status" aria-live="polite" className="mt-3 rounded-lg bg-[#F0F0F2] px-3 py-2 text-[11px] font-semibold text-[#424245]">
-            {toastMessage}
-          </div>
+        {setUp && canWrite ? (
+          <button
+            type="button"
+            onClick={onCheck}
+            disabled={busy}
+            className="h-8 rounded-lg border border-black/[0.1] px-3 text-[11px] font-semibold text-[#1D1D1F] disabled:opacity-50"
+          >
+            {busy ? "Checking…" : "Check it works"}
+          </button>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-/** The card used to say "Connected" while the client was silently simulating. */
-function DriverBadge({ driver }: { driver?: AdminIntegration["driver"] }) {
-  if (driver !== "log") return null;
-  return (
-    <span className="inline-flex rounded bg-[#FFF7E6] px-2 py-0.5 text-[10px] font-semibold text-[#8A5A00]">
-      Simulated
-    </span>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="ez-mono text-[9px] font-medium uppercase tracking-[0.14em] text-[#86868B]">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (checked: boolean) => void; label: string }) {
-  return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)} className={`relative h-6 w-10 rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${checked ? "bg-[#1D1D1F]" : "bg-[#D1D1D6]"}`}>
-      <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${checked ? "left-5" : "left-1"}`} />
-    </button>
-  );
-}
-
-/** Surfaces the API's 422 reason (e.g. the SSRF rejection) instead of a generic toast. */
-function errorMessage(error: unknown, fallback: string) {
-  const message = error instanceof Error ? error.message.trim() : "";
-  return message || fallback;
-}
-
-function formatSync(value?: string) {
-  return formatAdminDateTime(value, "Not synced yet");
-}
-
-function PlugIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M8 3v5M16 3v5M6 8h12v2a6 6 0 0 1-12 0V8ZM12 16v5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    </article>
   );
 }

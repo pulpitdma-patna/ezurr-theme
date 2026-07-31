@@ -518,6 +518,12 @@ export interface ApiReportSeriesPoint {
 
 export interface ApiReportSku {
   product_key: string;
+  /**
+   * The game's name. Optional only so an older server still parses — the Money
+   * screen used to print the key raw, so the owner read
+   * "ps4-assassins-creed-mirage" on the list he restocks from.
+   */
+  title?: string;
   qty: number;
   revenue: number;
 }
@@ -1217,6 +1223,18 @@ export const api = {
     apiFetch<ApiIntegrationTestResult>(`/admin/integrations/${key}/test`, {
       method: "POST",
     }),
+  /**
+   * Asks our own API where on Shopify to send the owner to approve us.
+   *
+   * The address that comes back is Shopify's, so the browser has to *go* there —
+   * fetching it would be a cross-origin request to somebody else's login page
+   * and would fail. `shop` is the full mystore.myshopify.com form.
+   */
+  startShopifyConnect: (shop: string) =>
+    apiFetch<{ authorizeUrl: string }>("/admin/integrations/shopify/oauth/start", {
+      method: "POST",
+      body: JSON.stringify({ shop }),
+    }),
 
   // Message templates + outbound log
   messageTemplates: () =>
@@ -1294,6 +1312,24 @@ export type ApiIntegrationField = {
   options?: { value: string; label: string }[];
 };
 
+/**
+ * The connect-button path, for a provider that has one.
+ *
+ * Only the server can answer `available`: it is the one that holds the app the
+ * owner would be approving. A deploy without one has to keep the paste-the-key
+ * form, or the owner is left pressing a button that cannot work.
+ */
+export type ApiIntegrationOauth = {
+  /** This provider has a connect-button path at all. */
+  supported: boolean;
+  /** This server is set up to offer it. */
+  available: boolean;
+  /** The owner has already approved us. */
+  connected: boolean;
+  /** Which shop he approved from, e.g. mystore.myshopify.com. */
+  shop: string | null;
+};
+
 export type ApiIntegration = {
   id: string;
   name: string;
@@ -1309,6 +1345,8 @@ export type ApiIntegration = {
   driver?: "log" | "live";
   fields?: ApiIntegrationField[];
   missingRequired?: string[];
+  /** Absent for providers configured by pasting keys. */
+  oauth?: ApiIntegrationOauth;
 };
 
 /**
@@ -1321,6 +1359,13 @@ export type ApiIntegrationPatch = {
   accountLabel?: string | null;
   config?: Record<string, string | null>;
   credentials?: Record<string, string | null>;
+  /**
+   * 'live' really calls the provider; 'log' builds the call and sends nothing.
+   * A first-class input on the API, not a config field — it is what this shop
+   * has decided to do, not one of the provider's own settings — and the API
+   * refuses 'live' until the credentials that provider needs are stored.
+   */
+  mode?: "log" | "live";
 };
 
 export type ApiIntegrationTestResult = {

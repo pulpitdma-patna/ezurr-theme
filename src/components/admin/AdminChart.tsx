@@ -29,7 +29,7 @@ export function AdminChart({
   color = "#1D1D1F",
   ariaLabel = "Chart",
   formatValue = (v) => v.toLocaleString("en-IN"),
-  emptyMessage = "No activity in this period",
+  emptyMessage = "Nothing happened on these days",
 }: AdminChartProps) {
   const [hover, setHover] = useState<number | null>(null);
   const gradId = useId().replace(/:/g, "");

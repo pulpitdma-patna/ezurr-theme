@@ -177,6 +177,26 @@ export function mapApiProductToGameCard(p: ApiProduct, index: number): GameCardP
   };
 }
 
+/**
+ * The code printed on the shelf label — `GAMCXBOX249`, not the web address.
+ *
+ * There is no `sku` column on products, so the admin showed `p.key` under the
+ * heading "SKU": a 55-character URL slug that wrapped over five lines and told
+ * the owner nothing he could match against a box in his hand. Every one of the
+ * 298 imported products already carries the real code at
+ * `meta.variants[0].sku`, in the payload the admin was already fetching.
+ *
+ * Returns "" rather than falling back to the slug when there is no variant SKU
+ * — a product he creates here has no shelf code yet, and printing the web
+ * address in its place is the defect this function exists to remove.
+ */
+export function productItemCode(p: Pick<ApiProduct, "meta">): string {
+  const meta = (p.meta ?? {}) as { variants?: unknown };
+  const first = Array.isArray(meta.variants) ? meta.variants[0] : null;
+  const sku = (first as { sku?: unknown } | null)?.sku;
+  return typeof sku === "string" ? sku.trim() : "";
+}
+
 export function mapApiProductToAdminRow(p: ApiProduct, index = 0): AdminCatalogRow {
   const status = p.active
     ? p.stock <= 0
@@ -189,9 +209,12 @@ export function mapApiProductToAdminRow(p: ApiProduct, index = 0): AdminCatalogR
     index,
     name: p.title,
     brand: p.brand_slug || "ezurr",
-    sku: p.key,
+    sku: productItemCode(p),
     platform: derivePlatform(p),
-    edition: "Standard",
+    // The admin used to print "Standard" here for every product in the
+    // catalogue. No product has an edition, there is no column to store one,
+    // and the form that offered to edit it threw the value away on save.
+    edition: "",
     price: formatInr(payablePrice(p)),
     strike: (payableMrp(p) ?? 0) > payablePrice(p) ? formatInr(payableMrp(p)!) : "",
     taxInclusive: p.tax_inclusive ?? true,
@@ -199,8 +222,18 @@ export function mapApiProductToAdminRow(p: ApiProduct, index = 0): AdminCatalogR
     digital: p.fulfillment_type === "digital",
     status,
     image: p.image_url || DEFAULT_IMG,
-    releaseDate: undefined,
+    // The API sends `release_at` (a date cast, so it arrives with a time part)
+    // but ApiProduct doesn't declare it. Dropping it here is why the list had to
+    // keep a second copy of every raw record just to know a release date.
+    releaseDate: toDateOnly((p as { release_at?: unknown }).release_at),
   };
+}
+
+/** "2026-11-19T00:00:00.000000Z" → "2026-11-19"; anything else → undefined. */
+function toDateOnly(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length >= 10 ? trimmed.slice(0, 10) : undefined;
 }
 
 const API_ORDER_STATUSES: AdminOrderStatus[] = [

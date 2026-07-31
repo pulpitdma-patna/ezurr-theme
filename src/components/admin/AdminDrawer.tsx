@@ -85,7 +85,7 @@ export function AdminDrawer({
       <button
         type="button"
         className="absolute inset-0 bg-[#1D1D1F]/35 backdrop-blur-[2px] transition"
-        aria-label="Close drawer"
+        aria-label="Close this panel"
         onClick={onClose}
       />
       <div

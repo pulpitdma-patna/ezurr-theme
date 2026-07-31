@@ -2,53 +2,26 @@
 
 import Image from "next/image";
 import { formatAdminDate } from "@/lib/adminFormat";
-import { priceToNumber } from "@/lib/productPayload";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { AdminNotice } from "@/components/admin/AdminNotice";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSelect } from "@/components/admin/AdminSelect";
+import { CatalogTabs } from "@/components/admin/CatalogTabs";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
+import { PlusIcon } from "@/components/admin/IconButton";
+import { ProductCodesPanel } from "@/components/admin/ProductCodesPanel";
 import {
-  ExportIcon,
-  EyeIcon,
-  IconButton,
-  PencilIcon,
-  PlusIcon,
-} from "@/components/admin/IconButton";
-import {
-  PreorderFields,
-  applyDigitalToggle,
-  emptyFulfilment,
-  fulfilmentFromApi,
-  fulfilmentLabels,
-  fulfilmentToPayload,
-  isFulfilmentType,
-  type FulfilmentType,
-  type FulfilmentValues,
-} from "@/components/admin/PreorderFields";
-import { ProductForm, type ProductFormValues } from "@/components/admin/ProductForm";
-import { StatusBadge } from "@/components/admin/StatusBadge";
-import { StockBadge } from "@/components/admin/StockBadge";
+  ProductForm,
+  emptyProductForm,
+  type ProductFormValues,
+} from "@/components/admin/ProductForm";
 import { StockEditor } from "@/components/admin/StockEditor";
-import {
-  parsePrice,
-  type AdminCatalogRow,
-  type AdminProductCategory,
-} from "@/data/admin";
+import { type AdminCatalogRow, parsePrice } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
-import { useAutoBanner } from "@/hooks/useAutoBanner";
-import { useListSavedViews } from "@/hooks/useListSavedViews";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
-import {
-  adjustStock,
-  deleteProduct,
-  publishProducts,
-  unpublishProducts,
-  upsertProduct,
-} from "@/lib/adminStore";
+import { adjustStock, deleteProduct, upsertProduct } from "@/lib/adminStore";
 import {
   apiCreateProduct,
   apiDeleteProduct,
@@ -58,99 +31,33 @@ import {
   type ApiProduct,
 } from "@/lib/apiClient";
 import { mapApiProductToAdminRow } from "@/lib/apiMappers";
+import {
+  apiProductToForm,
+  deriveFulfilment,
+  productFormToApiPayload,
+  websiteState,
+  websiteStateLabels,
+  websiteStateTones,
+} from "@/lib/productPayload";
 import { useSearchParams } from "next/navigation";
 
-/** The three fulfilment columns the API sends but `ApiProduct` doesn't declare. */
+/** The fulfilment columns the API sends but `ApiProduct` doesn't declare. */
 type ApiProductFulfilment = ApiProduct & {
   release_at?: string | null;
   reservation_amount?: number | null;
 };
 
-// Deliberately NOT a local copy. This was duplicated from lib/productPayload,
-// so the negative-price bug had to be fixed in two places — and the create
-// drawer kept accepting "-500" as 500 after the edit form was fixed.
-
-function productApiPayload(input: {
-  key: string;
-  name: string;
-  category: string;
-  brand: string;
-  price: string;
-  strike: string;
-  stock: number;
-  status: string;
-  image: string;
-  taxInclusive: boolean;
-  fulfilment: FulfilmentValues;
-}) {
-  const key = input.key.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80);
-  return {
-    key,
-    slug: key.slice(0, 120),
-    title: input.name,
-    category_slug: input.category,
-    brand_slug: input.brand.toLowerCase().replace(/\s+/g, "-") || "ezurr",
-    price: priceToNumber(input.price),
-    mrp: priceToNumber(input.strike) || null,
-    stock: input.stock,
-    image_url: input.image || null,
-    active: input.status === "active" || input.status === "published",
-    // The drawer has always shown a "Price includes GST" toggle and read it back
-    // from the product, but never sent it — so switching it saved nothing and
-    // reappeared unchanged on reload. It decides whether the catalogue price is
-    // grossed up at checkout, so the wrong value moves what the customer pays.
-    tax_inclusive: input.taxInclusive,
-    // Fulfilment owns `fulfillment_type` now — spread last so it wins.
-    ...fulfilmentToPayload(input.fulfilment),
-  };
-}
-
-type DrawerMode = "view" | "edit" | "add" | null;
-
-const emptyForm: ProductFormValues = {
-  category: "games",
-  name: "",
-  brand: "",
-  sku: "",
-  platform: "PS5",
-  edition: "Standard",
-  price: "",
-  strike: "",
-  taxInclusive: true,
-  stock: "10",
-  digital: false,
-  status: "draft",
-  image: "",
-};
-
-function toForm(product: AdminCatalogRow): ProductFormValues {
-  return {
-    category: product.category,
-    name: product.name,
-    brand: product.brand,
-    sku: product.sku,
-    platform: product.platform,
-    edition: product.edition,
-    price: product.price,
-    strike: product.strike,
-    taxInclusive: product.taxInclusive ?? true,
-    stock: String(product.stock),
-    digital: product.digital,
-    status: product.status,
-    image: product.image,
-    releaseDate: product.releaseDate,
-  };
-}
+type DrawerMode = "edit" | "add" | null;
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
 type StockFilter = "all" | "in_stock" | "low" | "out";
 
 const STOCK_FILTER_OPTIONS: { value: StockFilter; label: string }[] = [
-  { value: "all", label: "All stock" },
+  { value: "all", label: "Any stock" },
   { value: "in_stock", label: "In stock" },
-  { value: "low", label: "Low stock" },
-  { value: "out", label: "Out of stock / Sold out" },
+  { value: "low", label: "Running low" },
+  { value: "out", label: "None left" },
 ];
 
 function isStockFilter(value: unknown): value is StockFilter {
@@ -159,41 +66,32 @@ function isStockFilter(value: unknown): value is StockFilter {
 
 /**
  * Low/out use the store's configured threshold (the retired Inventory page's
- * behaviour) rather than a fixed 5.
+ * behaviour) rather than a fixed 5. `stock` here is the *true* count — for a
+ * code-delivered product that is the number of unsold codes, not the ignored
+ * `products.stock` column.
  */
-function matchesStockFilter(
-  row: AdminCatalogRow,
-  stockFilter: StockFilter,
-  lowThreshold: number,
-): boolean {
-  if (stockFilter === "all") return true;
-  if (stockFilter === "in_stock") return row.stock > lowThreshold;
-  if (stockFilter === "low") return row.stock > 0 && row.stock <= lowThreshold;
-  return row.stock <= 0 || row.status === "sold_out";
+function matchesStockFilter(stock: number, filter: StockFilter, lowThreshold: number): boolean {
+  if (filter === "all") return true;
+  if (filter === "in_stock") return stock > lowThreshold;
+  if (filter === "low") return stock > 0 && stock <= lowThreshold;
+  return stock <= 0;
 }
-
-type FulfilmentFilter = "all" | FulfilmentType;
-
-const FULFILMENT_TABS: { value: FulfilmentFilter; label: string }[] = [
-  { value: "all", label: "All products" },
-  { value: "physical", label: "Physical" },
-  { value: "digital", label: "Digital" },
-  { value: "preorder", label: "Pre-orders" },
-];
 
 export default function AdminProductsPage() {
   const store = useAdminStore();
   const searchParams = useSearchParams();
   const [category, setCategory] = useState<string>("all");
   const [brand, setBrand] = useState("all");
+  // The Platform column read "Hardware" on every row, so it went. The question
+  // it was trying to answer — "show me the Xbox things" — is a filter.
+  const [consoleFilter, setConsoleFilter] = useState("all");
   const [query, setQuery] = useSearchQueryParam();
-  const [selected, setSelected] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [pageSize, setPageSize] = useState(25);
 
-  // `?stock=` (and the retired Inventory page's legacy `?filter=`) and
-  // `?fulfilment=` seed the two folded-in views without an effect.
+  // `?stock=` (and the retired Inventory page's legacy `?filter=`) seeds the
+  // folded-in low-stock view without an effect.
   const urlStock = searchParams.get("stock") ?? searchParams.get("filter");
   const [stockLocal, setStockLocal] = useState<StockFilter | null>(null);
   const [seenStockParam, setSeenStockParam] = useState(urlStock);
@@ -203,36 +101,28 @@ export default function AdminProductsPage() {
   }
   const stockFilter: StockFilter = stockLocal ?? (isStockFilter(urlStock) ? urlStock : "all");
 
-  const urlFulfilment = searchParams.get("fulfilment") ?? searchParams.get("fulfillment");
-  const [fulfilmentLocal, setFulfilmentLocal] = useState<FulfilmentFilter | null>(null);
-  const [seenFulfilmentParam, setSeenFulfilmentParam] = useState(urlFulfilment);
-  if (urlFulfilment !== seenFulfilmentParam) {
-    setSeenFulfilmentParam(urlFulfilment);
-    setFulfilmentLocal(null);
-  }
-  const fulfilmentFilter: FulfilmentFilter =
-    fulfilmentLocal ?? (isFulfilmentType(urlFulfilment) ? urlFulfilment : "all");
-
   const [page, setPage] = usePagedList(
-    `${category}|${brand}|${stockFilter}|${fulfilmentFilter}|${query}|${sortKey}|${sortDir}|${pageSize}`,
+    `${category}|${brand}|${consoleFilter}|${stockFilter}|${query}|${sortKey}|${sortDir}|${pageSize}`,
   );
 
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [form, setForm] = useState<ProductFormValues>(emptyForm);
-  const [fulfilment, setFulfilment] = useState<FulfilmentValues>(emptyFulfilment);
-  const [toast, setToast] = useAutoBanner();
+  const [form, setForm] = useState<ProductFormValues>(emptyProductForm);
+  const [alsoIn, setAlsoIn] = useState<string[]>([]);
+  const [banner, setBanner] = useState("");
+  const [bannerTone, setBannerTone] = useState<"success" | "error">("success");
+  const [savedKey, setSavedKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saveTone, setSaveTone] = useState<"success" | "error">("success");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [openedFromNewParam, setOpenedFromNewParam] = useState(false);
   const [listLoading, setListLoading] = useState(true);
   const [apiProducts, setApiProducts] = useState<AdminCatalogRow[]>([]);
   const [apiRaw, setApiRaw] = useState<Record<string, ApiProductFulfilment>>({});
+  /** Unsold codes per product key — the only honest stock for a digital line. */
+  const [codeStock, setCodeStock] = useState<Record<string, number>>({});
   const [apiBrandOptions, setApiBrandOptions] = useState<{ value: string; label: string }[]>([]);
   const [apiCategoryOptions, setApiCategoryOptions] = useState<{ value: string; label: string }[]>([]);
   const [listError, setListError] = useState<string | null>(null);
-  const { views, removeView } = useListSavedViews("products");
 
   const lowThreshold = store.settings.lowStockThreshold ?? 5;
 
@@ -247,10 +137,15 @@ export default function AdminProductsPage() {
       // filtered server-side when set so we do not pull unrelated pages.
       const perPage = 100;
       const brandParam = brand !== "all" ? brand : undefined;
-      const [first, brandsRes, categoriesRes] = await Promise.all([
+      const [first, brandsRes, categoriesRes, digitalStock] = await Promise.all([
         api.adminProducts({ page: 1, per_page: perPage, brand: brandParam }),
         api.adminBrands().catch(() => ({ data: [] as Awaited<ReturnType<typeof api.adminBrands>>["data"] })),
         api.adminCategories().catch(() => ({ data: [] as Awaited<ReturnType<typeof api.adminCategories>>["data"] })),
+        // One call, every product. Without it the list rendered `products.stock`
+        // for a code-delivered product — so a game card could read "30 in stock"
+        // while OrderService::assertAvailable, which counts vault rows and
+        // ignores that column entirely, refused every single order for it.
+        api.adminDigitalStock().catch(() => []),
       ]);
       let all = Array.isArray(first.data) ? first.data : [];
       const lastPage = Number(first.last_page ?? 1);
@@ -259,11 +154,14 @@ export default function AdminProductsPage() {
         if (Array.isArray(res.data)) all = all.concat(res.data);
       }
       setApiProducts(all.map((p, i) => mapApiProductToAdminRow(p, i)));
-      // Keep the raw records: the admin row mapper drops release_at,
-      // reservation_amount and the preorder fulfilment type.
+      // Keep the raw records: the admin row mapper drops reservation_amount and
+      // the description.
       const raw: Record<string, ApiProductFulfilment> = {};
       for (const p of all) raw[p.key] = p as ApiProductFulfilment;
       setApiRaw(raw);
+      const counts: Record<string, number> = {};
+      for (const s of digitalStock) counts[s.product_key] = s.available;
+      setCodeStock(counts);
       const brands = Array.isArray(brandsRes.data) ? brandsRes.data : [];
       setApiBrandOptions(
         brands
@@ -284,7 +182,7 @@ export default function AdminProductsPage() {
       setApiRaw({});
       setApiBrandOptions([]);
       setApiCategoryOptions([]);
-      setListError(err instanceof Error ? err.message : "Could not load products");
+      setListError(err instanceof Error ? err.message : "Could not load what you sell.");
     } finally {
       setListLoading(false);
     }
@@ -304,16 +202,21 @@ export default function AdminProductsPage() {
     [store.products, apiProducts, activeKey],
   );
 
+  const openAdd = useCallback(() => {
+    setActiveKey(null);
+    setForm({ ...emptyProductForm });
+    setAlsoIn([]);
+    setDrawerMode("add");
+    setBanner("");
+    setSavedKey(null);
+  }, []);
+
   const wantsNew = searchParams.get("new") === "1";
   if (wantsNew && !openedFromNewParam) {
     setOpenedFromNewParam(true);
-    setActiveKey(null);
-    setForm({ ...emptyForm });
-    setFulfilment({ ...emptyFulfilment });
-    setDrawerMode("add");
-    setToast("");
+    openAdd();
     if (typeof window !== "undefined") {
-      // Drop only `new` so a `?fulfilment=`/`?stock=` deep link survives.
+      // Drop only `new` so a `?stock=` deep link survives.
       const next = new URLSearchParams(window.location.search);
       next.delete("new");
       const qs = next.toString();
@@ -321,18 +224,8 @@ export default function AdminProductsPage() {
     }
   }
 
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape" && !drawerMode) setSelected([]);
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [drawerMode]);
-
   const brandOptions = useMemo(() => {
-    if (isApiEnabled()) {
-      return apiBrandOptions.map((b) => b.value);
-    }
+    if (isApiEnabled()) return apiBrandOptions.map((b) => b.value);
     return store.brands
       .filter((b) => b.active)
       .map((b) => b.name)
@@ -342,9 +235,7 @@ export default function AdminProductsPage() {
   const brandFilter = brand !== "all" && brandOptions.includes(brand) ? brand : "all";
 
   const categoryOptions = useMemo(() => {
-    if (isApiEnabled()) {
-      return apiCategoryOptions.map((c) => c.value);
-    }
+    if (isApiEnabled()) return apiCategoryOptions.map((c) => c.value);
     return store.categories.filter((c) => c.active).map((c) => c.key);
   }, [store.categories, apiCategoryOptions]);
 
@@ -353,38 +244,24 @@ export default function AdminProductsPage() {
 
   const productSource = isApiEnabled() ? apiProducts : store.products;
 
-  /** Fulfilment for a row: from the API record, else inferred from mock data. */
-  const rowFulfilment = useCallback(
-    (row: AdminCatalogRow): FulfilmentValues => {
-      const raw = apiRaw[row.key];
-      if (raw) return fulfilmentFromApi(raw);
-      return {
-        type: row.digital ? "digital" : row.category === "preorders" ? "preorder" : "physical",
-        releaseAt: row.releaseDate ?? "",
-        reservationAmount: "",
-      };
-    },
-    [apiRaw],
+  const consoleOptions = useMemo(
+    () => [...new Set(productSource.map((p) => p.platform))].sort((a, b) => a.localeCompare(b)),
+    [productSource],
   );
 
-  const fulfilmentCounts = useMemo(() => {
-    const counts: Record<FulfilmentFilter, number> = {
-      all: productSource.length,
-      physical: 0,
-      digital: 0,
-      preorder: 0,
-    };
-    for (const row of productSource) counts[rowFulfilment(row).type] += 1;
-    return counts;
-  }, [productSource, rowFulfilment]);
+  /** The number that is actually true for this row. */
+  const trueStock = useCallback(
+    (row: AdminCatalogRow) => (row.digital ? (codeStock[row.key] ?? 0) : row.stock),
+    [codeStock],
+  );
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = productSource.filter((row) => {
       if (categoryFilter !== "all" && row.category !== categoryFilter) return false;
       if (brandFilter !== "all" && row.brand !== brandFilter) return false;
-      if (!matchesStockFilter(row, stockFilter, lowThreshold)) return false;
-      if (fulfilmentFilter !== "all" && rowFulfilment(row).type !== fulfilmentFilter) return false;
+      if (consoleFilter !== "all" && row.platform !== consoleFilter) return false;
+      if (!matchesStockFilter(trueStock(row), stockFilter, lowThreshold)) return false;
       if (!q) return true;
       return (
         row.name.toLowerCase().includes(q) ||
@@ -395,9 +272,8 @@ export default function AdminProductsPage() {
     });
     list = [...list].sort((a, b) => {
       let cmp = 0;
-      if (sortKey === "stock") cmp = a.stock - b.stock;
+      if (sortKey === "stock") cmp = trueStock(a) - trueStock(b);
       else if (sortKey === "price") cmp = parsePrice(a.price) - parsePrice(b.price);
-      else if (sortKey === "sku") cmp = a.sku.localeCompare(b.sku);
       else cmp = a.name.localeCompare(b.name);
       return sortDir === "asc" ? cmp : -cmp;
     });
@@ -406,115 +282,126 @@ export default function AdminProductsPage() {
     productSource,
     categoryFilter,
     brandFilter,
+    consoleFilter,
     stockFilter,
     lowThreshold,
-    fulfilmentFilter,
-    rowFulfilment,
+    trueStock,
     query,
     sortKey,
     sortDir,
   ]);
 
-  function openView(row: AdminCatalogRow) {
-    setActiveKey(row.key);
-    setForm(toForm(row));
-    setFulfilment(rowFulfilment(row));
-    setDrawerMode("view");
-    setToast("");
-  }
-
   function openEdit(row: AdminCatalogRow) {
+    const raw = isApiEnabled() ? apiRaw[row.key] : undefined;
     setActiveKey(row.key);
-    setForm(toForm(row));
-    setFulfilment(rowFulfilment(row));
+    setForm(
+      raw
+        ? apiProductToForm(raw)
+        : {
+            ...emptyProductForm,
+            category: row.category,
+            name: row.name,
+            brand: row.brand,
+            itemCode: row.sku,
+            platform: row.platform,
+            webAddress: row.key,
+            price: String(parsePrice(row.price) || ""),
+            strike: row.strike ? String(parsePrice(row.strike)) : "",
+            taxInclusive: row.taxInclusive ?? true,
+            stock: String(row.stock),
+            delivery: row.digital ? "digital" : "physical",
+            releaseAt: row.releaseDate ?? "",
+            onWebsite: row.status !== "draft",
+            image: row.image,
+          },
+    );
+    setAlsoIn([]);
     setDrawerMode("edit");
-    setToast("");
-  }
-
-  function openAdd() {
-    setActiveKey(null);
-    setForm({ ...emptyForm });
-    setFulfilment({ ...emptyFulfilment });
-    setDrawerMode("add");
-    setToast("");
+    setBanner("");
+    setSavedKey(null);
   }
 
   function closeDrawer() {
     setDrawerMode(null);
     setActiveKey(null);
-    setToast("");
+    setBanner("");
+    setSavedKey(null);
   }
 
   function updateForm<K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
-    // ProductForm's legacy "Digital product" checkbox writes the same column.
-    if (key === "digital") {
-      setFulfilment((prev) => applyDigitalToggle(prev, Boolean(value)));
-    }
-  }
-
-  function updateFulfilment(next: FulfilmentValues) {
-    setFulfilment(next);
-    setForm((prev) =>
-      prev.digital === (next.type === "digital") ? prev : { ...prev, digital: next.type === "digital" },
-    );
   }
 
   /** Inline stock save landed — patch the row instead of refetching the catalog. */
   const handleStockSaved = useCallback((key: string, nextStock: number) => {
     setApiProducts((prev) =>
-      prev.map((row) =>
-        row.key === key
-          ? {
-              ...row,
-              stock: nextStock,
-              status: row.status === "draft" ? "draft" : nextStock <= 0 ? "sold_out" : "published",
-            }
-          : row,
-      ),
+      prev.map((row) => (row.key === key ? { ...row, stock: nextStock } : row)),
     );
     setApiRaw((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], stock: nextStock } } : prev));
   }, []);
 
-  async function handleSave(event: React.FormEvent) {
-    event.preventDefault();
+  const handleCodeCount = useCallback((key: string, unsold: number) => {
+    setCodeStock((prev) => (prev[key] === unsold ? prev : { ...prev, [key]: unsold }));
+  }, []);
+
+  async function save(onWebsite: boolean) {
     if (saving) return;
     setSaving(true);
-    setSaveTone("success");
+    setBannerTone("success");
     try {
-      await saveProduct();
+      await saveProduct(onWebsite);
     } finally {
       setSaving(false);
     }
   }
 
-  async function saveProduct() {
+  function payloadFor(key: string, onWebsite: boolean) {
+    return productFormToApiPayload({
+      key,
+      name: form.name,
+      category: form.category,
+      brand: form.brand,
+      price: form.price,
+      strike: form.strike,
+      taxInclusive: form.taxInclusive,
+      // For a code-delivered product this column is meaningless — the vault is
+      // its stock, and OrderService::assertAvailable ignores the column
+      // entirely. The form stops asking, so whatever was already there rides
+      // along untouched; a save is not the place to quietly rewrite it.
+      stock: Number(form.stock) || 0,
+      onWebsite,
+      image: form.image,
+      description: form.description,
+      fulfilment: deriveFulfilment(form),
+      alsoIn: alsoIn.length > 0 ? alsoIn : undefined,
+    });
+  }
+
+  async function saveProduct(onWebsite: boolean) {
     if (drawerMode === "add") {
-      const key = `${form.category}:new-${Date.now()}`;
+      // Sanitised up front, not inside the payload builder: the codes panel and
+      // the reload both need the key the SERVER will hold. Generating
+      // "games:new-123" here and letting the builder turn it into
+      // "games-new-123" meant the panel then asked for codes belonging to a
+      // product key that does not exist.
+      const key = `${form.category}-new-${Date.now()}`.replace(/[^a-zA-Z0-9_-]/g, "-");
       if (isApiEnabled()) {
         try {
-          await apiCreateProduct(
-            productApiPayload({
-              key,
-              name: form.name,
-              category: form.category,
-              brand: form.brand,
-              price: form.price,
-              strike: form.strike,
-              stock: Number(form.stock) || 0,
-              status: form.status,
-              image: form.image,
-              taxInclusive: form.taxInclusive,
-              fulfilment,
-            }),
+          await apiCreateProduct(payloadFor(key, onWebsite));
+          // He is receiving a shipment, not creating one product. The drawer
+          // stays open and says what really happened; the old flow closed it and
+          // made him press "Add product" again for the second box in the carton.
+          setSavedKey(key);
+          setBanner(
+            onWebsite
+              ? "Saved. It's on the website."
+              : "Saved, and hidden. Customers can't see it yet.",
           );
-          setToast("Product created");
           await loadProducts();
-          closeDrawer();
         } catch (err) {
-          setSaveTone("error");
-          setToast(
-            err instanceof Error ? `Could not create product: ${err.message}` : "Could not create product",
+          setBannerTone("error");
+          setBanner(
+            err instanceof Error ? `Not saved — ${err.message}` : "Not saved. Nothing was changed.",
           );
         }
         return;
@@ -524,49 +411,40 @@ export default function AdminProductsPage() {
         category: form.category,
         name: form.name,
         brand: form.brand,
-        sku: form.sku || `EZ-NEW-${Date.now().toString().slice(-6)}`,
+        sku: form.itemCode,
         platform: form.platform,
-        edition: form.edition,
+        edition: "",
         price: form.price,
         strike: form.strike,
         stock: Number(form.stock) || 0,
-        digital: fulfilment.type === "digital",
-        status: form.status,
+        digital: form.delivery === "digital",
+        status: onWebsite ? "published" : "draft",
         image: form.image,
-        releaseDate: fulfilment.type === "preorder" ? fulfilment.releaseAt || undefined : undefined,
+        releaseDate: form.releaseAt || undefined,
       });
-      setToast("Product created");
-      window.setTimeout(closeDrawer, 500);
+      setSavedKey(key);
+      setBanner(onWebsite ? "Saved. It's on the website." : "Saved, and hidden.");
       return;
     }
 
     if (!activeProduct) return;
-    const nextStock = Number(form.stock) || 0;
+    const nextStock = form.delivery === "digital" ? 0 : Number(form.stock) || 0;
     if (isApiEnabled()) {
       try {
         await apiUpdateProduct(
           activeProduct.key.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 80),
-          productApiPayload({
-            key: activeProduct.key,
-            name: form.name,
-            category: form.category,
-            brand: form.brand,
-            price: form.price,
-            strike: form.strike,
-            stock: nextStock,
-            status: form.status,
-            image: form.image,
-            taxInclusive: form.taxInclusive,
-            fulfilment,
-          }),
+          payloadFor(activeProduct.key, onWebsite),
         );
-        setToast("Product saved");
+        setBanner(
+          onWebsite ? "Saved. It's on the website." : "Saved, and taken off the website.",
+        );
         await loadProducts();
         closeDrawer();
       } catch (err) {
-        setSaveTone("error");
-        setToast(
-          err instanceof Error ? `Could not save product: ${err.message}` : "Could not save product",
+        setBannerTone("error");
+        // The drawer stays open and every value he typed stays typed.
+        setBanner(
+          err instanceof Error ? `Not saved — ${err.message}` : "Not saved. Nothing was changed.",
         );
       }
       return;
@@ -577,22 +455,33 @@ export default function AdminProductsPage() {
       category: form.category,
       name: form.name,
       brand: form.brand,
-      sku: form.sku,
+      sku: form.itemCode,
       platform: form.platform,
-      edition: form.edition,
+      edition: "",
       price: form.price,
       strike: form.strike,
       stock: activeProduct.stock,
-      digital: fulfilment.type === "digital",
-      status: form.status,
+      digital: form.delivery === "digital",
+      status: onWebsite ? "published" : "draft",
       image: form.image,
-      releaseDate: fulfilment.type === "preorder" ? fulfilment.releaseAt || undefined : undefined,
+      releaseDate: form.releaseAt || undefined,
     });
-    if (delta !== 0) {
-      adjustStock(activeProduct.key, delta, "Product edit stock");
-    }
-    setToast("Product saved");
+    if (delta !== 0) adjustStock(activeProduct.key, delta, "Product edit stock");
+    setBanner("Saved.");
     window.setTimeout(closeDrawer, 500);
+  }
+
+  /** Keep category and brand; clear the box-specific fields. */
+  function addAnother() {
+    setSavedKey(null);
+    setBanner("");
+    setForm((prev) => ({
+      ...emptyProductForm,
+      category: prev.category,
+      brand: prev.brand,
+      delivery: prev.delivery,
+      taxInclusive: prev.taxInclusive,
+    }));
   }
 
   async function handleDelete() {
@@ -604,9 +493,9 @@ export default function AdminProductsPage() {
         await loadProducts();
         closeDrawer();
       } catch (err) {
-        setSaveTone("error");
-        setToast(
-          err instanceof Error ? `Could not delete: ${err.message}` : "Could not delete product",
+        setBannerTone("error");
+        setBanner(
+          err instanceof Error ? `Not deleted — ${err.message}` : "Could not delete this product.",
         );
       }
       return;
@@ -615,47 +504,17 @@ export default function AdminProductsPage() {
     closeDrawer();
   }
 
-  async function bulkSetActive(active: boolean) {
-    const keys = [...selected];
-    setSelected([]);
-    if (isApiEnabled()) {
-      try {
-        await Promise.all(keys.map((k) => apiUpdateProduct(k, { active })));
-        setToast(active ? "Published" : "Unpublished");
-        await loadProducts();
-      } catch (err) {
-        setToast(err instanceof Error ? `Bulk update failed: ${err.message}` : "Bulk update failed");
-      }
-      return;
-    }
-    if (active) publishProducts(keys);
-    else unpublishProducts(keys);
-  }
-
-  function toggleRow(key: string) {
-    setSelected((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
-    );
-  }
-
-  function toggleAll() {
-    const start = (page - 1) * pageSize;
-    const pageKeys = rows.slice(start, start + pageSize).map((r) => r.key);
-    const allSelected = pageKeys.every((k) => selected.includes(k));
-    setSelected(
-      allSelected
-        ? selected.filter((k) => !pageKeys.includes(k))
-        : [...new Set([...selected, ...pageKeys])],
-    );
-  }
-
-  function exportCsv() {
-    const header = "sku,name,brand,platform,stock,status,price,fulfilment,release_at\n";
+  function downloadSpreadsheet() {
+    const header = "item code,name,brand,console,in stock,on the website,price\n";
     const body = rows
-      .filter((r) => selected.length === 0 || selected.includes(r.key))
       .map((r) => {
-        const f = rowFulfilment(r);
-        return `${r.sku},"${r.name.replace(/"/g, '""')}",${r.brand},${r.platform},${r.stock},${r.status},${r.price},${f.type},${f.releaseAt}`;
+        const state = websiteState({
+          active: r.status !== "draft",
+          stock: r.stock,
+          fulfilmentType: r.digital ? "digital" : "physical",
+          codeCount: codeStock[r.key],
+        });
+        return `${r.sku},"${r.name.replace(/"/g, '""')}",${r.brand},${r.platform},${trueStock(r)},${websiteStateLabels[state]},${r.price}`;
       })
       .join("\n");
     const blob = new Blob([header + body], { type: "text/csv" });
@@ -673,168 +532,154 @@ export default function AdminProductsPage() {
       header: "Product",
       sortable: true,
       render: (row) => {
-        const f = rowFulfilment(row);
+        const today = new Date().toISOString().slice(0, 10);
+        const preorder = !!row.releaseDate && row.releaseDate > today;
         return (
           <div className="flex items-center gap-3">
             <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#F5F5F7] ring-1 ring-black/[0.04]">
               {row.image ? (
                 <Image src={row.image} alt="" fill className="object-contain p-0.5" sizes="40px" />
-              ) : (
-                <div className="flex h-full items-center justify-center ez-mono text-[7px] text-[#AEAEB2]">
-                  DIG
-                </div>
-              )}
+              ) : null}
             </div>
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate text-sm font-semibold tracking-[-0.02em]">{row.name}</span>
-                {f.type === "preorder" ? <PreorderBadge /> : null}
+                {preorder ? (
+                  <span className="shrink-0 rounded bg-[#FFEDD5] px-1.5 py-0.5 text-[9px] font-semibold text-[#9A3412]">
+                    Waiting for release
+                  </span>
+                ) : null}
               </div>
-              <div className="mt-0.5 text-[11px] text-[#86868B]">
-                {row.brand}
-                {f.type === "preorder" && f.releaseAt
-                  ? ` · releases ${formatAdminDate(f.releaseAt)}`
-                  : ""}
+              {/* The SKU column is gone. It printed the URL slug —
+                  "dualsense-wireless-controller-chrome-indigo-accplay265" —
+                  which wrapped over five lines and forced every row to ~130px,
+                  so a 298-product catalogue was sixty screens of scrolling. The
+                  code that IS on the shelf label sits here in eleven characters.
+                  The Platform column is gone with it: it read "Hardware" on
+                  every row, a column whose job was to be the same word 298
+                  times. The question survives as a filter. */}
+              <div className="mt-0.5 truncate text-[11px] text-[#86868B]">
+                {row.platform}
+                {row.sku ? ` · ${row.sku}` : ""}
+                {preorder ? ` · releases ${formatAdminDate(row.releaseDate)}` : ""}
               </div>
             </div>
           </div>
         );
       },
     },
-    // The SKU and Platform columns are gone.
-    //
-    // "SKU" rendered the URL slug — "dualsense-wireless-controller-chrome-indigo-
-    // accplay265" — which wrapped over five lines and forced every row to ~130px.
-    // Five products fitted on a 900px screen, so a 298-product catalogue was
-    // sixty screens of scrolling, all to display an identifier nobody reads off a
-    // shelf. It lives on the product page now, as its web address.
-    //
-    // "Platform" read "Hardware" for every row in the catalogue: a column whose
-    // job was to be the same word 298 times.
     {
       key: "stock",
-      header: "Stock",
+      header: "In stock",
       sortable: true,
-      // One control, not two. The badge and a separate "± Stock" button used to
-      // sit side by side for the same job — click the number you are looking at.
-      render: (row) => (
-        <StockEditor
-          productKey={row.key}
-          name={row.name}
-          stock={row.stock}
-          onSaved={handleStockSaved}
-        >
-          <StockBadge stock={row.stock} />
-        </StockEditor>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => <StatusBadge kind="product" status={row.status} />,
+      // One control, not two. A StockBadge and a separate "± Stock" button used
+      // to sit side by side for the same job — click the number you are looking
+      // at. A code-delivered product opens the codes panel instead, because its
+      // stock is not a number anyone can type.
+      render: (row) =>
+        row.digital ? (
+          <span className="text-xs font-semibold text-[#1D1D1F]">
+            {codeStock[row.key] ?? 0} codes
+          </span>
+        ) : (
+          <StockEditor
+            productKey={row.key}
+            name={row.name}
+            stock={row.stock}
+            onSaved={handleStockSaved}
+          >
+            <StockNumber stock={row.stock} low={lowThreshold} />
+          </StockEditor>
+        ),
     },
     {
       key: "price",
       header: "Price",
       sortable: true,
-      render: (row) => <span className="ez-mono text-xs font-medium">{row.price}</span>,
+      render: (row) => (
+        <span className="ez-mono text-xs font-medium">
+          {row.price}
+          {row.strike ? (
+            <span className="ml-1.5 text-[#AEAEB2] line-through">{row.strike}</span>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "On the website",
+      render: (row) => {
+        const state = websiteState({
+          active: row.status !== "draft",
+          stock: row.stock,
+          fulfilmentType: row.digital ? "digital" : "physical",
+          codeCount: codeStock[row.key],
+        });
+        return (
+          <span
+            className={`inline-flex items-center rounded-lg px-2 py-0.5 text-[10px] font-semibold ${websiteStateTones[state]}`}
+          >
+            {websiteStateLabels[state]}
+          </span>
+        );
+      },
     },
     {
       key: "actions",
       header: "",
       className: "text-right",
+      // A labelled word, not an unexplained eye and pencil pair. The eye opened
+      // a read-only panel of the same values the edit drawer shows — a second
+      // screen for looking at what you are about to change.
       render: (row) => (
-        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          <IconButton label="View product" onClick={() => openView(row)}>
-            <EyeIcon />
-          </IconButton>
-          <IconButton label="Edit product" onClick={() => openEdit(row)}>
-            <PencilIcon />
-          </IconButton>
+        <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => openEdit(row)}
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-[#1D1D1F] underline underline-offset-2"
+          >
+            Edit
+          </button>
         </div>
       ),
     },
   ];
 
-  const drawerTitle =
-    drawerMode === "add"
-      ? "Add product"
-      : drawerMode === "edit"
-        ? "Edit product"
-        : (activeProduct?.name ?? "Product");
-
-  const drawerSubtitle =
-    drawerMode === "add"
-      ? "Create a catalog SKU"
-      : activeProduct
-        ? `${activeProduct.sku} · ${activeProduct.platform}`
-        : undefined;
+  const drawerProductKey = drawerMode === "add" ? savedKey : activeProduct?.key ?? null;
 
   return (
     <div className="space-y-4">
       <AdminPageHeader
         title="Products"
         description="Everything you sell. Click a stock number to change it, or a product to edit the rest."
-        breadcrumbs={[
-          { label: "Catalog", href: "/admin/products" },
-          { label: "Products" },
-        ]}
         // The "298 SKUs" pill that lived here said the same number as the count
-        // beside the search box 200px below, in a word he does not use. The one
-        // below survives because it responds to the filters.
+        // beside the search box 200px below, in a word he does not use. Both are
+        // gone: DataTable's footer already prints "1–25 of 298".
       />
 
-      {listError ? (
-        <AdminNotice tone="error">{listError}</AdminNotice>
-      ) : null}
+      <CatalogTabs active="products" />
+
+      {listError ? <AdminNotice tone="error">{listError}</AdminNotice> : null}
 
       <section className="overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
-        <div className="flex flex-wrap items-center gap-1 border-b border-black/[0.05] px-2 py-2 sm:px-3">
-          {FULFILMENT_TABS.map((tab) => {
-            const active = fulfilmentFilter === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setFulfilmentLocal(tab.value)}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${
-                  active
-                    ? "bg-[#1D1D1F] text-white"
-                    : "text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
-                }`}
-              >
-                {tab.label}
-                <span
-                  className={`ez-mono text-[10px] ${active ? "text-white/60" : "text-[#AEAEB2]"}`}
-                >
-                  {fulfilmentCounts[tab.value]}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex flex-col gap-2.5 border-b border-black/[0.05] bg-[#FAFAFB] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <div className="relative min-w-0 flex-1 lg:max-w-sm">
-              <span
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#AEAEB2]"
-                aria-hidden
-              >
-                <SearchGlyph />
-              </span>
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search name, SKU, brand, platform…"
-                className="h-9 w-full rounded-lg border border-black/[0.07] bg-white pl-8 pr-3 text-sm shadow-[0_1px_2px_rgba(17,17,19,0.03)] outline-none placeholder:text-[#AEAEB2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-              />
-            </div>
-            <span className="hidden shrink-0 ez-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B] sm:inline">
-              {rows.length} products
+        {/* The four-tab fulfilment strip is gone: "All 298 · Physical 291 ·
+            Digital 0 · Pre-orders 7" was two tabs of decoration and one tab of
+            seven, above a notice that existed only to explain the strip. */}
+        <div className="flex flex-col gap-2.5 bg-[#FAFAFB] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative min-w-0 flex-1 lg:max-w-sm">
+            <span
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#AEAEB2]"
+              aria-hidden
+            >
+              <SearchGlyph />
             </span>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by name, item code or brand"
+              className="h-9 w-full rounded-lg border border-black/[0.07] bg-white pl-8 pr-3 text-sm shadow-[0_1px_2px_rgba(17,17,19,0.03)] outline-none placeholder:text-[#AEAEB2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+            />
           </div>
 
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -848,10 +693,7 @@ export default function AdminProductsPage() {
                   ? apiCategoryOptions
                   : store.categories
                       .filter((c) => c.active)
-                      .map((cat) => ({
-                        value: cat.key,
-                        label: cat.label,
-                      }))),
+                      .map((cat) => ({ value: cat.key, label: cat.label }))),
               ]}
             />
             <AdminSelect
@@ -862,9 +704,16 @@ export default function AdminProductsPage() {
                 { value: "all", label: "All brands" },
                 ...(isApiEnabled()
                   ? apiBrandOptions
-                  : store.brands
-                      .filter((b) => b.active)
-                      .map((b) => ({ value: b.name, label: b.name }))),
+                  : store.brands.filter((b) => b.active).map((b) => ({ value: b.name, label: b.name }))),
+              ]}
+            />
+            <AdminSelect
+              label="Console"
+              value={consoleFilter}
+              onChange={setConsoleFilter}
+              options={[
+                { value: "all", label: "Any console" },
+                ...consoleOptions.map((c) => ({ value: c, label: c })),
               ]}
             />
             <AdminSelect
@@ -874,9 +723,13 @@ export default function AdminProductsPage() {
               options={STOCK_FILTER_OPTIONS}
             />
             <div className="hidden h-6 w-px bg-black/[0.08] sm:block" aria-hidden />
-            <IconButton label="Export CSV" onClick={exportCsv} size="md">
-              <ExportIcon />
-            </IconButton>
+            <button
+              type="button"
+              onClick={downloadSpreadsheet}
+              className="inline-flex h-9 items-center rounded-xl border border-black/[0.1] bg-white px-3 text-xs font-semibold text-[#424245]"
+            >
+              Download as a spreadsheet
+            </button>
             <button
               type="button"
               onClick={openAdd}
@@ -887,52 +740,18 @@ export default function AdminProductsPage() {
             </button>
           </div>
         </div>
-
-        {views.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 px-3 py-2 sm:px-4">
-            {views.map((view) => (
-              <button
-                key={view.id}
-                type="button"
-                onClick={() => {
-                  setQuery(view.query);
-                  setCategory((view.filters.category as AdminProductCategory | "all") || "all");
-                  setBrand(view.filters.brand || "all");
-                  setStockLocal((view.filters.stock as StockFilter) || "all");
-                }}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  removeView(view.id);
-                  setToast("View removed");
-                }}
-                className="rounded-full border border-black/[0.08] bg-white px-3 py-1 text-[11px] font-semibold text-[#424245] shadow-[0_1px_2px_rgba(17,17,19,0.03)] transition hover:border-black/[0.12] hover:text-[#1D1D1F]"
-                title="Click to apply · right-click to remove"
-              >
-                {view.name}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </section>
-
-      {fulfilmentFilter === "preorder" ? (
-        <AdminNotice tone="info">
-          Pre-order is a product setting — open a product and pick{" "}
-          <strong>Fulfilment → Pre-order</strong> to set its release date and reservation amount.
-          Customer release <em>holds</em> are orders:{" "}
-          <Link href="/admin/orders" className="font-semibold underline">
-            Orders
-          </Link>{" "}
-          → filter status <strong>Pre-order</strong>.
-        </AdminNotice>
-      ) : null}
 
       <DataTable
         loading={listLoading}
         columns={columns}
         rows={rows}
         rowKey={(row) => row.key}
-        emptyMessage="No products match this filter."
+        emptyMessage={
+          query.trim()
+            ? `Nothing matches "${query.trim()}".`
+            : "Nothing here yet. Add the first thing you sell."
+        }
         density="compact"
         emptyAction={
           <button
@@ -944,11 +763,7 @@ export default function AdminProductsPage() {
             Add product
           </button>
         }
-        selectable
-        selectedKeys={selected}
-        onToggleRow={toggleRow}
-        onToggleAll={toggleAll}
-        onRowClick={openView}
+        onRowClick={openEdit}
         sortKey={sortKey}
         sortDir={sortDir}
         onSort={(key) => {
@@ -966,121 +781,82 @@ export default function AdminProductsPage() {
           setPageSize(size);
           setPage(1);
         }}
-        bulkBar={
-          <>
-            <span className="text-xs font-semibold">{selected.length} selected</span>
-            <button
-              type="button"
-              onClick={() => void bulkSetActive(true)}
-              className="h-7 rounded-md bg-white px-2.5 text-[11px] font-semibold text-[#1D1D1F]"
-            >
-              Publish drafts
-            </button>
-            <button
-              type="button"
-              onClick={() => void bulkSetActive(false)}
-              className="h-7 rounded-md border border-white/30 px-2.5 text-[11px] font-semibold text-white"
-            >
-              Unpublish
-            </button>
-            <button
-              type="button"
-              onClick={exportCsv}
-              className="h-7 rounded-md border border-white/30 px-2.5 text-[11px] font-semibold text-white"
-            >
-              Export CSV
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelected([])}
-              className="h-7 rounded-md px-2.5 text-[11px] font-semibold text-white/70"
-            >
-              Clear (Esc)
-            </button>
-          </>
-        }
       />
 
       <AdminDrawer
         open={drawerMode !== null}
-        title={drawerTitle}
-        subtitle={drawerSubtitle}
+        title={drawerMode === "add" ? "Add a product" : (activeProduct?.name ?? "Product")}
         onClose={closeDrawer}
         widthClassName="max-w-lg sm:max-w-xl"
-        footer={
-          drawerMode === "view" && activeProduct ? (
-            <div className="flex justify-end gap-2">
+      >
+        {drawerMode === "add" && savedKey ? (
+          <div className="space-y-3">
+            <AdminNotice tone="info">{banner}</AdminNotice>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={addAnother}
+                className="inline-flex h-10 items-center rounded-lg bg-[#1D1D1F] px-4 text-xs font-semibold text-white"
+              >
+                Add another
+              </button>
               <button
                 type="button"
                 onClick={closeDrawer}
-                className="h-9 rounded-lg border border-black/10 px-4 text-xs font-semibold"
+                className="inline-flex h-10 items-center rounded-lg border border-black/10 px-4 text-xs font-semibold"
               >
-                Close
+                Done
               </button>
-              <button
-                type="button"
-                onClick={() => openEdit(activeProduct)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#1D1D1F] px-4 text-xs font-semibold text-white"
-              >
-                <PencilIcon />
-                Quick edit
-              </button>
-              <Link
-                href={`/admin/products/${encodeURIComponent(activeProduct.key)}/edit`}
-                className="inline-flex h-9 items-center rounded-lg border border-black/10 px-4 text-xs font-semibold"
-              >
-                Full editor
-              </Link>
             </div>
-          ) : null
-        }
-      >
-        {drawerMode === "view" && activeProduct ? (
-          <ProductViewPanel product={activeProduct} fulfilment={fulfilment} />
-        ) : null}
-
-        {(drawerMode === "edit" || drawerMode === "add") && (
-          <div className="space-y-5">
-            <PreorderFields value={fulfilment} onChange={updateFulfilment} embedded />
-            <ProductForm
-              key={drawerMode === "add" ? "add" : (activeKey ?? "edit")}
-              form={form}
-              update={updateForm}
-              onSubmit={handleSave}
-              submitLabel={drawerMode === "add" ? "Create product" : "Save changes"}
-              onCancel={closeDrawer}
-              embedded
-              toastMessage={toast || undefined}
-              toastTone={saveTone}
-              submitting={saving}
-            />
+            {form.delivery === "digital" && drawerProductKey ? (
+              <ProductCodesPanel
+                productKey={drawerProductKey}
+                onCountChange={handleCodeCount}
+              />
+            ) : null}
           </div>
-        )}
-
-        {drawerMode === "edit" && activeProduct ? (
-          <div className="mt-6 flex items-center justify-between gap-3 border-t border-black/[0.08] pt-4">
-            <div>
-              <p className="text-xs font-semibold text-[#1D1D1F]">Delete product</p>
-              <p className="text-[11px] text-[#86868B]">
-                Removes it from the catalog. Blocked if it appears in existing orders.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="inline-flex h-9 shrink-0 items-center rounded-lg border border-red-200 px-3 text-xs font-semibold text-red-700 hover:bg-red-50"
-            >
-              Delete
-            </button>
-          </div>
+        ) : drawerMode !== null ? (
+          <ProductForm
+            key={drawerMode === "add" ? "add" : (activeKey ?? "edit")}
+            form={form}
+            update={updateForm}
+            mode={drawerMode}
+            onSubmit={() => void save(true)}
+            onSubmitHidden={() => void save(false)}
+            onCancel={closeDrawer}
+            onDelete={drawerMode === "edit" ? () => setConfirmDelete(true) : undefined}
+            banner={banner || undefined}
+            bannerTone={bannerTone}
+            submitting={saving}
+            extraCategories={alsoIn}
+            onExtraCategoriesChange={setAlsoIn}
+            codesPanel={
+              form.delivery === "digital" && drawerMode === "edit" && drawerProductKey ? (
+                <ProductCodesPanel
+                  productKey={drawerProductKey}
+                  onCountChange={handleCodeCount}
+                />
+              ) : form.delivery === "digital" ? (
+                <p className="rounded-xl border border-black/[0.07] bg-[#FAFAFB] p-3.5 text-[12px] leading-snug text-[#6E6E73]">
+                  Save this first, then paste in the codes your supplier sent.
+                </p>
+              ) : null
+            }
+          />
         ) : null}
       </AdminDrawer>
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Delete product?"
-        description={`"${activeProduct?.name ?? "This product"}" will be removed from the catalog. This cannot be undone.`}
-        confirmLabel="Delete"
+        title={`Delete ${activeProduct?.name ?? "this product"}?`}
+        description={
+          `It comes off your website and out of this list straight away. ` +
+          `Nothing happens to orders that already contain it, and no customer is told anything. ` +
+          `Your categories, brands and every other product are untouched. ` +
+          `If you only want to stop selling it for now, close this and use "Save but keep it hidden" instead.`
+        }
+        confirmLabel="Delete it"
+        cancelLabel="Keep it"
         danger
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => void handleDelete()}
@@ -1089,108 +865,11 @@ export default function AdminProductsPage() {
   );
 }
 
-function PreorderBadge() {
-  return (
-    <span className="shrink-0 rounded bg-[#EEF2FF] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-[#3730A3]">
-      Pre-order
-    </span>
-  );
-}
-
-function ProductViewPanel({
-  product,
-  fulfilment,
-}: {
-  product: AdminCatalogRow;
-  fulfilment: FulfilmentValues;
-}) {
-  const store = useAdminStore();
-  return (
-    <div className="space-y-6">
-      <div className="flex gap-4">
-        <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl bg-[#F5F5F7] ring-1 ring-black/[0.06]">
-          {product.image ? (
-            <Image src={product.image} alt="" fill className="object-contain p-2" sizes="112px" />
-          ) : (
-            <div className="flex h-full items-center justify-center ez-mono text-[10px] text-[#AEAEB2]">
-              DIGITAL
-            </div>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge kind="product" status={product.status} />
-            <StockBadge stock={product.stock} />
-            {fulfilment.type === "preorder" ? <PreorderBadge /> : null}
-            {fulfilment.type === "digital" ? (
-              <span className="rounded-full bg-[#F0F0F2] px-2.5 py-1 text-[10px] font-semibold text-[#6E6E73]">
-                Digital
-              </span>
-            ) : null}
-          </div>
-          <h3 className="mt-2 text-base font-semibold tracking-[-0.02em]">{product.name}</h3>
-          <p className="mt-1 text-sm text-[#6E6E73]">{product.brand}</p>
-          <p className="mt-3 ez-mono text-lg font-medium tracking-[-0.02em]">{product.price}</p>
-          {product.strike ? (
-            <p className="ez-mono text-xs text-[#AEAEB2] line-through">{product.strike}</p>
-          ) : null}
-        </div>
-      </div>
-
-      <dl className="grid grid-cols-2 gap-3 rounded-2xl border border-black/[0.06] bg-[#FAFAFB] p-4">
-        <ViewField label="SKU" value={product.sku} mono />
-        <ViewField label="Platform" value={product.platform} />
-        <ViewField label="Edition" value={product.edition || "—"} />
-        <ViewField
-          label="Category"
-          value={
-            store.categories.find((t) => t.key === product.category)?.label ??
-            product.category
-          }
-        />
-        <ViewField label="Stock qty" value={String(product.stock)} mono />
-        <ViewField label="Fulfilment" value={fulfilmentLabels[fulfilment.type]} />
-        {fulfilment.type === "preorder" ? (
-          <>
-            <ViewField
-              label="Release"
-              value={formatAdminDate(fulfilment.releaseAt, "Not set")}
-            />
-            <ViewField
-              label="Reservation"
-              value={
-                fulfilment.reservationAmount === ""
-                  ? "Not set"
-                  : Number(fulfilment.reservationAmount) === 0
-                    ? "Free to reserve"
-                    : `₹${fulfilment.reservationAmount}`
-              }
-              mono={fulfilment.reservationAmount !== "" && Number(fulfilment.reservationAmount) > 0}
-            />
-          </>
-        ) : null}
-      </dl>
-    </div>
-  );
-}
-
-function ViewField({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div>
-      <dt className="ez-mono text-[9px] uppercase tracking-[0.12em] text-[#86868B]">{label}</dt>
-      <dd className={`mt-1 text-sm font-medium text-[#1D1D1F] ${mono ? "ez-mono text-xs" : ""}`}>
-        {value}
-      </dd>
-    </div>
-  );
+/** The stock number, coloured by how worried he should be. */
+function StockNumber({ stock, low }: { stock: number; low: number }) {
+  const tone =
+    stock <= 0 ? "text-[#B42318]" : stock <= low ? "text-[#8A5A00]" : "text-[#1D1D1F]";
+  return <span className={`text-xs font-semibold ${tone}`}>{stock}</span>;
 }
 
 function SearchGlyph() {

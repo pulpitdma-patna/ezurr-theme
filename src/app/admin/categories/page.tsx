@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { AdminNotice } from "@/components/admin/AdminNotice";
+import { CatalogTabs } from "@/components/admin/CatalogTabs";
 import { IconButton, PencilIcon, PlusIcon } from "@/components/admin/IconButton";
 import { ImageUploadField } from "@/components/admin/ImageUploadField";
 import { ListToolbar } from "@/components/admin/ListToolbar";
@@ -53,7 +54,6 @@ export default function AdminCategoriesPage() {
   const [description, setDescription] = useState("");
   const [key, setKey] = useState("");
   const [image, setImage] = useState("");
-  const [parentId, setParentId] = useState("");
   const [active, setActive] = useState(true);
   const [listable, setListable] = useState(true);
   const [metaTitle, setMetaTitle] = useState("");
@@ -88,34 +88,51 @@ export default function AdminCategoriesPage() {
       })
       .catch((err: Error) => {
         setApiCategories([]);
-        setListError(err.message || "Could not load categories");
+        setListError(err.message || "Could not load your categories.");
       });
   }, [apiOn]);
 
   const categorySource: CategoryRow[] = apiOn ? apiCategories : store.categories;
   const productSource = apiOn ? [] : store.products;
 
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return categorySource
-      .map((cat) => ({
+  const mapped = useMemo(
+    () =>
+      categorySource.map((cat) => ({
         ...cat,
         // In API mode the count arrives with the row — the mock catalog isn't
         // loaded there, and filtering it locally is what made every row read 0.
         productCount: apiOn
           ? (cat.productCount ?? 0)
           : productSource.filter((p) => p.category === cat.key).length,
-      }))
+      })),
+    [apiOn, categorySource, productSource],
+  );
+
+  /**
+   * 29 of the 33 categories came out of the Shopify import and have no page:
+   * seven "-copy" duplicates, five platform facets of one 13-product parent,
+   * price bands called "2000" and "2999", and rows that are perfect subsets of
+   * Games. Every one of them showed a green "Active" badge, so the screen read
+   * as 33 working categories and he had no way to tell which four a customer
+   * could actually reach.
+   *
+   * Default to the ones customers can see, and say in one line what the other
+   * 29 are. Which of them actually go is his decision about his shop, so
+   * nothing here deletes anything.
+   */
+  const hiddenCount = mapped.filter((c) => !c.listable).length;
+  const [showAll, setShowAll] = useState(false);
+
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return mapped
+      .filter((cat) => showAll || q !== "" || cat.listable)
       .filter((cat) => {
         if (!q) return true;
-        return (
-          cat.label.toLowerCase().includes(q) ||
-          cat.key.toLowerCase().includes(q) ||
-          cat.description.toLowerCase().includes(q)
-        );
+        return cat.label.toLowerCase().includes(q) || cat.key.toLowerCase().includes(q);
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [apiOn, categorySource, productSource, query]);
+  }, [mapped, query, showAll]);
 
   function openAdd() {
     setEditing(null);
@@ -123,7 +140,6 @@ export default function AdminCategoriesPage() {
     setDescription("");
     setKey("");
     setImage("");
-    setParentId("");
     setActive(true);
     // A category the owner just created was made on purpose, so it gets a page.
     // Everything the Shopify import produced is backfilled off.
@@ -138,7 +154,6 @@ export default function AdminCategoriesPage() {
     setDescription(row.description);
     setKey(row.key);
     setImage(row.image ?? "");
-    setParentId(row.parentId ?? "");
     setActive(row.active);
     setListable(row.listable ?? false);
     setMetaTitle(row.metaTitle ?? "");
@@ -177,7 +192,7 @@ export default function AdminCategoriesPage() {
           name: label.trim(),
           description,
           imageUrl: image || null,
-          parentId: parentId || null,
+          parentId: null,
           active,
           listable,
           metaTitle: metaTitle.trim() || null,
@@ -211,7 +226,7 @@ export default function AdminCategoriesPage() {
           });
           closeDrawer();
         })
-        .catch((err) => setFormError(err instanceof Error ? err.message : "Could not save category"));
+        .catch((err) => setFormError(err instanceof Error ? err.message : "That category did not save."));
       return;
     }
     if (drawerMode === "add") {
@@ -239,14 +254,12 @@ export default function AdminCategoriesPage() {
           setApiCategories((prev) => prev.filter((c) => c.key !== editing.key));
           closeDrawer();
         })
-        .catch((err) => setFormError(err instanceof Error ? err.message : "Could not delete category"));
+        .catch((err) => setFormError(err instanceof Error ? err.message : "That category did not delete."));
       return;
     }
     deleteCategory(editing.id);
     closeDrawer();
   }
-
-  const parentOptions = categorySource.filter((c) => c.key !== editing?.key);
 
   const columns: DataTableColumn<(typeof rows)[number]>[] = [
     {
@@ -259,22 +272,12 @@ export default function AdminCategoriesPage() {
               <Image src={row.image} alt="" fill className="object-cover" sizes="36px" unoptimized />
             ) : null}
           </span>
-          <div>
-            <div className="text-sm font-semibold tracking-[-0.02em]">{row.label}</div>
-            <div className="mt-0.5 ez-mono text-[10px] text-[#86868B]">{row.key}</div>
-            {row.parentKey ? (
-              <div className="mt-0.5 text-[10px] text-[#86868B]">↳ under {row.parentKey}</div>
-            ) : null}
-          </div>
+          {/* The slug line under every label and the Description column are
+              gone: the first is a web address printed as a subtitle, and 31 of
+              33 descriptions were "—". The web address is in the drawer, where
+              it can be copied. */}
+          <div className="text-sm font-semibold tracking-[-0.02em]">{row.label}</div>
         </div>
-      ),
-    },
-    {
-      key: "description",
-      header: "Description",
-      hideOnMobile: true,
-      render: (row) => (
-        <span className="text-xs text-[#6E6E73]">{row.description || "—"}</span>
       ),
     },
     {
@@ -286,13 +289,13 @@ export default function AdminCategoriesPage() {
     },
     {
       key: "status",
-      header: "Status",
+      header: "Customers can see it",
       render: (row) => (
         <StatusBadge
           kind="custom"
-          label={row.active ? "Active" : "Hidden"}
+          label={row.listable ? "Yes" : "No"}
           className={
-            row.active ? "bg-[#EAF6ED] text-[#2D6B3C]" : "bg-[#F0F0F2] text-[#6E6E73]"
+            row.listable ? "bg-[#EAF6ED] text-[#2D6B3C]" : "bg-[#F0F0F2] text-[#6E6E73]"
           }
         />
       ),
@@ -315,15 +318,16 @@ export default function AdminCategoriesPage() {
     <div>
       <AdminPageHeader
         title="Categories"
-        description="Organize catalog sections shown across products and filters."
+        description="The sections customers browse your shop by."
       />
 
+      <CatalogTabs active="categories" />
+
       <ListToolbar
-        resultLabel={`${rows.length} categories`}
         search={{
           value: query,
           onChange: setQuery,
-          placeholder: "Search categories…",
+          placeholder: "Search categories",
         }}
         actions={
           <button
@@ -339,11 +343,41 @@ export default function AdminCategoriesPage() {
 
       {listError ? <AdminNotice tone="error">{listError}</AdminNotice> : null}
 
+      {hiddenCount > 0 && !showAll && !query.trim() ? (
+        <p className="mb-2 text-[11px] text-[#86868B]">
+          {hiddenCount} categor{hiddenCount === 1 ? "y" : "ies"} came from the
+          Shopify import and are hidden from customers.{" "}
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="font-semibold text-[#1D1D1F] underline underline-offset-2"
+          >
+            Review them
+          </button>
+        </p>
+      ) : null}
+      {showAll ? (
+        <p className="mb-2 text-[11px] text-[#86868B]">
+          Showing every category, including the ones customers can&apos;t see.{" "}
+          <button
+            type="button"
+            onClick={() => setShowAll(false)}
+            className="font-semibold text-[#1D1D1F] underline underline-offset-2"
+          >
+            Show only the visible ones
+          </button>
+        </p>
+      ) : null}
+
       <DataTable
         columns={columns}
         rows={rows}
         rowKey={(row) => row.id}
-        emptyMessage="No categories yet."
+        emptyMessage={
+          query.trim()
+            ? `No category matches "${query.trim()}".`
+            : "No categories yet. Add the sections customers browse by — Games, Consoles, Accessories."
+        }
         emptyAction={
           <button
             type="button"
@@ -371,7 +405,7 @@ export default function AdminCategoriesPage() {
           {formError ? <AdminNotice tone="error">{formError}</AdminNotice> : null}
           <label className="flex flex-col gap-1.5">
             <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-              Label
+              Name
             </span>
             <input
               required
@@ -382,8 +416,10 @@ export default function AdminCategoriesPage() {
             />
           </label>
           <label className="flex flex-col gap-1.5">
+            {/* "Key / slug" is two developer words for one thing he can see in
+                the line below: the end of the web address customers land on. */}
             <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-              Key / slug
+              End of the web address
             </span>
             <input
               value={key}
@@ -404,57 +440,34 @@ export default function AdminCategoriesPage() {
             />
           </label>
           <ImageUploadField value={image} onChange={setImage} folder="categories" label="Image" />
-          <label className="flex flex-col gap-1.5">
-            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-              Parent category
-            </span>
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              className="h-10 rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-            >
-              <option value="">None (top level)</option>
-              {parentOptions.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input
-              type="checkbox"
-              checked={active}
-              onChange={(e) => setActive(e.target.checked)}
-              className="accent-[#1D1D1F]"
-            />
-            Active in filters
-          </label>
 
-          {/* The gate that decides whether customers can reach this category at
-              all. Off for everything the Shopify import produced — 7 "-copy"
-              duplicates, five platform facets of one 13-product parent, price
-              bands, and rows that are perfect subsets of Games — so the owner
-              turns on the ones they actually want. */}
+          {/* Two switches, one idea. "Active in filters" and "Give this category
+              a page" were separate, so 29 categories showed a green Active badge
+              while having no page a customer could ever reach — 29 rows of the
+              screen contradicting itself. One question now, and it writes both.
+              Parent category is gone with them: 0 of 33 used it. */}
           <div className="rounded-xl border border-black/[0.08] bg-[#F7F7F8] p-3">
             <label className="flex items-start gap-2 text-sm font-medium">
               <input
                 type="checkbox"
                 checked={listable}
-                onChange={(e) => setListable(e.target.checked)}
+                onChange={(e) => {
+                  setListable(e.target.checked);
+                  setActive(e.target.checked);
+                }}
                 className="mt-0.5 accent-[#1D1D1F]"
               />
               <span>
-                Give this category a page
+                Show this category to customers.
                 <span className="mt-0.5 block text-[11px] font-normal leading-snug text-[#6E6E73]">
                   {listable ? (
                     <>
-                      Customers can visit{" "}
+                      They can visit{" "}
                       <span className="ez-mono">yourstore.com{pagePath}</span> and it
                       can appear in the menu.
                     </>
                   ) : (
-                    "No page, no menu entry, nothing in Google. Nothing links to it."
+                    "No page, no menu entry, nothing in Google. Only you can see it."
                   )}
                 </span>
               </span>
@@ -470,7 +483,7 @@ export default function AdminCategoriesPage() {
             {listable ? (
               <label className="mt-3 block">
                 <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-                  Search title
+                  Heading Google shows
                 </span>
                 <input
                   value={metaTitle}
@@ -480,8 +493,8 @@ export default function AdminCategoriesPage() {
                   className="mt-1 h-10 w-full rounded-xl border border-black/[0.08] bg-white px-3 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
                 />
                 <span className="ez-mono mt-1 block text-[10px] text-[#A1A1A6]">
-                  {metaTitle.length}/70 — what Google shows. Leave blank to use the
-                  name.
+                  {metaTitle.length} of 70 letters. Leave it blank and Google uses the
+                  name above.
                 </span>
               </label>
             ) : null}
@@ -491,7 +504,7 @@ export default function AdminCategoriesPage() {
               type="submit"
               className="inline-flex h-9 items-center rounded-lg bg-[#1D1D1F] px-4 text-xs font-semibold text-white"
             >
-              {drawerMode === "add" ? "Create" : "Save"}
+              {drawerMode === "add" ? "Add this category" : "Save changes"}
             </button>
             <button
               type="button"
@@ -515,9 +528,10 @@ export default function AdminCategoriesPage() {
 
       <ConfirmDialog
         open={pendingDelete}
-        title="Delete category?"
-        description={`"${editing?.label ?? "This category"}" will be removed. This cannot be undone.`}
-        confirmLabel="Delete"
+        title={`Delete "${editing?.label ?? "this category"}"?`}
+        description="The section disappears from your shop and its page stops working. The products in it are not deleted — they stay in your list, just not under this heading."
+        confirmLabel="Delete this category"
+        cancelLabel="Keep it"
         danger
         onCancel={() => setPendingDelete(false)}
         onConfirm={handleDelete}

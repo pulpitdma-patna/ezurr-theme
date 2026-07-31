@@ -7,6 +7,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
 import { AdminNotice } from "@/components/admin/AdminNotice";
+import { CatalogTabs } from "@/components/admin/CatalogTabs";
 import { IconButton, PencilIcon, PlusIcon } from "@/components/admin/IconButton";
 import { ImageUploadField } from "@/components/admin/ImageUploadField";
 import { ListToolbar } from "@/components/admin/ListToolbar";
@@ -41,7 +42,6 @@ export default function AdminBrandsPage() {
   const [editing, setEditing] = useState<BrandRow | null>(null);
   const [name, setName] = useState("");
   const [image, setImage] = useState("");
-  const [parentId, setParentId] = useState("");
   const [active, setActive] = useState(true);
 
   useEffect(() => {
@@ -66,7 +66,7 @@ export default function AdminBrandsPage() {
       })
       .catch((err: Error) => {
         setApiBrands([]);
-        setListError(err.message || "Could not load brands");
+        setListError(err.message || "Could not load your brands.");
       });
   }, [apiOn]);
 
@@ -93,7 +93,6 @@ export default function AdminBrandsPage() {
     setEditing(null);
     setName("");
     setImage("");
-    setParentId("");
     setActive(true);
     setDrawerMode("add");
   }
@@ -102,7 +101,6 @@ export default function AdminBrandsPage() {
     setEditing(row);
     setName(row.name);
     setImage(row.image ?? "");
-    setParentId(row.parentId ?? "");
     setActive(row.active);
     setDrawerMode("edit");
   }
@@ -124,7 +122,7 @@ export default function AdminBrandsPage() {
           key: drawerMode === "edit" ? editing?.slug : undefined,
           name: name.trim(),
           imageUrl: image || null,
-          parentId: parentId || null,
+          parentId: null,
           active,
         })
         .then((saved) => {
@@ -148,7 +146,7 @@ export default function AdminBrandsPage() {
           });
           closeDrawer();
         })
-        .catch((err) => setFormError(err instanceof Error ? err.message : "Could not save brand"));
+        .catch((err) => setFormError(err instanceof Error ? err.message : "That brand did not save."));
       return;
     }
     if (drawerMode === "add") {
@@ -170,7 +168,9 @@ export default function AdminBrandsPage() {
     if (apiOn) {
       const slug = editing.slug;
       if (!slug) {
-        setFormError("This brand has no server slug and can't be deleted via the API.");
+        setFormError(
+          "This brand was never saved to your shop, so there is nothing to delete. Close this and it will be gone.",
+        );
         return;
       }
       void api
@@ -179,15 +179,13 @@ export default function AdminBrandsPage() {
           setApiBrands((prev) => prev.filter((b) => b.slug !== slug));
           closeDrawer();
         })
-        .catch((err) => setFormError(err instanceof Error ? err.message : "Could not delete brand"));
+        .catch((err) => setFormError(err instanceof Error ? err.message : "That brand did not delete."));
       return;
     }
     // Local mode deletes by id (local rows may not carry a slug).
     deleteBrand(editing.id);
     closeDrawer();
   }
-
-  const parentOptions = brandSource.filter((b) => b.slug !== editing?.slug);
 
   const columns: DataTableColumn<(typeof rows)[number]>[] = [
     {
@@ -201,12 +199,7 @@ export default function AdminBrandsPage() {
               <Image src={row.image} alt="" fill className="object-cover" sizes="36px" unoptimized />
             ) : null}
           </span>
-          <div>
-            <div className="text-sm font-semibold tracking-[-0.02em]">{row.name}</div>
-            {row.parentKey ? (
-              <div className="mt-0.5 text-[10px] text-[#86868B]">↳ under {row.parentKey}</div>
-            ) : null}
-          </div>
+          <div className="text-sm font-semibold tracking-[-0.02em]">{row.name}</div>
         </div>
       ),
     },
@@ -219,11 +212,13 @@ export default function AdminBrandsPage() {
     },
     {
       key: "status",
-      header: "Status",
+      // Same question and same two words as the Categories tab next door: he
+      // moves between them and should not have to learn a second vocabulary.
+      header: "Customers can see it",
       render: (row) => (
         <StatusBadge
           kind="custom"
-          label={row.active ? "Active" : "Hidden"}
+          label={row.active ? "Yes" : "No"}
           className={
             row.active ? "bg-[#EAF6ED] text-[#2D6B3C]" : "bg-[#F0F0F2] text-[#6E6E73]"
           }
@@ -248,15 +243,16 @@ export default function AdminBrandsPage() {
     <div>
       <AdminPageHeader
         title="Brands"
-        description="Manage publisher and platform brands used across the catalog."
+        description="The makers whose things you sell."
       />
 
+      <CatalogTabs active="brands" />
+
       <ListToolbar
-        resultLabel={`${rows.length} brands`}
         search={{
           value: query,
           onChange: setQuery,
-          placeholder: "Search brands…",
+          placeholder: "Search brands",
         }}
         actions={
           <button
@@ -276,7 +272,11 @@ export default function AdminBrandsPage() {
         columns={columns}
         rows={rows}
         rowKey={(row) => row.id}
-        emptyMessage="No brands yet."
+        emptyMessage={
+          query.trim()
+            ? `No brand matches "${query.trim()}".`
+            : "No brands yet. Add the makers whose things you sell — PlayStation, Nintendo — so customers can filter by them."
+        }
         emptyAction={
           <button
             type="button"
@@ -313,24 +313,10 @@ export default function AdminBrandsPage() {
               placeholder="PlayStation"
             />
           </label>
-          <ImageUploadField value={image} onChange={setImage} folder="brands" label="Logo / image" />
-          <label className="flex flex-col gap-1.5">
-            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-              Parent brand
-            </span>
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              className="h-10 rounded-xl border border-black/[0.08] bg-[#F7F7F8] px-3 text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-            >
-              <option value="">None (top level)</option>
-              {parentOptions.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ImageUploadField value={image} onChange={setImage} folder="brands" label="Logo" />
+          {/* "Parent brand" is gone. 0 of the 7 brands used it, it had no
+              storefront effect, and it was one more decision between the owner
+              and a saved brand. Same for the "↳ under …" line in the list. */}
           <label className="flex items-center gap-2 text-sm font-medium">
             <input
               type="checkbox"
@@ -338,14 +324,14 @@ export default function AdminBrandsPage() {
               onChange={(e) => setActive(e.target.checked)}
               className="accent-[#1D1D1F]"
             />
-            Active in filters
+            Show this brand to customers.
           </label>
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="submit"
               className="inline-flex h-9 items-center rounded-lg bg-[#1D1D1F] px-4 text-xs font-semibold text-white"
             >
-              {drawerMode === "add" ? "Create" : "Save"}
+              {drawerMode === "add" ? "Add this brand" : "Save changes"}
             </button>
             <button
               type="button"
@@ -369,9 +355,10 @@ export default function AdminBrandsPage() {
 
       <ConfirmDialog
         open={pendingDelete}
-        title="Delete brand?"
-        description={`"${editing?.name ?? "This brand"}" will be removed. This cannot be undone.`}
-        confirmLabel="Delete"
+        title={`Delete "${editing?.name ?? "this brand"}"?`}
+        description="It disappears from your list of brands, and customers can no longer narrow the shop down to it. You would have to add it again from scratch."
+        confirmLabel="Delete this brand"
+        cancelLabel="Keep it"
         danger
         onCancel={() => setPendingDelete(false)}
         onConfirm={handleDelete}

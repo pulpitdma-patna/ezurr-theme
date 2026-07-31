@@ -9,7 +9,7 @@ import { formatAdminDateTime } from "@/lib/adminFormat";
 import { api, isApiEnabled, type ApiActivityEntry } from "@/lib/apiClient";
 import { AdminSelect } from "@/components/admin/AdminSelect";
 import { DataTable, type DataTableColumn } from "@/components/admin/DataTable";
-import type { AdminActivityEntry } from "@/data/admin";
+import { activityAreaLabels, orderStatusLabels, type AdminActivityEntry } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { usePagedList, useSearchQueryParam } from "@/hooks/useListQuery";
 
@@ -43,7 +43,7 @@ const dateRangeOptions = [
   { value: "today", label: "Today" },
   { value: "7d", label: "Last 7 days" },
   { value: "30d", label: "Last 30 days" },
-  { value: "custom", label: "Custom range" },
+  { value: "custom", label: "Between two dates" },
 ];
 
 function inDateRange(timestamp: string, range: string, from: string, to: string): boolean {
@@ -98,8 +98,14 @@ function formatActionLabel(action: string) {
 }
 
 function formatValue(value: unknown): string {
-  if (value == null) return "—";
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+  if (value == null) return "nothing";
+  if (typeof value === "string") {
+    // A stored order status is the one raw value that turns up here often
+    // enough to matter: the line read "confirmed → packed" in the server's
+    // words, not the words on the button he had just pressed.
+    return orderStatusLabels[value as keyof typeof orderStatusLabels] ?? value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
     return String(value);
   }
   if (Array.isArray(value)) return value.map(formatValue).join(", ");
@@ -125,7 +131,7 @@ function summarizeDetail(detail?: string): { summary?: string; mono?: string } {
       };
     }
     if (parsed.status != null) {
-      return { summary: `Status → ${formatValue(parsed.status)}`, mono: detail };
+      return { summary: `Now ${formatValue(parsed.status).toLowerCase()}`, mono: detail };
     }
     const keys = Object.keys(parsed);
     if (keys.length === 1) {
@@ -148,7 +154,7 @@ function summarizeDetail(detail?: string): { summary?: string; mono?: string } {
   } catch {
     if (detail.includes("→")) return { summary: detail };
     if (detail.startsWith("{") || detail.startsWith("[")) {
-      return { summary: "Change recorded", mono: detail };
+      return { summary: "Something was changed", mono: detail };
     }
     return { summary: detail };
   }
@@ -221,7 +227,7 @@ function EntityTag({ entry }: { entry: AdminActivityEntry }) {
       onClick={(e) => e.stopPropagation()}
       className={`inline-flex max-w-full items-center gap-1.5 rounded-md border border-black/[0.06] px-2 py-1 ez-mono text-[10px] font-medium transition hover:border-black/[0.12] hover:shadow-[0_1px_2px_rgba(17,17,19,0.04)] ${tone}`}
     >
-      <span className="truncate capitalize">{entry.entityType}</span>
+      <span className="truncate">{activityAreaLabels[entry.entityType] ?? entry.entityType}</span>
       {entry.entityId ? (
         <>
           <span className="opacity-40" aria-hidden>
@@ -310,12 +316,12 @@ export default function AdminActivityPage() {
     },
     {
       key: "actor",
-      header: "Actor",
+      header: "Who",
       render: (row) => <ActorChip name={row.actor} />,
     },
     {
       key: "action",
-      header: "Action",
+      header: "What they did",
       render: (row) => {
         const { summary, mono } = summarizeDetail(row.detail);
         const tone = entityTones[row.entityType] ?? entityTones.system;
@@ -323,9 +329,9 @@ export default function AdminActivityPage() {
           <div className="min-w-0 max-w-xl">
             <div className="flex flex-wrap items-center gap-1.5">
               <span
-                className={`inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[9px] font-semibold capitalize tracking-[-0.01em] ${tone}`}
+                className={`inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[9px] font-semibold tracking-[-0.01em] ${tone}`}
               >
-                {row.entityType}
+                {activityAreaLabels[row.entityType] ?? row.entityType}
               </span>
               <span className="text-sm font-semibold tracking-[-0.02em] text-[#1D1D1F]">
                 {formatActionLabel(row.action)}
@@ -343,31 +349,34 @@ export default function AdminActivityPage() {
     },
     {
       key: "entity",
-      header: "Entity",
+      header: "Where",
       className: "text-right md:text-left",
       render: (row) => <EntityTag entry={row} />,
     },
   ];
 
-  const emptyMessage = hasActiveFilters ? "No events match your filters." : "No activity yet";
+  const emptyMessage = hasActiveFilters
+    ? "Nothing changed that matches what you asked for."
+    : "Nothing has changed yet.";
 
   const emptyDescription = hasActiveFilters
-    ? "Try a different search term, type, or date range."
-    : "Order updates, customer edits, and settings changes will appear here.";
+    ? "Try another name, another part of the shop, or a wider set of dates."
+    : "Every order you accept, product you edit and setting you change gets written down here, with who did it.";
 
   return (
     <div>
       {!apiOn ? (
         <AdminNotice tone="demo">
-          This activity log shows local demo events — enable the store API for the live audit trail.
+          Practice shop. These changes are made up — your real ones appear once your shop is
+          connected.
         </AdminNotice>
       ) : null}
       <AdminPageHeader
-        title="Activity"
-        description="Audit trail of admin mutations in this workspace."
+        title="What changed"
+        description="Who changed what in here, newest first."
         breadcrumbs={[
-          { label: "System", href: "/admin/settings" },
-          { label: "Activity" },
+          { label: "Setup", href: "/admin/settings" },
+          { label: "What changed" },
         ]}
       />
 
@@ -385,32 +394,34 @@ export default function AdminActivityPage() {
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search actions, entities…"
+                placeholder="Search by who, or what they touched"
                 className="h-9 w-full rounded-lg border border-black/[0.07] bg-white pl-8 pr-3 text-sm shadow-[0_1px_2px_rgba(17,17,19,0.03)] outline-none placeholder:text-[#AEAEB2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
               />
             </div>
             <span className="hidden shrink-0 ez-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B] sm:inline">
-              {loading ? "Loading…" : `${rows.length} events`}
+              {loading
+                ? "Loading…"
+                : `${rows.length} ${rows.length === 1 ? "change" : "changes"}`}
             </span>
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <AdminSelect
-              label="Type"
+              label="Part of the shop"
               value={entityType}
               onChange={setEntityType}
               options={[
-                { value: "all", label: "All" },
+                { value: "all", label: "Everything" },
                 { value: "order", label: "Orders" },
                 { value: "product", label: "Products" },
                 { value: "customer", label: "Customers" },
-                { value: "inventory", label: "Inventory" },
-                { value: "settings", label: "Settings" },
-                { value: "automation", label: "Automations" },
-                { value: "system", label: "System" },
+                { value: "inventory", label: activityAreaLabels.inventory },
+                { value: "settings", label: activityAreaLabels.settings },
+                { value: "automation", label: "Automatic messages" },
+                { value: "system", label: activityAreaLabels.system },
               ]}
             />
             <AdminSelect
-              label="Date"
+              label="When"
               value={dateRange}
               onChange={setDateRange}
               options={dateRangeOptions}

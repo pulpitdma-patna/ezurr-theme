@@ -202,7 +202,7 @@ export function StockEditor({
                   void save();
                 }
               }}
-              aria-label="New stock quantity"
+              aria-label="How many you have"
               className="h-8 w-full rounded-md border border-black/[0.08] bg-[#F7F7F8] px-2 text-center text-sm outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
             />
             <button
@@ -215,7 +215,7 @@ export function StockEditor({
             </button>
           </div>
 
-          <p className="mt-1.5 text-[10px] text-[#86868B]">Sets the on-hand quantity.</p>
+          <p className="mt-1.5 text-[10px] text-[#86868B]">This becomes how many you have.</p>
 
           {error ? (
             <p role="alert" className="mt-2 rounded-md bg-[#FDECEC] px-2 py-1.5 text-[11px] text-[#B42318]">

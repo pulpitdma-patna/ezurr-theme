@@ -1,6 +1,7 @@
 "use client";
 
 import type { ApiDocumentParty } from "@/lib/apiClient";
+import { formatAdminDate } from "@/lib/adminFormat";
 
 export const sheetClass =
   "ez-doc rounded-xl border border-black/[0.08] bg-white p-6 text-[#1D1D1F] shadow-[0_1px_2px_rgba(17,17,19,0.03)] sm:p-8";
@@ -8,15 +9,14 @@ export const sheetClass =
 export const metaLabelClass =
   "ez-mono text-[8px] uppercase tracking-[0.14em] text-[#86868B]";
 
+/**
+ * Every date on a printed sheet, in the one admin-wide shape and pinned to IST.
+ * It used to call `toLocaleDateString` with no time zone, so the date on a GST
+ * invoice was whatever the machine printing it believed — a bill dated a day
+ * out is the kind of thing an accountant sends straight back.
+ */
 export function formatDocDate(value: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatAdminDate(value, "Not recorded");
 }
 
 /** A seller/buyer address panel. `party.state` is blank when we could not resolve it. */
@@ -37,7 +37,7 @@ export function PartyBlock({
     <div className="ez-doc-keep min-w-0">
       <div className={metaLabelClass}>{label}</div>
       <div className="mt-1 text-[13px] font-semibold tracking-[-0.01em]">
-        {party.name || "—"}
+        {party.name || "Name not set"}
       </div>
       <div className="mt-0.5 space-y-0.5 text-[11px] leading-relaxed text-[#424245]">
         {party.addressLines.map((line) => (

@@ -25,17 +25,26 @@ export function PackingSlipDocument({ doc }: { doc: ApiPackingSlipDocument }) {
         meta={[
           { label: "Order", value: order.publicId },
           { label: "Placed", value: formatDocDate(order.placedAt) },
-          { label: "Units", value: String(order.unitCount ?? 0) },
+          { label: "Pieces in total", value: String(order.unitCount ?? 0) },
         ]}
       />
 
       <div className="mt-5 grid gap-6 sm:grid-cols-2">
         <PartyBlock label="Ship to" party={doc.shipTo} />
         <div className="ez-doc-keep grid grid-cols-2 gap-4 sm:justify-items-end">
-          <Detail label="Dispatch" value={doc.seller.name || "—"} />
-          <Detail label="Carrier" value={order.carrierName || "Not assigned"} />
-          <Detail label="AWB" value={order.awb || order.tracking || "—"} />
-          <Detail label="Lines" value={String(order.lineCount ?? doc.items.length)} />
+          {/* "Dispatch / Carrier / AWB / Lines" is warehouse-and-courier
+              shorthand. The person holding this sheet is packing a box in a
+              shop, and half the time that is the owner himself. */}
+          <Detail label="Sent by" value={doc.seller.name || "Not set"} />
+          <Detail label="Courier" value={order.carrierName || "Not booked yet"} />
+          <Detail
+            label="Courier number"
+            value={order.awb || order.tracking || "Not booked yet"}
+          />
+          <Detail
+            label="Different things"
+            value={String(order.lineCount ?? doc.items.length)}
+          />
         </div>
       </div>
 
@@ -45,17 +54,17 @@ export function PackingSlipDocument({ doc }: { doc: ApiPackingSlipDocument }) {
             <tr className="border-y border-black/[0.08] text-[#6E6E73]">
               <th className="py-2 pr-2 font-medium">#</th>
               <th className="py-2 pr-2 font-medium">Item</th>
-              <th className="py-2 pr-2 font-medium">SKU</th>
-              <th className="py-2 pr-2 text-right font-medium">Qty</th>
-              <th className="py-2 text-right font-medium">Picked</th>
+              <th className="py-2 pr-2 font-medium">Code on the box</th>
+              <th className="py-2 pr-2 text-right font-medium">How many</th>
+              <th className="py-2 text-right font-medium">Packed</th>
             </tr>
           </thead>
           <tbody>
             {doc.items.map((item, index) => (
               <tr key={`${item.sku ?? "line"}-${index}`} className="border-b border-black/[0.05]">
                 <td className="py-2.5 pr-2 align-top text-[#86868B]">{index + 1}</td>
-                <td className="py-2.5 pr-2 align-top font-medium">{item.title ?? "—"}</td>
-                <td className="ez-mono py-2.5 pr-2 align-top text-[10px]">{item.sku ?? "—"}</td>
+                <td className="py-2.5 pr-2 align-top font-medium">{item.title ?? "Unnamed item"}</td>
+                <td className="ez-mono py-2.5 pr-2 align-top text-[10px]">{item.sku ?? "none"}</td>
                 <td className="py-2.5 pr-2 text-right align-top text-[13px] font-semibold">
                   {item.qty}
                 </td>
@@ -64,7 +73,7 @@ export function PackingSlipDocument({ doc }: { doc: ApiPackingSlipDocument }) {
                     className="inline-block h-4 w-4 border border-black/30 align-middle"
                     aria-hidden
                   />
-                  <span className="sr-only">Tick when picked</span>
+                  <span className="sr-only">Tick when it is in the box</span>
                 </td>
               </tr>
             ))}

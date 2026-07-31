@@ -1,499 +1,486 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminNotice } from "@/components/admin/AdminNotice";
-import { AdminSelect } from "@/components/admin/AdminSelect";
-import { CheckoutRuleBuilder } from "@/components/admin/CheckoutRuleBuilder";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import {
+  blankCheckoutRule,
+  CheckoutRuleBuilder,
+  ExampleOrderPicker,
+  WhatThisDoes,
+} from "@/components/admin/CheckoutRuleBuilder";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
-import {
-  IconButton,
-  PauseIcon,
-  PencilIcon,
-  PlayIcon,
-  TrashIcon,
-} from "@/components/admin/IconButton";
+import { RuleSentence } from "@/components/admin/RuleSentence";
 import { useAdminStore } from "@/hooks/useAdminStore";
-import { useAutoBanner } from "@/hooks/useAutoBanner";
-import {
-  deleteCheckoutRule,
-  toggleCheckoutRule,
-  upsertCheckoutRule,
-} from "@/lib/adminStore";
-import { api, isApiEnabled } from "@/lib/apiClient";
-import type { AdminCheckoutRule } from "@/lib/checkoutRules";
-import { mockExperimentStats, resolveCheckoutPolicy } from "@/lib/checkoutRules";
 import { adminErrorMessage } from "@/lib/adminError";
-import { formatInr } from "@/data/admin";
+import { deleteCheckoutRule, upsertCheckoutRule } from "@/lib/adminStore";
+import { api, isApiEnabled, type ApiCheckoutRule } from "@/lib/apiClient";
+import {
+  alreadyHasRule,
+  buildCheckoutSentence,
+  checkoutSentenceText,
+  COMMON_CHECKOUT_RULES,
+  DEFAULT_EXAMPLE_ORDER,
+  deadConditions,
+  type AdminCheckoutRule,
+  type CommonCheckoutRule,
+  type ExampleOrder,
+} from "@/lib/checkoutRules";
 
-const actionLabels: Record<string, string> = {
-  allow_payment_methods: "Allow methods",
-  hide_payment_method: "Hide method",
-  set_prepaid_discount_pct: "Prepaid %",
-  set_cod_max: "COD max",
-  set_shipping: "Shipping",
-  require_field: "Require field",
-  hide_field: "Hide field",
-  set_banner: "Banner",
-  block_checkout: "Block",
-  allow_gateways: "Gateways",
-  hide_gateway: "Hide gateway",
-  prefer_gateway: "Prefer gateway",
-  set_tax_rate: "Tax rate",
-  set_tax_inclusive_message: "Tax copy",
-  exempt_tax: "Tax exempt",
-  set_carrier: "Carrier",
-  set_rate_table: "Rate table",
-  hide_carrier: "Hide carrier",
-  set_deposit_pct: "Deposit %",
-  enable_pay_later: "Pay later",
-  split_payment: "Split pay",
-};
+/**
+ * Checkout rules.
+ *
+ * The owner's words: "Checkout rules in the admin looks complicated."
+ *
+ * What he was looking at: five metric pills across the top — one of them
+ * "Sample methods: PREPAID · COD" — a search box, a state filter, two separate
+ * links to a Templates screen, and then a row per rule reading
+ *
+ *     Enforce COD maximum   P10   On
+ *     Hide COD when cart exceeds the configured COD limit (via set_cod_max).
+ *     Always · COD max
+ *
+ * Three lines, none of which is what happens. The name was typed by whoever
+ * made the rule; the grey line was a description that nothing keeps true; and
+ * "Always · COD max" is our own vocabulary. Thirteen rows of that, including
+ * one that could never run and two halves of a split test whose only number was
+ * invented.
+ *
+ * Now: one order at the top that he chooses, and under it every rule as one
+ * sentence with the rupees it moves on that order. Rules that are waiting say
+ * what they are waiting for. Rules that can never run say so. And the starting
+ * points that used to be a screen of their own are the grey half of the same
+ * list, one button each.
+ */
 
-const primaryBtnClass =
-  "inline-flex h-9 items-center rounded-xl bg-[#1D1D1F] px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#2C2C2E] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
-
-const secondaryBtnClass =
-  "inline-flex h-9 items-center rounded-xl border border-black/[0.08] bg-white px-3.5 text-xs font-semibold text-[#1D1D1F] shadow-[0_1px_2px_rgba(17,17,19,0.03)] transition hover:bg-[#FAFAFB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
-
-const compactSelectClass = "h-9 rounded-lg shadow-none";
-
-function blankRule(): AdminCheckoutRule {
-  const now = new Date().toISOString();
+function apiToRule(rule: ApiCheckoutRule): AdminCheckoutRule {
   return {
-    id: "",
-    name: "",
-    description: "",
-    enabled: true,
-    priority: 100,
-    conditions: [],
-    actions: [{ type: "set_banner", value: "" }],
-    createdAt: now,
-    updatedAt: now,
+    id: rule.id,
+    name: rule.name,
+    description: rule.description ?? "",
+    enabled: rule.enabled,
+    priority: rule.priority,
+    conditions: (rule.conditions ?? []) as AdminCheckoutRule["conditions"],
+    actions: (rule.actions ?? []) as AdminCheckoutRule["actions"],
+    experimentId: rule.experimentId ?? undefined,
+    variant: rule.variant ?? undefined,
+    trafficPct: rule.trafficPct ?? undefined,
+    createdAt: "",
+    updatedAt: "",
   };
 }
 
+function ruleToApi(rule: AdminCheckoutRule): ApiCheckoutRule {
+  return {
+    id: rule.id,
+    name: rule.name || checkoutSentenceText(rule).slice(0, 160),
+    description: "",
+    enabled: rule.enabled,
+    priority: rule.priority,
+    conditions: rule.conditions,
+    actions: rule.actions,
+    experimentId: rule.experimentId ?? null,
+    variant: rule.variant ?? null,
+    trafficPct: rule.trafficPct ?? null,
+  };
+}
+
+/**
+ * An id for a rule saved in the practice shop, where there is no server to mint
+ * one. Lives outside the component: the clock is not something a render may
+ * read.
+ */
+function practiceId(): string {
+  return `cr-${Date.now()}`;
+}
+
+function ruleFromCommon(common: CommonCheckoutRule, priority: number): AdminCheckoutRule {
+  const now = new Date().toISOString();
+  const rule: AdminCheckoutRule = {
+    ...blankCheckoutRule(),
+    priority,
+    conditions: structuredClone(common.conditions),
+    actions: structuredClone(common.actions),
+    createdAt: now,
+    updatedAt: now,
+  };
+  return { ...rule, name: checkoutSentenceText(rule).slice(0, 160) };
+}
+
 export default function AdminCheckoutRulesPage() {
-  const { checkoutRules, settings } = useAdminStore();
-  const [query, setQuery] = useState("");
-  const [enabledFilter, setEnabledFilter] = useState<"all" | "on" | "off">("all");
+  const apiOn = isApiEnabled();
+  const store = useAdminStore();
+
+  const [remoteRules, setRemoteRules] = useState<AdminCheckoutRule[]>([]);
   const [editing, setEditing] = useState<AdminCheckoutRule | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [, setToast] = useAutoBanner(2600);
-  const [apiSync, setApiSync] = useState<"off" | "ok" | "err">("off");
+  const [deleting, setDeleting] = useState<AdminCheckoutRule | null>(null);
+  const [notice, setNotice] = useState<{ tone: "info" | "error"; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [drawerError, setDrawerError] = useState<string | null>(null);
+  const [order, setOrder] = useState<ExampleOrder>(DEFAULT_EXAMPLE_ORDER);
+
+  const load = useCallback(async () => {
+    if (!apiOn) return;
+    try {
+      const res = await api.checkoutRules();
+      setRemoteRules((res.data ?? []).map(apiToRule));
+    } catch (e) {
+      // A failure to read stays on the page rather than becoming a toast. An
+      // empty list that failed to load looks exactly like a shop with no rules,
+      // and he would go and write the ones he already has.
+      setNotice({
+        tone: "error",
+        text: adminErrorMessage(e, "Could not load your checkout rules."),
+      });
+    }
+  }, [apiOn]);
 
   useEffect(() => {
-    if (!isApiEnabled()) return;
-    void api
-      .checkoutRules()
-      .then((res) => {
-        for (const rule of res.data ?? []) {
-          upsertCheckoutRule(rule as AdminCheckoutRule);
-        }
-        setApiSync("ok");
-      })
-      .catch(() => setApiSync("err"));
-  }, []);
+    void load();
+  }, [load]);
 
-  const rules = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return [...checkoutRules]
-      .filter((rule) => {
-        if (enabledFilter === "on" && !rule.enabled) return false;
-        if (enabledFilter === "off" && rule.enabled) return false;
-        return (
-          !needle ||
-          rule.name.toLowerCase().includes(needle) ||
-          rule.description.toLowerCase().includes(needle)
-        );
-      })
-      .sort((a, b) => a.priority - b.priority);
-  }, [checkoutRules, enabledFilter, query]);
+  const rules = useMemo(
+    () =>
+      [...(apiOn ? remoteRules : store.checkoutRules)].sort((a, b) => a.priority - b.priority),
+    [apiOn, remoteRules, store.checkoutRules],
+  );
 
-  const enabledCount = checkoutRules.filter((r) => r.enabled).length;
-  const pausedCount = checkoutRules.length - enabledCount;
-  const samplePolicy = resolveCheckoutPolicy(settings, checkoutRules, {
-    subtotal: 5999,
-    pincode: "560001",
-    fulfillmentType: "preorder",
-  });
-  const sampleMethods =
-    samplePolicy.methods.join(" · ").toUpperCase() || "—";
-  const hasActiveFilters =
-    query.trim().length > 0 || enabledFilter !== "all";
+  const settings = store.settings;
+  const working = rules.filter((rule) => rule.enabled);
+  const switchedOff = rules.filter((rule) => !rule.enabled);
+  const notSetUp = COMMON_CHECKOUT_RULES.filter((common) => !alreadyHasRule(common, rules));
+  const offCount = switchedOff.length + notSetUp.length;
+
+  async function write(action: () => Promise<unknown> | unknown, done: string) {
+    setNotice(null);
+    try {
+      await action();
+      await load();
+      setNotice({ tone: "info", text: done });
+    } catch (e) {
+      setNotice({
+        tone: "error",
+        text: adminErrorMessage(e, "That did not save. Nothing has changed."),
+      });
+    }
+  }
+
+  /** One place that writes a rule, so practice mode and the real shop agree. */
+  async function persist(rule: AdminCheckoutRule) {
+    if (!apiOn) {
+      upsertCheckoutRule({ ...rule, id: rule.id || practiceId() });
+      return;
+    }
+    await api.upsertCheckoutRule(ruleToApi(rule));
+  }
+
+  async function setEnabled(rule: AdminCheckoutRule, enabled: boolean) {
+    await write(
+      () => persist({ ...rule, enabled }),
+      enabled
+        ? "Switched on. It applies to the next order."
+        : "Switched off. It changes nothing from now on.",
+    );
+  }
+
+  async function turnOnCommon(common: CommonCheckoutRule) {
+    const priority = (rules[rules.length - 1]?.priority ?? 0) + 10;
+    await write(
+      () => persist(ruleFromCommon(common, priority)),
+      "Switched on. It applies to the next order.",
+    );
+  }
+
+  /**
+   * Move a rule up or down the list.
+   *
+   * This is what "Priority (lower runs first)" used to be: a number field in
+   * the editor. The order matters — when two rules both set the delivery
+   * charge, the lower one wins — but that is a fact about this list, not a
+   * number to type into a form.
+   */
+  async function move(rule: AdminCheckoutRule, direction: -1 | 1) {
+    // Neighbour within the list he can SEE. Swapping with a switched-off rule
+    // sitting invisibly between two working ones would move nothing on screen,
+    // and he would press the button again and again.
+    const index = working.findIndex((r) => r.id === rule.id);
+    const neighbour = working[index + direction];
+    if (!neighbour) return;
+    await write(async () => {
+      if (rule.priority === neighbour.priority) {
+        // Two rules that were never ordered against each other. Put this one
+        // decisively on the right side rather than swapping two equal numbers.
+        await persist({ ...rule, priority: neighbour.priority + direction });
+        return;
+      }
+      await persist({ ...rule, priority: neighbour.priority });
+      await persist({ ...neighbour, priority: rule.priority });
+    }, "Moved. Where two rules decide the same thing, the lower one wins.");
+  }
 
   async function saveRule(rule: AdminCheckoutRule) {
-    const isNew = !rule.id;
-    if (isApiEnabled()) {
-      try {
-        const saved = await api.upsertCheckoutRule(rule);
-        upsertCheckoutRule(saved as AdminCheckoutRule);
-        setApiSync("ok");
-        setEditing(null);
-        setToast(isNew ? "Rule created" : "Rule updated");
-      } catch (err) {
-        setApiSync("err");
-        setToast(adminErrorMessage(err, "Could not save rule"));
-      }
-      return;
+    setSaving(true);
+    setDrawerError(null);
+    try {
+      await persist(rule);
+      setEditing(null);
+      await load();
+      setNotice({ tone: "info", text: "Saved. It applies to the next order." });
+    } catch (e) {
+      // The drawer stays open with his sentence in it.
+      setDrawerError(adminErrorMessage(e, "That did not save. Nothing has changed."));
+    } finally {
+      setSaving(false);
     }
-    upsertCheckoutRule({ ...rule, id: rule.id || `cr-${Date.now()}` });
-    setEditing(null);
-    setToast(isNew ? "Rule created" : "Rule updated");
-  }
-
-  async function toggleRule(rule: AdminCheckoutRule) {
-    const next = !rule.enabled;
-    toggleCheckoutRule(rule.id, next);
-    if (isApiEnabled()) {
-      try {
-        const saved = await api.upsertCheckoutRule({ ...rule, enabled: next });
-        upsertCheckoutRule(saved as AdminCheckoutRule);
-        setApiSync("ok");
-        setToast(next ? "Enabled" : "Paused");
-      } catch (err) {
-        toggleCheckoutRule(rule.id, rule.enabled);
-        setApiSync("err");
-        setToast(adminErrorMessage(err, "Could not update rule"));
-      }
-      return;
-    }
-    setToast(next ? "Enabled" : "Paused");
-  }
-
-  async function deleteRule(id: string) {
-    const target = checkoutRules.find((r) => r.id === id);
-    deleteCheckoutRule(id);
-    setDeleteId(null);
-    if (isApiEnabled()) {
-      try {
-        await api.deleteCheckoutRule(id);
-        setApiSync("ok");
-        setToast("Rule deleted");
-      } catch (err) {
-        if (target) upsertCheckoutRule(target);
-        setApiSync("err");
-        setToast(adminErrorMessage(err, "Could not delete rule"));
-      }
-      return;
-    }
-    setToast("Rule deleted");
-  }
-
-  function clearFilters() {
-    setQuery("");
-    setEnabledFilter("all");
   }
 
   return (
     <div className="space-y-4">
       <AdminPageHeader
         title="Checkout rules"
-        description="Control payment methods, COD limits, shipping labels, and checkout messaging from cart context."
-        breadcrumbs={[
-          { label: "Online store", href: "/admin/cms" },
-          { label: "Checkout rules" },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {apiSync === "ok" ? (
-              <span className="inline-flex items-center gap-1.5 rounded-lg border border-black/[0.06] bg-[#FAFAFB] px-2.5 py-1 ez-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#2D6B3C]" aria-hidden />
-                Laravel synced
-              </span>
-            ) : null}
-            <Link href="/admin/checkout-rules/templates" className={secondaryBtnClass}>
-              Templates
-            </Link>
-            <button
-              type="button"
-              onClick={() => setEditing(blankRule())}
-              className={primaryBtnClass}
-            >
-              New rule
-            </button>
-          </div>
-        }
+        description="What a customer is offered, and charged, when they pay."
+        breadcrumbs={[{ label: "Online store", href: "/admin/cms" }, { label: "Checkout rules" }]}
       />
 
-      {apiSync === "err" ? (
-        <AdminNotice tone="error">
-          Couldn&apos;t sync rules from the server — showing local data. Changes may not persist.
+      {!apiOn ? (
+        <AdminNotice tone="demo">
+          Practice shop. These rules only change the practice checkout — no real customer sees
+          them.
         </AdminNotice>
       ) : null}
+      {notice ? (
+        <AdminNotice tone={notice.tone === "error" ? "error" : "info"}>{notice.text}</AdminNotice>
+      ) : null}
 
-      <section className="overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
-        <div className="border-b border-black/[0.05] bg-[#FAFAFB]">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 sm:px-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <MetricTile label="Rules" value={String(checkoutRules.length)} accent />
-              <MetricTile label="Enabled" value={String(enabledCount)} />
-              <MetricTile label="Paused" value={String(pausedCount)} />
-              <MetricTile label="Sample methods" value={sampleMethods} wide />
-              <MetricTile label="COD max" value={formatInr(samplePolicy.codMax)} />
-            </div>
-            <Link
-              href="/admin/checkout-rules/templates"
-              className="ez-mono text-[9px] font-medium uppercase tracking-[0.1em] text-[#6E6E73] transition hover:text-[#1D1D1F]"
-            >
-              Templates →
-            </Link>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2.5 border-b border-black/[0.05] bg-[#FAFAFB] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <div className="relative min-w-0 flex-1 lg:max-w-sm">
-              <span
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#AEAEB2]"
-                aria-hidden
-              >
-                <SearchGlyph />
-              </span>
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search rules…"
-                className="h-9 w-full rounded-lg border border-black/[0.07] bg-white pl-8 pr-3 text-sm shadow-[0_1px_2px_rgba(17,17,19,0.03)] outline-none placeholder:text-[#AEAEB2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-              />
-            </div>
-            <span className="hidden shrink-0 ez-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B] sm:inline">
-              {rules.length} rules
-            </span>
-          </div>
-
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <AdminSelect
-              label="State"
-              value={enabledFilter}
-              onChange={(value) => setEnabledFilter(value as "all" | "on" | "off")}
-              options={[
-                { value: "all", label: "All" },
-                { value: "on", label: "Enabled" },
-                { value: "off", label: "Paused" },
-              ]}
-              className={compactSelectClass}
-            />
-          </div>
-        </div>
-
-        <div className="p-3.5 sm:p-4">
-          {rules.length === 0 ? (
-            <AdminEmptyState
-              title={hasActiveFilters ? "No rules match" : "No checkout rules"}
-              description={
-                hasActiveFilters
-                  ? "Try another state or search — or start from a template."
-                  : "Create a rule or start from a template."
-              }
-              action={
-                hasActiveFilters ? (
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={clearFilters}
-                      className="h-9 rounded-xl border border-black/[0.1] bg-[#F7F7F8] px-3.5 text-xs font-semibold"
-                    >
-                      Clear filters
-                    </button>
-                    <Link href="/admin/checkout-rules/templates" className={primaryBtnClass}>
-                      Browse templates
-                    </Link>
-                  </div>
-                ) : (
-                  <Link href="/admin/checkout-rules/templates" className={primaryBtnClass}>
-                    Browse templates
-                  </Link>
-                )
-              }
-            />
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-black/[0.05]">
-              <ul className="divide-y divide-black/[0.05]">
-                {rules.map((rule) => (
-                  <RuleRow
-                    key={rule.id}
-                    rule={rule}
-                    onEdit={() => setEditing(rule)}
-                    onToggle={() => void toggleRule(rule)}
-                    onDelete={() => setDeleteId(rule.id)}
-                  />
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+      <section className="rounded-xl border border-black/[0.06] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
+        <ExampleOrderPicker order={order} onChange={setOrder} />
+        <p className="mt-1.5 text-[11px] text-[#86868B]">
+          Every rule below says what it would do to this order. Change the order to check another
+          one.
+        </p>
       </section>
 
-      <p className="text-sm text-[#6E6E73]">
-        Defaults live in{" "}
-        <Link href="/admin/settings#checkout" className="font-semibold text-[#1D1D1F] underline">
+      <section>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h2 className="text-[13px] font-semibold tracking-[-0.01em] text-[#1D1D1F]">
+            Working now · {working.length}
+          </h2>
+          <button
+            type="button"
+            onClick={() => {
+              setDrawerError(null);
+              setEditing(blankCheckoutRule());
+            }}
+            className="h-8 rounded-lg border border-black/[0.1] bg-white px-3 text-[11px] font-semibold text-[#1D1D1F] transition hover:bg-[#F7F7F8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+          >
+            Write your own
+          </button>
+        </div>
+
+        {working.length === 0 ? (
+          <p className="rounded-xl border border-black/[0.06] bg-white px-3.5 py-4 text-[13px] text-[#6E6E73]">
+            Nothing is changing your checkout. Customers get the delivery, payment and GST
+            settings from{" "}
+            <Link href="/admin/settings#checkout" className="font-semibold text-[#1D1D1F] underline">
+              Settings → Checkout
+            </Link>
+            , exactly as they are.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {working.map((rule, index) => {
+              const dead = deadConditions(rule);
+              return (
+                <li
+                  key={rule.id}
+                  className="rounded-xl border border-black/[0.06] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(17,17,19,0.03)]"
+                >
+                  <RuleSentence slots={buildCheckoutSentence(rule)} />
+
+                  {dead.length > 0 ? (
+                    <p className="mt-1.5 rounded-lg border border-[#F4D8A8] bg-[#FEF6E7] px-2.5 py-1.5 text-[11px] font-medium text-[#8A5A00]">
+                      This one can never run — it waits for {dead.map((c) => c.field).join(", ")},
+                      which the checkout no longer records.
+                    </p>
+                  ) : (
+                    <div className="mt-1.5">
+                      <WhatThisDoes
+                        compact
+                        settings={settings}
+                        allRules={rules}
+                        rule={rule}
+                        order={order}
+                      />
+                    </div>
+                  )}
+
+                  <div className="mt-2 flex flex-wrap items-center justify-end gap-1 border-t border-black/[0.05] pt-2">
+                    {index > 0 ? (
+                      <RowAction onClick={() => void move(rule, -1)}>Move up</RowAction>
+                    ) : null}
+                    {index < working.length - 1 ? (
+                      <RowAction onClick={() => void move(rule, 1)}>Move down</RowAction>
+                    ) : null}
+                    <RowAction
+                      onClick={() => {
+                        setDrawerError(null);
+                        setEditing(rule);
+                      }}
+                    >
+                      Change it
+                    </RowAction>
+                    <RowAction onClick={() => void setEnabled(rule, false)}>Switch off</RowAction>
+                    <RowAction danger onClick={() => setDeleting(rule)}>
+                      Delete
+                    </RowAction>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {working.length > 1 ? (
+          <p className="mt-2 text-[11px] text-[#86868B]">
+            They run top to bottom. Where two of them decide the same thing, the lower one wins.
+          </p>
+        ) : null}
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-[13px] font-semibold tracking-[-0.01em] text-[#1D1D1F]">
+          Not turned on · {offCount}
+        </h2>
+        {offCount === 0 ? (
+          <p className="rounded-xl border border-black/[0.06] bg-white px-3.5 py-4 text-[13px] text-[#6E6E73]">
+            Everything worth switching on is on.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {switchedOff.map((rule) => (
+              <li
+                key={rule.id}
+                className="flex flex-col gap-2 rounded-xl border border-black/[0.05] bg-[#FAFAFB] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <RuleSentence muted slots={buildCheckoutSentence(rule)} />
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => void setEnabled(rule, true)}
+                    className={turnOnBtnClass}
+                  >
+                    Turn it on
+                  </button>
+                  <RowAction danger onClick={() => setDeleting(rule)}>
+                    Delete
+                  </RowAction>
+                </div>
+              </li>
+            ))}
+
+            {/* The old Templates screen, folded back in. A starting point is
+                just a sentence he has not turned on yet. */}
+            {notSetUp.map((common) => {
+              const asRule = ruleFromCommon(common, 100);
+              return (
+                <li
+                  key={common.id}
+                  className="flex flex-col gap-2 rounded-xl border border-black/[0.05] bg-[#FAFAFB] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <RuleSentence muted slots={buildCheckoutSentence(asRule)} />
+                    <p className="mt-1 text-[11px] text-[#AEAEB2]">{common.why}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void turnOnCommon(common)}
+                    className={turnOnBtnClass}
+                  >
+                    Turn it on
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <p className="text-[11px] text-[#86868B]">
+        The starting point for every order — your delivery charge, whether you take cash on
+        delivery, and your GST — lives in{" "}
+        <Link href="/admin/settings#checkout" className="font-semibold text-[#424245] underline">
           Settings → Checkout
         </Link>
-        . Rules layer on top at runtime.
+        . The rules above change it for the orders they name.
       </p>
 
       {editing ? (
         <CheckoutRuleBuilder
+          key={editing.id || "new"}
           rule={editing}
+          settings={settings}
+          otherRules={rules}
+          order={order}
+          onOrderChange={setOrder}
+          saving={saving}
+          error={drawerError}
           onClose={() => setEditing(null)}
-          onSave={saveRule}
+          onSave={(rule) => void saveRule(rule)}
         />
       ) : null}
 
       <ConfirmDialog
-        open={Boolean(deleteId)}
-        title="Delete checkout rule?"
-        description="This cannot be undone. The storefront will stop applying this rule immediately."
-        confirmLabel="Delete"
+        open={deleting !== null}
+        title="Delete this checkout rule?"
+        description={
+          deleting
+            ? `“${checkoutSentenceText(deleting)}” stops applying and cannot be brought back — you would set it up again from the list. Orders already placed are not affected. If you only want it to stop for now, switch it off instead.`
+            : ""
+        }
+        confirmLabel="Delete it"
+        cancelLabel="Keep it"
         danger
-        onCancel={() => setDeleteId(null)}
+        onCancel={() => setDeleting(null)}
         onConfirm={() => {
-          if (deleteId) void deleteRule(deleteId);
-          else setDeleteId(null);
+          const rule = deleting;
+          setDeleting(null);
+          if (!rule) return;
+          void write(async () => {
+            if (apiOn) await api.deleteCheckoutRule(rule.id);
+            else deleteCheckoutRule(rule.id);
+          }, "Deleted. It will not change another order.");
         }}
       />
     </div>
   );
 }
 
-function RuleRow({
-  rule,
-  onEdit,
-  onToggle,
-  onDelete,
+const turnOnBtnClass =
+  "h-8 shrink-0 rounded-lg bg-[#1D1D1F] px-3 text-[11px] font-semibold text-white transition hover:bg-[#2C2C2E] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
+
+function RowAction({
+  children,
+  onClick,
+  danger,
 }: {
-  rule: AdminCheckoutRule;
-  onEdit: () => void;
-  onToggle: () => void;
-  onDelete: () => void;
+  children: React.ReactNode;
+  onClick: () => void;
+  danger?: boolean;
 }) {
-  const conditionText =
-    rule.conditionMode === "script"
-      ? "Script condition"
-      : rule.conditions.length === 0
-        ? "Always"
-        : `${rule.conditions.length} condition${rule.conditions.length === 1 ? "" : "s"}`;
-  const actionText = rule.actions
-    .map((a) => actionLabels[a.type] ?? a.type)
-    .join(", ");
-
   return (
-    <li className="group flex flex-col gap-3 px-3.5 py-3.5 transition hover:bg-[#FAFAFB] sm:flex-row sm:items-center sm:justify-between sm:px-4">
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="truncate text-[13px] font-semibold tracking-[-0.02em] text-[#1D1D1F] transition hover:text-[#424245]"
-          >
-            {rule.name}
-          </button>
-          <span className="ez-mono rounded-md bg-[#F0F0F2] px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.1em] text-[#86868B]">
-            P{rule.priority}
-          </span>
-          <StatusPill enabled={rule.enabled} />
-          {rule.experimentId ? (
-            <span className="rounded-md bg-[#EEF0FF] px-1.5 py-0.5 text-[10px] font-semibold text-[#3B4CCA]">
-              A/B · {rule.variant ?? "control"}
-            </span>
-          ) : null}
-          {rule.conditionMode === "script" ? (
-            <span className="rounded-md bg-[#FFF4E5] px-1.5 py-0.5 text-[10px] font-semibold text-[#B54708]">
-              Script
-            </span>
-          ) : null}
-        </div>
-        {rule.description ? (
-          <p className="mt-0.5 line-clamp-1 text-[11px] text-[#86868B]">{rule.description}</p>
-        ) : null}
-        <p className="mt-1.5 ez-mono text-[10px] text-[#AEAEB2]">
-          {conditionText} · {actionText}
-        </p>
-        {rule.experimentId && rule.variant ? (
-          <p className="mt-1 text-[10px] text-[#86868B]">
-            {(() => {
-              const stats = mockExperimentStats(rule.experimentId, rule.variant);
-              return `Mock CVR ${stats.ratePct}% · ${stats.conversions}/${stats.sessions} sessions`;
-            })()}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1 sm:opacity-90 sm:group-hover:opacity-100">
-        <IconButton
-          label={rule.enabled ? `Pause ${rule.name}` : `Enable ${rule.name}`}
-          onClick={onToggle}
-        >
-          {rule.enabled ? <PauseIcon /> : <PlayIcon />}
-        </IconButton>
-        <IconButton label={`Edit ${rule.name}`} onClick={onEdit}>
-          <PencilIcon />
-        </IconButton>
-        <IconButton
-          label={`Delete ${rule.name}`}
-          onClick={onDelete}
-          className="border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 hover:text-red-800"
-        >
-          <TrashIcon />
-        </IconButton>
-      </div>
-    </li>
-  );
-}
-
-function StatusPill({ enabled }: { enabled: boolean }) {
-  return (
-    <span
-      className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
-        enabled ? "bg-[#EAF6ED] text-[#2D6B3C]" : "bg-[#F0F0F2] text-[#86868B]"
+    <button
+      type="button"
+      onClick={onClick}
+      className={`h-7 rounded-lg px-2.5 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+        danger
+          ? "text-[#B42318] hover:bg-[#FFF5F5] focus-visible:outline-[#B42318]"
+          : "text-[#424245] hover:bg-[#F0F0F2] focus-visible:outline-[#1D1D1F]"
       }`}
     >
-      {enabled ? "On" : "Off"}
-    </span>
-  );
-}
-
-function MetricTile({
-  label,
-  value,
-  accent,
-  wide,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-  wide?: boolean;
-}) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 ${
-        accent ? "border-black/[0.06] bg-white" : "border-black/[0.05] bg-white/70"
-      } ${wide ? "max-w-[14rem]" : ""}`}
-    >
-      <span className="ez-mono text-[8px] font-medium uppercase tracking-[0.12em] text-[#86868B]">
-        {label}
-      </span>
-      <span
-        className={`truncate text-[13px] font-semibold tracking-[-0.03em] text-[#1D1D1F] ${
-          wide ? "" : "tabular-nums"
-        }`}
-        title={value}
-      >
-        {value}
-      </span>
-    </span>
-  );
-}
-
-function SearchGlyph() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
-      <circle cx="6" cy="6" r="4.25" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M9.2 9.2L12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
+      {children}
+    </button>
   );
 }

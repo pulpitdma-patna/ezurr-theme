@@ -78,7 +78,7 @@ function LibraryModal({
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4">
       <div className="flex max-h-[80vh] w-full max-w-[860px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-black/[0.07] px-4 py-3">
-          <p className="m-0 text-sm font-semibold text-[#1D1D1F]">Your media</p>
+          <p className="m-0 text-sm font-semibold text-[#1D1D1F]">Your photos</p>
           <button
             type="button"
             onClick={onClose}

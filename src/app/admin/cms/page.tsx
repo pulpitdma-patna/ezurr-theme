@@ -119,16 +119,16 @@ export default function AdminCmsPagesPage() {
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Pages"
-        description="Build storefront pages with a section builder — homepage, landings, and custom modules."
+        title="Website"
+        description="The pages customers see. Open one to change what is on it."
       />
 
       {isApiEnabled() ? (
         <AdminNotice tone={syncState === "error" ? "error" : "info"}>
           {syncState === "error" ? (
             <>
-              Couldn&apos;t load your pages from the server. This list may be out
-              of date — open a page to see its real state.{" "}
+              Couldn&apos;t fetch your pages. What is listed below may be out of
+              date — open a page to see how it really stands.{" "}
               <button
                 type="button"
                 onClick={() => void hydrateFromApi()}
@@ -141,14 +141,14 @@ export default function AdminCmsPagesPage() {
             <>
               {syncState === "loading"
                 ? "Loading your pages…"
-                : "Open a page to edit it. Changes save as you work; use Publish inside the editor to put them live."}
+                : "Open a page to change it. Your work saves as you go — press Publish inside the page to put it in front of customers."}
             </>
           )}
         </AdminNotice>
       ) : null}
 
       <div className="rounded-2xl border border-black/[0.07] bg-white p-5">
-        <p className="text-sm font-semibold text-[#1D1D1F]">Create page</p>
+        <p className="text-sm font-semibold text-[#1D1D1F]">Add a page</p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input
             value={title}
@@ -163,13 +163,13 @@ export default function AdminCmsPagesPage() {
                 );
               }
             }}
-            placeholder="Title"
+            placeholder="Page name, e.g. About us"
             className="min-h-11 flex-1 rounded-xl border border-black/[0.1] px-3 text-sm outline-none focus:border-[#1D1D1F]"
           />
           <input
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
-            placeholder="slug"
+            placeholder="about-us"
             className="min-h-11 w-full rounded-xl border border-black/[0.1] px-3 text-sm outline-none focus:border-[#1D1D1F] sm:w-48"
           />
           <button
@@ -177,7 +177,7 @@ export default function AdminCmsPagesPage() {
             onClick={() => {
               if (!title.trim()) return;
               const id = createCmsPage(title.trim(), slug.trim() || title.trim());
-              toast.push("Page created", "success");
+              toast.push("Page added", "success");
               setTitle("");
               setSlug("");
               window.location.href = `/admin/cms/${id}`;
@@ -194,17 +194,19 @@ export default function AdminCmsPagesPage() {
           <thead className="border-b border-black/[0.06] bg-[#F8F8FA] text-[11px] uppercase tracking-[0.1em] text-[#86868B]">
             <tr>
               <th className="px-4 py-3 font-semibold">Page</th>
-              <th className="px-4 py-3 font-semibold">Path</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">Updated</th>
-              <th className="px-4 py-3 font-semibold text-right">Actions</th>
+              <th className="px-4 py-3 font-semibold">Web address</th>
+              <th className="px-4 py-3 font-semibold">Customers see</th>
+              <th className="px-4 py-3 font-semibold">Last changed</th>
+              <th className="px-4 py-3 font-semibold text-right">What you can do</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-10 text-center text-sm text-[#6E6E73]">
-                  {syncState === "loading" ? "Loading your pages…" : "No pages yet."}
+                  {syncState === "loading"
+                    ? "Loading your pages…"
+                    : "No pages yet. Add one above and it appears here."}
                 </td>
               </tr>
             ) : null}
@@ -230,7 +232,7 @@ export default function AdminCmsPagesPage() {
                   ) : null}
                   {page.id === "home" ? (
                     <span className="mt-0.5 block text-[11px] text-[#86868B]">
-                      Your storefront home page.
+                      The first page anybody lands on.
                     </span>
                   ) : null}
                 </td>
@@ -242,14 +244,14 @@ export default function AdminCmsPagesPage() {
                   {(() => {
                     const [label, tone] = page.publishAt
                       ? [
-                          `Scheduled ${formatAdminDateTime(page.publishAt)}`,
+                          `Goes live ${formatAdminDateTime(page.publishAt)}`,
                           "bg-sky-50 text-sky-900",
                         ]
                       : page.status === "published" && page.hasUnpublishedChanges
-                        ? ["Live · edits pending", "bg-amber-50 text-amber-900"]
+                        ? ["Live · your edits are not up yet", "bg-amber-50 text-amber-900"]
                         : page.status === "published"
                           ? ["Live", "bg-emerald-50 text-emerald-800"]
-                          : ["Draft", "bg-[#F0F0F2] text-[#6E6E73]"];
+                          : ["Not up yet", "bg-[#F0F0F2] text-[#6E6E73]"];
                     return (
                       <span
                         className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${tone}`}
@@ -279,12 +281,12 @@ export default function AdminCmsPagesPage() {
                         type="button"
                         onClick={() => {
                           const id = duplicateCmsPage(page.id);
-                          toast.push("Duplicated", "success");
+                          toast.push("Copied — you are now on the copy", "success");
                           if (id) window.location.href = `/admin/cms/${id}`;
                         }}
                         className="rounded-lg border border-black/[0.1] px-2.5 py-1 text-[11px] font-semibold hover:bg-[#F5F5F7]"
                       >
-                        Duplicate
+                        Make a copy
                       </button>
                     ) : null}
                     {!isSystemPage ? (
@@ -310,21 +312,22 @@ export default function AdminCmsPagesPage() {
           href="/admin/cms/code"
           className="rounded-full border border-black/[0.1] bg-white px-4 py-2 font-semibold hover:bg-[#F5F5F7]"
         >
-          Global custom code →
+          Code for the whole site →
         </Link>
         <Link
           href="/admin/settings#appearance"
           className="rounded-full border border-black/[0.1] bg-white px-4 py-2 font-semibold hover:bg-[#F5F5F7]"
         >
-          Appearance settings →
+          Colours and fonts →
         </Link>
       </div>
 
       <ConfirmDialog
         open={deletePage !== null}
-        title="Delete page?"
-        description={`"${deletePage?.title ?? "This page"}" will be removed. This cannot be undone.`}
-        confirmLabel="Delete"
+        title={`Delete "${deletePage?.title ?? "this page"}"?`}
+        description="The page comes off your website straight away and anyone who has the link will get a not-found. You cannot get it back."
+        confirmLabel="Delete this page"
+        cancelLabel="Keep it"
         danger
         onCancel={() => setDeletePage(null)}
         onConfirm={async () => {
@@ -333,13 +336,13 @@ export default function AdminCmsPagesPage() {
           if (!target) return;
           deleteCmsPage(target.id);
           if (!isApiEnabled()) {
-            toast.push("Deleted", "success");
+            toast.push("Page deleted", "success");
             return;
           }
           // The server refuses to delete a published page, which is a real
           // answer the owner needs to see — not something to swallow.
           const res = await deletePage_(target.id);
-          toast.push(res.ok ? "Deleted" : res.error.message, res.ok ? "success" : "danger");
+          toast.push(res.ok ? "Page deleted" : res.error.message, res.ok ? "success" : "danger");
           if (res.ok) void hydrateFromApi();
         }}
       />

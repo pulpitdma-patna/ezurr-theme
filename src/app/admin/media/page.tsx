@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { CatalogTabs } from "@/components/admin/CatalogTabs";
 import { ListToolbar } from "@/components/admin/ListToolbar";
 import { Phase2PageShell } from "@/components/admin/Phase2PageShell";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -24,7 +25,7 @@ function fromApiAsset(a: ApiMediaAsset): MediaAsset {
     name: a.path.split("/").pop() ?? a.path,
     url: a.url,
     kind: "upload",
-    bytesLabel: `${Math.round((a.bytes || 0) / 1024)} KB · ${a.folder}`,
+    bytesLabel: `${Math.round((a.bytes || 0) / 1024)} KB · in ${a.folder}`,
   };
 }
 
@@ -58,7 +59,7 @@ export default function AdminMediaPage() {
         name: product.name,
         url: product.image,
         kind: "product" as const,
-        bytesLabel: "CDN · pending",
+        bytesLabel: "Came with a product",
       })),
     [store.products],
   );
@@ -74,19 +75,16 @@ export default function AdminMediaPage() {
 
   return (
     <Phase2PageShell
-      title="Media"
+      title="Photos"
       description={
         apiOn
-          ? "Optimised image library — every upload is compressed and stored on the server."
-          : "CDN library for product stills and merchandising — uploads stay local until the API is enabled."
+          ? "Every picture in your shop. Anything you send up here is shrunk first so pages load fast."
+          : "Practice shop. Pictures you add stay in this browser and no customer sees them."
       }
-      breadcrumbs={[
-        { label: "Catalog", href: "/admin/products" },
-        { label: "Media" },
-      ]}
+
       actions={
         <label className="inline-flex h-9 cursor-pointer items-center rounded-xl bg-[#1D1D1F] px-3.5 text-xs font-semibold text-white">
-          Upload
+          Add a photo
           <input
             type="file"
             accept="image/*"
@@ -98,11 +96,14 @@ export default function AdminMediaPage() {
               if (apiOn) {
                 void uploadImage(file, "media")
                   .then(() => {
-                    toast.push("Uploaded & optimised", "success");
+                    toast.push("Photo added and shrunk to load fast", "success");
                     return reload();
                   })
                   .catch((err) =>
-                    toast.push(err instanceof Error ? err.message : "Upload failed", "warning"),
+                    toast.push(
+                      err instanceof Error ? err.message : "That photo did not go up",
+                      "warning",
+                    ),
                   );
                 return;
               }
@@ -112,19 +113,20 @@ export default function AdminMediaPage() {
                 name: file.name,
                 url,
                 kind: "upload",
-                bytesLabel: `${Math.round(file.size / 1024)} KB · local`,
+                bytesLabel: `${Math.round(file.size / 1024)} KB · this browser only`,
               };
               setUploads((prev) => [asset, ...prev]);
               setSelected(asset.id);
-              toast.push("File staged locally — not uploaded to CDN", "warning");
+              toast.push("Practice shop — this photo stays in this browser", "warning");
             }}
           />
         </label>
       }
     >
+      <CatalogTabs active="media" />
+
       <ListToolbar
-        resultLabel={`${assets.length} assets`}
-        search={{ value: query, onChange: setQuery, placeholder: "Search media…" }}
+        search={{ value: query, onChange: setQuery, placeholder: "Search photos by name" }}
       />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
@@ -180,14 +182,19 @@ export default function AdminMediaPage() {
               </div>
               <h2 className="mt-3 text-sm font-semibold tracking-[-0.02em]">{active.name}</h2>
               <p className="mt-1 text-xs text-[#86868B]">{active.bytesLabel}</p>
+              {/* The "Variants · 1× planned 3×" row that sat here was a promise
+                  about a feature, printed as if it were a fact about his photo.
+                  Nothing generated three sizes; there was nothing to report. */}
               <dl className="mt-3 space-y-1.5 text-xs text-[#6E6E73]">
                 <div className="flex justify-between gap-2">
-                  <dt>Kind</dt>
-                  <dd className="font-semibold capitalize text-[#1D1D1F]">{active.kind}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt>Variants</dt>
-                  <dd className="font-semibold text-[#1D1D1F]">1× · planned 3×</dd>
+                  <dt>Where it came from</dt>
+                  <dd className="font-semibold text-[#1D1D1F]">
+                    {active.kind === "product"
+                      ? "A product"
+                      : active.kind === "banner"
+                        ? "A banner"
+                        : "You added it"}
+                  </dd>
                 </div>
               </dl>
               <div className="mt-4 flex flex-col gap-2">
@@ -195,11 +202,16 @@ export default function AdminMediaPage() {
                   type="button"
                   onClick={() => {
                     void navigator.clipboard.writeText(active.url);
-                    toast.push(apiOn ? "URL copied" : "URL copied (may be local blob)", "success");
+                    toast.push(
+                      apiOn
+                        ? "Link copied — paste it wherever you need the photo"
+                        : "Link copied, but it only works in this browser",
+                      "success",
+                    );
                   }}
                   className="h-9 rounded-xl border border-black/10 text-xs font-semibold"
                 >
-                  Copy URL
+                  Copy the link
                 </button>
                 {apiOn && active.assetId ? (
                   <button
@@ -209,29 +221,31 @@ export default function AdminMediaPage() {
                       void api
                         .deleteMedia(id)
                         .then(() => {
-                          toast.push("Asset deleted", "success");
+                          toast.push("Photo deleted", "success");
                           setSelected(null);
                           return reload();
                         })
-                        .catch(() => toast.push("Could not delete", "warning"));
+                        .catch(() => toast.push("Could not delete it", "warning"));
                     }}
                     className="h-9 rounded-xl border border-red-200 text-xs font-semibold text-red-700"
                   >
-                    Delete asset
+                    Delete this photo
                   </button>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => toast.push("Crop studio is a later feature", "warning")}
+                    onClick={() => toast.push("Trimming photos is not built yet", "warning")}
                     className="h-9 rounded-xl bg-[#1D1D1F] text-xs font-semibold text-white"
                   >
-                    Open crop studio
+                    Trim this photo
                   </button>
                 )}
               </div>
             </>
           ) : (
-            <p className="text-sm text-[#86868B]">No assets yet.</p>
+            <p className="text-sm text-[#86868B]">
+              No photos yet. Press Add a photo and pick one from your phone.
+            </p>
           )}
         </aside>
       </div>

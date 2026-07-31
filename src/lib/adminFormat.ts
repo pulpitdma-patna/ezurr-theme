@@ -35,6 +35,18 @@ const dateTimeFormatter = new Intl.DateTimeFormat("en-IN", {
 });
 
 /**
+ * Clock only — `4:12 pm`. Used where the day is already obvious from context
+ * ("Saved · 4:12 pm"), so repeating it would be noise. `numeric` rather than
+ * `2-digit` because nobody writing down a shop's day writes `04:12`.
+ */
+const timeFormatter = new Intl.DateTimeFormat("en-IN", {
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZone: IST,
+});
+
+/**
  * Accepts anything the API or the local store hands us. A bare `YYYY-MM-DD`
  * parses as UTC midnight, which is still the same calendar day in IST because
  * IST is ahead of UTC — so date-only values need no special casing.
@@ -52,6 +64,15 @@ export function formatAdminDate(
 ): string {
   const date = toDate(value);
   return date ? dateFormatter.format(date) : fallback;
+}
+
+/** `4:12 pm` in IST, for a time on a day the screen has already established. */
+export function formatAdminTime(
+  value: string | number | Date | null | undefined,
+  fallback: string = NO_DATE,
+): string {
+  const date = toDate(value);
+  return date ? timeFormatter.format(date) : fallback;
 }
 
 /** `25 Jul 2026, 01:46 pm` in IST. */

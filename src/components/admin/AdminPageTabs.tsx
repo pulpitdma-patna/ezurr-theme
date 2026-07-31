@@ -28,7 +28,7 @@ export function AdminPageTabs({
   tabs,
   active,
   onChange,
-  ariaLabel = "Views",
+  ariaLabel = "Sections",
 }: {
   tabs: AdminTab[];
   active: string;

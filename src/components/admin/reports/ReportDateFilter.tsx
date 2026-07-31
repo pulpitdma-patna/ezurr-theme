@@ -28,8 +28,9 @@ export function ReportDateFilter({
 }) {
   return (
     <div className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-black/[0.07] bg-[#FAFAFB] p-1 shadow-[0_1px_2px_rgba(17,17,19,0.04)]">
+      {/* "Period" is an accounting word. He picks dates. */}
       <AdminSelect
-        label="Period"
+        label="Dates"
         value={preset}
         onChange={(value) => onPresetChange(value as DatePreset)}
         options={presetOptions.map((option) => ({

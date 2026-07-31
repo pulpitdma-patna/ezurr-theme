@@ -19,8 +19,8 @@ export default function AdminCmsCodePage() {
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Custom code"
-        description="Site-wide CSS and JavaScript."
+        title="Code for the whole site"
+        description="Not available — here is what does work instead."
       />
 
       <div className="rounded-2xl border border-black/[0.07] bg-white p-6">
@@ -54,9 +54,9 @@ export default function AdminCmsCodePage() {
               href="/admin/settings#appearance"
               className="font-semibold text-[#1D1D1F] underline"
             >
-              Appearance settings
+              in Shop settings
             </Link>
-            , no code required.
+            , with no code at all.
           </li>
         </ul>
       </div>
@@ -66,7 +66,7 @@ export default function AdminCmsCodePage() {
           href="/admin/cms"
           className="rounded-xl border border-black/[0.1] bg-white px-4 py-2.5 text-sm font-semibold hover:bg-[#F5F5F7]"
         >
-          ← Pages
+          ← Website
         </Link>
       </div>
     </div>

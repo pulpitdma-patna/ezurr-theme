@@ -9,22 +9,39 @@ export type IntegrationConfigSubmit = {
 };
 
 /**
+ * The API marks a field the owner would only ever touch because somebody told
+ * him to. `advanced` is missing from `AdminIntegrationField` in data/admin.ts,
+ * which another agent owns; read structurally until it lands there.
+ */
+type MaybeAdvanced = AdminIntegrationField & { advanced?: boolean };
+
+function isAdvanced(field: AdminIntegrationField): boolean {
+  return Boolean((field as MaybeAdvanced).advanced);
+}
+
+/**
  * Renders `integration.fields` — the API's per-provider schema — generically.
  *
  * Rules:
  *  - secret fields are write-only;
  *  - an untouched field is not submitted (blank ≠ clear);
  *  - JSON null clears an optional stored value;
- *  - draft is kept until save succeeds.
+ *  - draft is kept until save succeeds;
+ *  - anything rarely touched is folded away, because a signing key and a
+ *    delivery-report key sitting between the two boxes that actually matter is
+ *    how a screen of four fields reads as a screen of ten.
  */
 export function IntegrationConfigForm({
   integration,
   saving,
   onSave,
+  readOnly,
 }: {
   integration: AdminIntegration;
   saving: boolean;
   onSave: (patch: IntegrationConfigSubmit) => void | Promise<void>;
+  /** Someone who can read this screen but is not allowed to change it. */
+  readOnly?: boolean;
 }) {
   const fields = integration.fields;
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -33,6 +50,8 @@ export function IntegrationConfigForm({
   const [submitting, setSubmitting] = useState(false);
 
   const editable = useMemo(() => (fields ?? []).filter((f) => !f.readOnly), [fields]);
+  const everyday = useMemo(() => (fields ?? []).filter((f) => !isAdvanced(f)), [fields]);
+  const advanced = useMemo(() => (fields ?? []).filter(isAdvanced), [fields]);
   const dirty =
     Object.keys(draft).some((key) => draft[key].trim() !== "") || Object.keys(clearKeys).length > 0;
   const busy = saving || submitting;
@@ -46,12 +65,8 @@ export function IntegrationConfigForm({
   if (!fields) {
     return (
       <div className="rounded-xl border border-dashed border-black/[0.12] bg-[#FAFAFB] p-4">
-        <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-          Configuration
-        </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-[#6E6E73]">
-          The field schema is served by the API, so there is nothing to configure in
-          demo mode. Point the admin at a running API to edit credentials.
+        <p className="text-xs leading-relaxed text-[#6E6E73]">
+          This is a practice shop, so there is no real account to set up here.
         </p>
       </div>
     );
@@ -60,11 +75,8 @@ export function IntegrationConfigForm({
   if (!fields.length) {
     return (
       <div className="rounded-xl border border-dashed border-black/[0.12] bg-[#FAFAFB] p-4">
-        <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-          Configuration
-        </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-[#6E6E73]">
-          This integration has no configurable fields.
+        <p className="text-xs leading-relaxed text-[#6E6E73]">
+          There is nothing to fill in for this one.
         </p>
       </div>
     );
@@ -101,79 +113,87 @@ export function IntegrationConfigForm({
       setClearKeys({});
       setReveal({});
     } catch {
-      // Parent shows the toast; keep the draft so secrets are not lost.
+      // The parent renders the reason next to this form and the draft stays
+      // exactly as typed — a half-pasted key is not something to make anybody
+      // find twice.
     } finally {
       setSubmitting(false);
     }
   }
 
+  const renderRow = (field: AdminIntegrationField) => (
+    <FieldRow
+      key={field.key}
+      field={field}
+      value={draft[field.key] ?? ""}
+      clearing={Boolean(clearKeys[field.key])}
+      revealed={Boolean(reveal[field.key])}
+      readOnly={Boolean(readOnly)}
+      onChange={(next) =>
+        setDraft((prev) => {
+          setClearKeys((keys) => {
+            if (!keys[field.key]) return keys;
+            const { [field.key]: _dropped, ...rest } = keys;
+            return rest;
+          });
+          if (next === "") {
+            const { [field.key]: _dropped, ...rest } = prev;
+            return rest;
+          }
+          return { ...prev, [field.key]: next };
+        })
+      }
+      onClear={() => {
+        setClearKeys((prev) => ({ ...prev, [field.key]: true }));
+        setDraft((prev) => {
+          const { [field.key]: _dropped, ...rest } = prev;
+          return rest;
+        });
+      }}
+      onUndoClear={() =>
+        setClearKeys((prev) => {
+          const { [field.key]: _dropped, ...rest } = prev;
+          return rest;
+        })
+      }
+      onToggleReveal={() => setReveal((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
+    />
+  );
+
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-          Configuration
-        </div>
-        {missingLabels.length ? (
-          <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[#9A3412]">
-            Missing: {missingLabels.join(", ")}
-          </span>
-        ) : null}
-      </div>
-
-      {fields.map((field) => (
-        <FieldRow
-          key={field.key}
-          field={field}
-          value={draft[field.key] ?? ""}
-          clearing={Boolean(clearKeys[field.key])}
-          revealed={Boolean(reveal[field.key])}
-          onChange={(next) =>
-            setDraft((prev) => {
-              setClearKeys((keys) => {
-                if (!keys[field.key]) return keys;
-                const { [field.key]: _dropped, ...rest } = keys;
-                return rest;
-              });
-              if (next === "") {
-                const { [field.key]: _dropped, ...rest } = prev;
-                return rest;
-              }
-              return { ...prev, [field.key]: next };
-            })
-          }
-          onClear={() => {
-            setClearKeys((prev) => ({ ...prev, [field.key]: true }));
-            setDraft((prev) => {
-              const { [field.key]: _dropped, ...rest } = prev;
-              return rest;
-            });
-          }}
-          onUndoClear={() =>
-            setClearKeys((prev) => {
-              const { [field.key]: _dropped, ...rest } = prev;
-              return rest;
-            })
-          }
-          onToggleReveal={() =>
-            setReveal((prev) => ({ ...prev, [field.key]: !prev[field.key] }))
-          }
-        />
-      ))}
-
-      <div className="flex items-center gap-3 border-t border-black/[0.06] pt-3">
-        <button
-          type="submit"
-          disabled={!dirty || busy || !editable.length}
-          className="h-9 rounded-lg bg-[#1D1D1F] px-4 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {busy ? "Saving…" : "Save configuration"}
-        </button>
-        <p className="text-[11px] leading-relaxed text-[#86868B]">
-          {editable.length
-            ? "Secrets are encrypted server-side and never sent back. Leave a box blank to keep the stored value; use Clear to remove an optional one."
-            : "Every field here is resolved from the server environment."}
+      {missingLabels.length ? (
+        <p className="text-[11px] font-semibold leading-relaxed text-[#9A3412]">
+          Still needed: {missingLabels.join(", ")}
         </p>
-      </div>
+      ) : null}
+
+      {everyday.map(renderRow)}
+
+      {advanced.length ? (
+        <details className="rounded-xl border border-black/[0.06] bg-[#FAFAFB] px-3 py-2.5">
+          <summary className="cursor-pointer text-[11px] font-semibold text-[#424245]">
+            Only if someone told you to
+          </summary>
+          <div className="mt-3 space-y-4">{advanced.map(renderRow)}</div>
+        </details>
+      ) : null}
+
+      {readOnly ? null : (
+        <div className="flex items-center gap-3 border-t border-black/[0.06] pt-3">
+          <button
+            type="submit"
+            disabled={!dirty || busy || !editable.length}
+            className="h-9 rounded-lg bg-[#1D1D1F] px-4 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy ? "Saving…" : "Save"}
+          </button>
+          <p className="text-[11px] leading-relaxed text-[#86868B]">
+            Anything secret is kept encrypted and never shown again. Leave a box blank to keep
+            what&rsquo;s already there.
+          </p>
+        </div>
+      )}
     </form>
   );
 }
@@ -183,6 +203,7 @@ function FieldRow({
   value,
   clearing,
   revealed,
+  readOnly,
   onChange,
   onClear,
   onUndoClear,
@@ -192,6 +213,7 @@ function FieldRow({
   value: string;
   clearing: boolean;
   revealed: boolean;
+  readOnly: boolean;
   onChange: (value: string) => void;
   onClear: () => void;
   onUndoClear: () => void;
@@ -200,25 +222,22 @@ function FieldRow({
   const inputId = `integration-field-${field.key}`;
   const isPassword = field.type === "password";
   const caption = fieldCaption(field);
-  const canClear = !field.readOnly && !field.required && (field.configured || clearing);
+  const locked = field.readOnly || readOnly;
+  const canClear = !locked && !field.required && (field.configured || clearing);
 
   return (
     <label className="flex flex-col gap-1.5" htmlFor={inputId}>
       <span className="flex flex-wrap items-center gap-2">
-        <span className="ez-mono text-[9px] font-medium uppercase tracking-[0.14em] text-[#86868B]">
-          {field.label}
-        </span>
+        <span className="text-[11px] font-semibold text-[#424245]">{field.label}</span>
         {field.required ? (
-          <span className="ez-mono text-[8px] uppercase tracking-[0.12em] text-[#AEAEB2]">
-            required
-          </span>
+          <span className="text-[10px] font-medium text-[#AEAEB2]">needed</span>
         ) : null}
         <StateChip field={field} clearing={clearing} />
       </span>
 
       {clearing ? (
         <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-[#B45309]/40 bg-[#FFF7ED] px-3 py-2.5">
-          <p className="text-xs text-[#9A3412]">Will clear the stored value on save.</p>
+          <p className="text-xs text-[#9A3412]">Saving will wipe what is stored here.</p>
           <button
             type="button"
             onClick={onUndoClear}
@@ -232,12 +251,12 @@ function FieldRow({
           {field.type === "select" && field.options ? (
             <select
               id={inputId}
-              disabled={field.readOnly}
+              disabled={locked}
               value={value || field.value || ""}
               onChange={(event) => onChange(event.target.value)}
               className={controlClass}
             >
-              <option value="">Select…</option>
+              <option value="">Pick one</option>
               {field.options.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -250,14 +269,14 @@ function FieldRow({
               type={isPassword && !revealed ? "password" : "text"}
               inputMode={field.type === "url" ? "url" : undefined}
               autoComplete="off"
-              disabled={field.readOnly}
+              disabled={locked}
               value={field.secret ? value : value || field.value || ""}
               placeholder={secretPlaceholder(field)}
               onChange={(event) => onChange(event.target.value)}
               className={`${controlClass} ${field.secret || field.type === "url" ? "ez-mono text-xs" : ""}`}
             />
           )}
-          {isPassword && !field.readOnly ? (
+          {isPassword && !locked ? (
             <button
               type="button"
               onClick={onToggleReveal}
@@ -298,37 +317,39 @@ function StateChip({ field, clearing }: { field: AdminIntegrationField; clearing
   if (field.viaFallback && !field.configured) {
     return (
       <span className="inline-flex rounded bg-[#FEF3C7] px-1.5 py-0.5 text-[10px] font-semibold text-[#92400E]">
-        Using server env
+        Came with your server
       </span>
     );
   }
   if (!field.secret && !field.configured) return null;
   return field.configured ? (
     <span className="inline-flex rounded bg-[#EAF6ED] px-1.5 py-0.5 text-[10px] font-semibold text-[#2D6B3C]">
-      Configured{field.hint ? ` · ${field.hint}` : ""}
+      Saved{field.hint ? ` · ${field.hint}` : ""}
     </span>
   ) : field.secret ? (
     <span className="inline-flex rounded bg-[#F0F0F2] px-1.5 py-0.5 text-[10px] font-semibold text-[#6E6E73]">
-      Not set
+      Not saved yet
     </span>
   ) : null;
 }
 
 function secretPlaceholder(field: AdminIntegrationField) {
-  if (field.readOnly) return field.configured ? "Set on Settings → Store" : "Not set";
+  if (field.readOnly) return field.configured ? "Set somewhere else" : "Not set";
   if (!field.secret) return field.type === "url" ? "https://example.com/hooks/ezurr" : "";
-  if (field.configured) return "Leave blank to keep the stored value";
-  if (field.viaFallback) return "Using server env (not stored yet) — paste to store in DB";
+  if (field.configured) return "Leave blank to keep what's saved";
+  if (field.viaFallback) return "Came with your server — paste it here to keep it with your shop";
   return "Paste the value";
 }
 
 function fieldCaption(field: AdminIntegrationField) {
   if (field.readOnly) {
-    const source = field.envVar ? `Set via ${field.envVar}` : "Edited on Settings → Store";
-    return field.help ? `${source}. ${field.help}` : `${source}.`;
+    const source = "This one is set somewhere else and can't be changed here.";
+    return field.help ? `${source} ${field.help}` : source;
   }
   if (field.viaFallback && !field.configured) {
-    const note = "Using a server env fallback — Connect or Save to store it in the database.";
+    // Says what it means for him — it works, but it is not his shop's copy —
+    // without naming where it came from, which he cannot reach anyway.
+    const note = "This value came with your server and works. Paste it here to keep it with your shop.";
     return field.help ? `${note} ${field.help}` : note;
   }
   return field.help ?? undefined;

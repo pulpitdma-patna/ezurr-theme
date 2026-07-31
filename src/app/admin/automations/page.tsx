@@ -1,680 +1,436 @@
 "use client";
 
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
-import { formatAdminDateTime } from "@/lib/adminFormat";
-import { api, isApiEnabled, type ApiAutomation } from "@/lib/apiClient";
-import { AdminSelect } from "@/components/admin/AdminSelect";
-import { AutomationBuilder } from "@/components/admin/AutomationBuilder";
+import { AdminPageTabs } from "@/components/admin/AdminPageTabs";
+import { AdminNotice } from "@/components/admin/AdminNotice";
+import { AutomationBuilder, blankRule } from "@/components/admin/AutomationBuilder";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
-import type {
-  AdminAutomationRule,
-  AdminAutomationRun,
-  AutomationTrigger,
-} from "@/data/admin";
-import { automationTemplates } from "@/data/automationTemplates";
-import { useAdminStore } from "@/hooks/useAdminStore";
-import { useAutoBanner } from "@/hooks/useAutoBanner";
+import { MessageWordingPanel } from "@/components/admin/MessageWordingPanel";
+import { RuleSentence } from "@/components/admin/RuleSentence";
 import {
-  deleteAutomation,
-  testAutomation,
-  toggleAutomation,
-  upsertAutomation,
-} from "@/lib/adminStore";
+  api,
+  isApiEnabled,
+  type ApiAutomation,
+  type ApiMessageTemplate,
+} from "@/lib/apiClient";
+import {
+  buildRuleSentence,
+  describeLastRun,
+  sentenceToText,
+  type ActionKind,
+  type AutomationRule,
+  type AutomationRunRecord,
+  type AutomationTriggerKey,
+  type WordingChoice,
+} from "@/lib/automationGrammar";
+import { isAlreadyARule, RECOMMENDED_RULES, type RecommendedRule } from "@/data/automationTemplates";
+import { useAdminStore } from "@/hooks/useAdminStore";
 
-const triggerLabels: Record<AutomationTrigger, string> = {
-  order_status_changed: "Order status",
-  stock_low: "Low stock",
-  customer_created: "Customer created",
-  preorder_released: "Pre-order released",
-  payment_authorized: "Payment authorized",
-  payment_captured: "Payment captured",
-  payment_failed: "Payment failed",
-};
+/**
+ * Automatic messages.
+ *
+ * The old screen was 788 lines carrying four metric pills, a two-tab strip with
+ * uppercase sub-labels, a third pseudo-tab that was a link, a "{n} templates →"
+ * pill and a "Browse templates" button — three entry points to one route — a
+ * search box, two filter dropdowns, and a card per rule showing
+ * `TRIGGER → IF → THEN` in three boxes. Everything on it described our data
+ * model. None of it answered the only two questions a shop owner has: what is
+ * my shop saying to customers on its own, and did it actually go out.
+ *
+ * So: one column, two headings, one sentence per rule, and a grey line of truth
+ * under each running one. Message wording is the second tab rather than a
+ * separate nav item, because a rule points at a wording by key and splitting
+ * them is why "held back — the wording isn't approved yet" was unreadable.
+ */
 
-const triggerOptions = [
-  { value: "all", label: "All triggers" },
-  ...Object.entries(triggerLabels).map(([value, label]) => ({ value, label })),
-];
-
-const actionLabels: Record<string, string> = {
-  notify_internal: "Notify team",
-  add_customer_tag: "Add tag",
-  update_order_status: "Update status",
-  send_email: "Email",
-  send_whatsapp: "WhatsApp",
-  send_webhook: "Webhook",
-};
-
-const runStatusMeta: Record<
-  AdminAutomationRun["status"],
-  { label: string; className: string }
-> = {
-  completed: { label: "Completed", className: "bg-[#EAF6ED] text-[#2D6B3C]" },
-  skipped: { label: "Skipped", className: "bg-[#FFF1E5] text-[#9A3412]" },
-  failed: { label: "Failed", className: "bg-[#FFF5F5] text-[#B42318]" },
-};
-
-const primaryBtnClass =
-  "inline-flex h-9 items-center rounded-xl bg-[#1D1D1F] px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#2C2C2E] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
-
-const secondaryBtnClass =
-  "inline-flex h-9 items-center rounded-xl border border-black/[0.08] bg-white px-3.5 text-xs font-semibold text-[#1D1D1F] shadow-[0_1px_2px_rgba(17,17,19,0.03)] transition hover:bg-[#FAFAFB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
-
-const compactSelectClass = "h-9 rounded-lg shadow-none";
-
-function blankRule(): AdminAutomationRule {
-  const now = new Date().toISOString();
-  return {
-    id: "",
-    name: "",
-    description: "",
-    trigger: "order_status_changed",
-    enabled: true,
-    conditions: [],
-    actions: [{ type: "notify_internal", value: "" }],
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-function apiToRule(a: ApiAutomation): AdminAutomationRule {
+function apiToRule(a: ApiAutomation): AutomationRule {
   return {
     id: a.id ?? "",
     name: a.name,
     description: a.description ?? "",
-    trigger: a.trigger as AutomationTrigger,
+    trigger: a.trigger as AutomationTriggerKey,
     enabled: a.enabled,
-    conditions: (a.conditions ?? []) as AdminAutomationRule["conditions"],
-    actions: (a.actions ?? []) as AdminAutomationRule["actions"],
+    conditions: (a.conditions ?? []) as AutomationRule["conditions"],
+    actions: (a.actions ?? []) as AutomationRule["actions"],
     createdAt: a.createdAt ?? "",
     updatedAt: a.updatedAt ?? "",
   };
 }
 
-export default function AdminAutomationsPage() {
-  const store = useAdminStore();
-  const apiOn = isApiEnabled();
-  const [apiAutomations, setApiAutomations] = useState<AdminAutomationRule[]>([]);
-  const [apiRuns, setApiRuns] = useState<AdminAutomationRun[]>([]);
+function ruleToApi(rule: AutomationRule): ApiAutomation {
+  return {
+    id: rule.id || undefined,
+    name: rule.name,
+    description: rule.description,
+    trigger: rule.trigger,
+    enabled: rule.enabled,
+    priority: 100,
+    conditions: rule.conditions,
+    actions: rule.actions,
+  };
+}
 
-  const loadAutomations = useCallback(async () => {
+export default function AdminAutomaticMessagesPage() {
+  const apiOn = isApiEnabled();
+  const store = useAdminStore();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const tab = searchParams.get("tab") === "wording" ? "wording" : "messages";
+
+  const [rules, setRules] = useState<AutomationRule[]>([]);
+  const [runs, setRuns] = useState<AutomationRunRecord[]>([]);
+  const [templates, setTemplates] = useState<ApiMessageTemplate[]>([]);
+  const [editing, setEditing] = useState<AutomationRule | null>(null);
+  const [deleting, setDeleting] = useState<AutomationRule | null>(null);
+  const [notice, setNotice] = useState<{ tone: "info" | "error"; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [drawerError, setDrawerError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
     if (!apiOn) return;
     try {
-      const [rules, runs] = await Promise.all([api.automations(), api.automationRuns()]);
-      setApiAutomations((rules.data ?? []).map(apiToRule));
-      setApiRuns(
-        (runs.data ?? []).map((r) => ({
+      const [ruleRes, runRes, templateRes] = await Promise.all([
+        api.automations(),
+        api.automationRuns(),
+        api.messageTemplates(),
+      ]);
+      setRules((ruleRes.data ?? []).map(apiToRule));
+      setRuns(
+        (runRes.data ?? []).map((r) => ({
           id: r.id,
           ruleId: r.ruleId ?? "",
           ruleName: r.ruleName,
-          trigger: r.trigger as AutomationTrigger,
           at: r.at,
-          status: r.status as AdminAutomationRun["status"],
+          status: r.status as AutomationRunRecord["status"],
+          delivery: (r.delivery ?? undefined) as AutomationRunRecord["delivery"],
           summary: r.summary ?? "",
-          delivery: (r.delivery ?? undefined) as AdminAutomationRun["delivery"],
         })),
       );
-    } catch {
-      setApiAutomations([]);
-      setApiRuns([]);
+      setTemplates(templateRes.data ?? []);
+    } catch (e) {
+      // A failure to read stays on the page. It is never a toast — the whole
+      // point of this screen is telling him what is running, and an empty list
+      // that failed to load looks exactly like a shop that sends nothing.
+      setNotice({
+        tone: "error",
+        text:
+          e instanceof Error
+            ? `Could not load your automatic messages — ${e.message}`
+            : "Could not load your automatic messages.",
+      });
     }
   }, [apiOn]);
 
   useEffect(() => {
-    void loadAutomations();
-  }, [loadAutomations]);
+    void load();
+  }, [load]);
 
-  const automations = apiOn ? apiAutomations : store.automations;
-  const automationRuns = apiOn ? apiRuns : store.automationRuns;
+  // In practice mode there is no server; the local sample shop stands in, and
+  // the band under the title says so.
+  const liveRules: AutomationRule[] = apiOn ? rules : (store.automations as AutomationRule[]);
 
-  const searchParams = useSearchParams();
-  const initialTab = searchParams.get("tab") === "runs" ? "runs" : "rules";
-  const [tab, setTab] = useState<"rules" | "runs">(initialTab);
-  const [seenTabParam, setSeenTabParam] = useState(searchParams.get("tab"));
-  if (searchParams.get("tab") !== seenTabParam) {
-    setSeenTabParam(searchParams.get("tab"));
-    setTab(searchParams.get("tab") === "runs" ? "runs" : "rules");
-  }
-  const [query, setQuery] = useState("");
-  const [trigger, setTrigger] = useState("all");
-  const [enabledFilter, setEnabledFilter] = useState<"all" | "on" | "off">("all");
-  const [editing, setEditing] = useState<AdminAutomationRule | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [toast, setToast] = useAutoBanner(2600);
+  /** Only approved + enabled wordings can actually send, so only those are offered. */
+  const wordings = useMemo(() => {
+    const pick = (channel: string): WordingChoice[] =>
+      templates
+        .filter((t) => t.channel === channel && t.enabled && t.status === "approved")
+        .map((t) => ({ value: t.event_key, label: t.name || t.event_key }));
+    return { whatsapp: pick("whatsapp"), email: pick("email") };
+  }, [templates]);
 
-  const rules = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return automations.filter((rule) => {
-      if (trigger !== "all" && rule.trigger !== trigger) return false;
-      if (enabledFilter === "on" && !rule.enabled) return false;
-      if (enabledFilter === "off" && rule.enabled) return false;
-      return (
-        !needle ||
-        rule.name.toLowerCase().includes(needle) ||
-        rule.description.toLowerCase().includes(needle)
-      );
-    });
-  }, [automations, enabledFilter, query, trigger]);
+  const wordingsFor = useCallback(
+    (type: ActionKind): WordingChoice[] =>
+      type === "send_email" ? wordings.email : type === "send_whatsapp" ? wordings.whatsapp : [],
+    [wordings],
+  );
 
-  const runs = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return automationRuns.filter((run) => {
-      if (trigger !== "all" && run.trigger !== trigger) return false;
-      return (
-        !needle ||
-        run.ruleName.toLowerCase().includes(needle) ||
-        run.summary.toLowerCase().includes(needle)
-      );
-    });
-  }, [automationRuns, query, trigger]);
+  /** The newest run per rule — the grey line of truth under each sentence. */
+  const lastRunByRule = useMemo(() => {
+    const map = new Map<string, AutomationRunRecord>();
+    for (const run of runs) {
+      const existing = map.get(run.ruleId);
+      if (!existing || new Date(run.at) > new Date(existing.at)) map.set(run.ruleId, run);
+    }
+    return map;
+  }, [runs]);
 
-  const enabledCount = automations.filter((rule) => rule.enabled).length;
-  const pausedCount = automations.length - enabledCount;
-  const completedRuns = automationRuns.filter((run) => run.status === "completed").length;
-  const blockedRuns = automationRuns.filter(
-    (run) => run.status === "skipped" || run.delivery === "blocked",
-  ).length;
+  const running = liveRules.filter((rule) => rule.enabled);
+  const switchedOff = liveRules.filter((rule) => !rule.enabled);
+  const notSetUp = RECOMMENDED_RULES.filter((rec) => !isAlreadyARule(rec, liveRules));
+  const offCount = switchedOff.length + notSetUp.length;
 
-  function openNew() {
-    setEditing(blankRule());
+  async function write(action: () => Promise<unknown>, done: string) {
+    setNotice(null);
+    try {
+      await action();
+      await load();
+      setNotice({ tone: "info", text: done });
+    } catch (e) {
+      setNotice({
+        tone: "error",
+        text: e instanceof Error ? e.message : "That did not save. Nothing has changed.",
+      });
+    }
   }
 
-  function toApiPayload(rule: AdminAutomationRule): ApiAutomation {
-    return {
-      id: rule.id || undefined,
-      name: rule.name,
-      description: rule.description,
-      trigger: rule.trigger,
-      enabled: rule.enabled,
-      priority: 100,
-      conditions: rule.conditions,
-      actions: rule.actions,
+  async function setEnabled(rule: AutomationRule, enabled: boolean) {
+    if (!apiOn) return;
+    await write(
+      () => api.upsertAutomation({ ...ruleToApi(rule), enabled }),
+      enabled ? "Switched on. It runs from now on." : "Switched off. Nothing will go out from this one.",
+    );
+  }
+
+  async function turnOn(recommendation: RecommendedRule) {
+    if (!apiOn) return;
+    const rule: AutomationRule = {
+      ...blankRule(),
+      name: recommendation.name,
+      trigger: recommendation.trigger,
+      conditions: recommendation.conditions,
+      actions: recommendation.actions,
     };
+    // Name it after what it says, so the run log reads as English too.
+    rule.name = sentenceToText(buildRuleSentence(rule, wordingsFor)).slice(0, 160);
+    await write(() => api.upsertAutomation(ruleToApi(rule)), "Switched on. It runs from now on.");
   }
 
-  async function saveRule(rule: AdminAutomationRule) {
-    if (apiOn) {
-      try {
-        await api.upsertAutomation(toApiPayload(rule));
-        setEditing(null);
-        setToast(rule.id ? "Rule updated" : "Rule created");
-        await loadAutomations();
-      } catch {
-        setToast("Could not save automation");
-      }
+  async function saveRule(rule: AutomationRule) {
+    if (!apiOn) {
+      setDrawerError("This is the sample shop. Connect your shop to save a rule.");
       return;
     }
-    const id = rule.id || `auto-${Date.now()}`;
-    upsertAutomation({ ...rule, id });
-    setEditing(null);
-    setToast(rule.id ? "Rule updated" : "Rule created");
-  }
-
-  async function handleToggle(rule: AdminAutomationRule, enabled: boolean) {
-    if (apiOn) {
-      try {
-        await api.upsertAutomation({ ...toApiPayload(rule), enabled });
-        await loadAutomations();
-      } catch {
-        setToast("Could not update automation");
-      }
-    } else {
-      toggleAutomation(rule.id, enabled);
-    }
-    setToast(enabled ? "Enabled" : "Paused");
-  }
-
-  async function handleTest(rule: AdminAutomationRule) {
-    if (apiOn) {
-      try {
-        await api.testAutomation(rule.id);
-        setToast("Test event fired");
-        await loadAutomations();
-      } catch {
-        setToast("Could not run test");
-      }
-    } else {
-      testAutomation(rule.trigger);
-      setToast(`Test event fired · ${triggerLabels[rule.trigger]}`);
+    setSaving(true);
+    setDrawerError(null);
+    try {
+      await api.upsertAutomation(ruleToApi(rule));
+      setEditing(null);
+      await load();
+      setNotice({ tone: "info", text: "Saved. It runs from now on." });
+    } catch (e) {
+      // The drawer stays open with his sentence in it.
+      setDrawerError(e instanceof Error ? e.message : "That did not save. Nothing has changed.");
+    } finally {
+      setSaving(false);
     }
   }
 
-  async function handleDelete(id: string) {
-    if (apiOn) {
-      try {
-        await api.deleteAutomation(id);
-        await loadAutomations();
-      } catch {
-        setToast("Could not delete automation");
-      }
-    } else {
-      deleteAutomation(id);
-    }
-    setToast("Rule deleted");
+  async function tryIt(rule: AutomationRule) {
+    if (!apiOn) return;
+    await write(
+      () => api.testAutomation(rule.id),
+      "Tried it with a sample order. The line under the rule says what happened.",
+    );
   }
-
-  const resultLabel = tab === "rules" ? `${rules.length} rules` : `${runs.length} runs`;
 
   return (
     <div className="space-y-4">
       <AdminPageHeader
-        title="Automations"
-        description="Store-ops rules that fire on order, stock, payment, and customer events — delivery is simulated locally."
-        breadcrumbs={[
-          { label: "System", href: "/admin/settings" },
-          { label: "Automations" },
-        ]}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Link href="/admin/automations/templates" className={secondaryBtnClass}>
-              Browse templates
-            </Link>
-            <button type="button" onClick={openNew} className={primaryBtnClass}>
-              New rule
-            </button>
-          </div>
-        }
+        title="Automatic messages"
+        description="What your shop says to customers on its own."
       />
 
-      <section className="overflow-hidden rounded-xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(17,17,19,0.03)]">
-        <div className="border-b border-black/[0.05] bg-[#FAFAFB]">
-          {apiOn ? (
-            <p className="border-b border-black/[0.04] px-3.5 py-2 text-[11px] leading-relaxed text-[#6E6E73] sm:px-4">
-              Automations run on the live server. WhatsApp/SMS actions send via MSG91 once the
-              matching template is approved (until then a run is recorded as &ldquo;blocked&rdquo;).
-            </p>
-          ) : null}
+      {!apiOn ? (
+        <AdminNotice tone="demo">
+          Practice shop. Nothing here is your real shop, and no customer is contacted.
+        </AdminNotice>
+      ) : null}
+      {notice ? (
+        <AdminNotice tone={notice.tone === "error" ? "error" : "info"}>{notice.text}</AdminNotice>
+      ) : null}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 sm:px-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <MetricPill label="Active" value={enabledCount} accent />
-              <MetricPill label="Paused" value={pausedCount} />
-              <MetricPill
-                label="Runs"
-                value={automationRuns.length}
-                detail={`${completedRuns} ok`}
-              />
-              <MetricPill label="Blocked" value={blockedRuns} warn={blockedRuns > 0} />
-            </div>
-            <Link
-              href="/admin/automations/templates"
-              className="ez-mono text-[9px] font-medium uppercase tracking-[0.1em] text-[#6E6E73] transition hover:text-[#1D1D1F]"
-            >
-              {automationTemplates.length} templates →
-            </Link>
-          </div>
-        </div>
+      <AdminPageTabs
+        ariaLabel="Automatic messages"
+        active={tab}
+        onChange={(key) =>
+          router.replace(key === "wording" ? "/admin/automations?tab=wording" : "/admin/automations")
+        }
+        tabs={[
+          { key: "messages", label: "Automatic messages", count: running.length },
+          { key: "wording", label: "Message wording", count: templates.length },
+        ]}
+      />
 
-        <div className="border-b border-black/[0.05] px-3 py-2.5 sm:px-4">
-          <div
-            className="inline-flex w-full max-w-full gap-1 overflow-x-auto rounded-xl border border-black/[0.06] bg-[#F0F0F2] p-1 shadow-[0_1px_2px_rgba(17,17,19,0.03)] sm:w-auto"
-            role="tablist"
-            aria-label="Automations views"
-          >
-            {(
-              [
-                { id: "rules" as const, label: "Rules", hint: "Configured", count: automations.length },
-                { id: "runs" as const, label: "History", hint: "Run log", count: automationRuns.length },
-              ] as const
-            ).map((item) => {
-              const active = tab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  id={`automations-tab-${item.id}`}
-                  onClick={() => setTab(item.id)}
-                  className={`inline-flex min-w-[7.5rem] shrink-0 flex-col rounded-lg px-3.5 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${
-                    active
-                      ? "bg-white text-[#1D1D1F] shadow-[0_1px_2px_rgba(17,17,19,0.06)]"
-                      : "text-[#6E6E73] hover:text-[#1D1D1F]"
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="text-xs font-semibold tracking-[-0.01em]">{item.label}</span>
-                    <span
-                      className={`ez-mono text-[8px] ${
-                        active ? "text-[#86868B]" : "text-[#AEAEB2]"
-                      }`}
-                    >
-                      {item.count}
-                    </span>
-                  </span>
-                  <span
-                    className={`mt-0.5 ez-mono text-[8px] uppercase tracking-[0.12em] ${
-                      active ? "text-[#86868B]" : "text-[#AEAEB2]"
-                    }`}
-                  >
-                    {item.hint}
-                  </span>
-                </button>
-              );
-            })}
-            <Link
-              href="/admin/automations/templates"
-              role="tab"
-              aria-selected={false}
-              className="inline-flex min-w-[7.5rem] shrink-0 flex-col rounded-lg px-3.5 py-2 text-left text-[#6E6E73] transition hover:text-[#1D1D1F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-            >
-              <span className="flex items-center gap-2">
-                <span className="text-xs font-semibold tracking-[-0.01em]">Templates</span>
-                <span className="ez-mono text-[8px] text-[#AEAEB2]">
-                  {automationTemplates.length}
-                </span>
-              </span>
-              <span className="mt-0.5 ez-mono text-[8px] uppercase tracking-[0.12em] text-[#AEAEB2]">
-                Starters
-              </span>
-            </Link>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2.5 border-b border-black/[0.05] bg-[#FAFAFB] px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <div className="relative min-w-0 flex-1 lg:max-w-sm">
-              <span
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#AEAEB2]"
-                aria-hidden
+      {tab === "wording" ? (
+        <MessageWordingPanel templates={templates} onReload={load} />
+      ) : (
+        <div className="space-y-5">
+          <section>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h2 className="text-[13px] font-semibold tracking-[-0.01em] text-[#1D1D1F]">
+                Running now · {running.length}
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setDrawerError(null);
+                  setEditing(blankRule());
+                }}
+                className="h-8 rounded-lg border border-black/[0.1] bg-white px-3 text-[11px] font-semibold text-[#1D1D1F] transition hover:bg-[#F7F7F8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
               >
-                <SearchGlyph />
-              </span>
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={tab === "rules" ? "Search rules…" : "Search run history…"}
-                className="h-9 w-full rounded-lg border border-black/[0.07] bg-white pl-8 pr-3 text-sm shadow-[0_1px_2px_rgba(17,17,19,0.03)] outline-none placeholder:text-[#AEAEB2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-              />
+                Write your own
+              </button>
             </div>
-            <span className="hidden shrink-0 ez-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[#86868B] sm:inline">
-              {resultLabel}
-            </span>
-          </div>
 
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <AdminSelect
-              label="Trigger"
-              value={trigger}
-              onChange={setTrigger}
-              options={triggerOptions}
-              className={compactSelectClass}
-            />
-            {tab === "rules" ? (
-              <AdminSelect
-                label="Status"
-                value={enabledFilter}
-                onChange={(value) => setEnabledFilter(value as "all" | "on" | "off")}
-                options={[
-                  { value: "all", label: "All" },
-                  { value: "on", label: "Enabled" },
-                  { value: "off", label: "Paused" },
-                ]}
-                className={compactSelectClass}
-              />
-            ) : null}
-          </div>
-        </div>
-
-        <div className="p-3.5 sm:p-4">
-          {tab === "rules" ? (
-            rules.length ? (
-              <div className="grid gap-2.5 lg:grid-cols-2">
-                {rules.map((rule) => (
-                  <RuleCard
-                    key={rule.id}
-                    rule={rule}
-                    onEdit={() => setEditing(rule)}
-                    onDelete={() => setDeleteId(rule.id)}
-                    onToggle={(enabled) => void handleToggle(rule, enabled)}
-                    onTest={() => {
-                      void handleTest(rule);
-                      setTab("runs");
-                    }}
-                  />
-                ))}
-              </div>
+            {running.length === 0 ? (
+              <p className="rounded-xl border border-black/[0.06] bg-white px-3.5 py-4 text-[13px] text-[#6E6E73]">
+                Your shop is not telling customers anything on its own. The list below is what it
+                could be saying.
+              </p>
             ) : (
-              <AdminEmptyState
-                title="No rules match"
-                description="Try another trigger, status, or search — or start from a template."
-                action={
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQuery("");
-                        setTrigger("all");
-                        setEnabledFilter("all");
-                      }}
-                      className="h-9 rounded-xl border border-black/[0.1] bg-[#F7F7F8] px-3.5 text-xs font-semibold"
-                    >
-                      Clear filters
-                    </button>
-                    <Link href="/admin/automations/templates" className={primaryBtnClass}>
-                      Browse templates
-                    </Link>
-                  </div>
-                }
-              />
-            )
-          ) : runs.length ? (
-            <div className="overflow-hidden rounded-xl border border-black/[0.05]">
-              <ul className="divide-y divide-black/[0.05]">
-                {runs.slice(0, 80).map((run) => (
-                  <RunRow key={run.id} run={run} />
+              <ul className="space-y-2">
+                {running.map((rule) => (
+                  <li
+                    key={rule.id}
+                    className="rounded-xl border border-black/[0.06] bg-white px-3.5 py-3 shadow-[0_1px_2px_rgba(17,17,19,0.03)]"
+                  >
+                    <RuleSentence slots={buildRuleSentence(rule, wordingsFor)} />
+                    <p className="mt-1.5 text-[11px] text-[#86868B]">
+                      {describeLastRun(lastRunByRule.get(rule.id))}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center justify-end gap-1 border-t border-black/[0.05] pt-2">
+                      <RowAction onClick={() => void tryIt(rule)} disabled={!apiOn}>
+                        Try it with a sample order
+                      </RowAction>
+                      <RowAction
+                        onClick={() => {
+                          setDrawerError(null);
+                          setEditing(rule);
+                        }}
+                      >
+                        Change it
+                      </RowAction>
+                      <RowAction onClick={() => void setEnabled(rule, false)} disabled={!apiOn}>
+                        Switch off
+                      </RowAction>
+                      <RowAction danger onClick={() => setDeleting(rule)} disabled={!apiOn}>
+                        Delete
+                      </RowAction>
+                    </div>
+                  </li>
                 ))}
               </ul>
-              {runs.length > 80 ? (
-                <p className="border-t border-black/[0.05] bg-[#FAFAFB] px-4 py-2.5 text-center ez-mono text-[9px] uppercase tracking-[0.1em] text-[#86868B]">
-                  Showing latest 80 of {runs.length} runs
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <AdminEmptyState
-              title="No runs yet"
-              description="Test a rule or change an order status to see outcomes here."
-              action={
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (automations[0]) {
-                      void handleTest(automations[0]);
-                    } else {
-                      openNew();
-                    }
-                  }}
-                  className={primaryBtnClass}
-                >
-                  {automations[0] ? "Fire sample test" : "Create a rule"}
-                </button>
-              }
-            />
-          )}
+            )}
+          </section>
+
+          <section>
+            <h2 className="mb-2 text-[13px] font-semibold tracking-[-0.01em] text-[#1D1D1F]">
+              Not turned on · {offCount}
+            </h2>
+            {offCount === 0 ? (
+              <p className="rounded-xl border border-black/[0.06] bg-white px-3.5 py-4 text-[13px] text-[#6E6E73]">
+                Everything worth switching on is on.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {switchedOff.map((rule) => (
+                  <li
+                    key={rule.id}
+                    className="flex flex-col gap-2 rounded-xl border border-black/[0.05] bg-[#FAFAFB] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <RuleSentence muted slots={buildRuleSentence(rule, wordingsFor)} />
+                    <button
+                      type="button"
+                      onClick={() => void setEnabled(rule, true)}
+                      disabled={!apiOn}
+                      className={turnOnBtnClass}
+                    >
+                      Turn on
+                    </button>
+                  </li>
+                ))}
+                {notSetUp.map((recommendation) => {
+                  const asRule: AutomationRule = {
+                    ...blankRule(),
+                    id: recommendation.id,
+                    name: recommendation.name,
+                    trigger: recommendation.trigger,
+                    conditions: recommendation.conditions,
+                    actions: recommendation.actions,
+                  };
+                  return (
+                    <li
+                      key={recommendation.id}
+                      className="flex flex-col gap-2 rounded-xl border border-black/[0.05] bg-[#FAFAFB] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <RuleSentence muted slots={buildRuleSentence(asRule, wordingsFor)} />
+                        <p className="mt-1 text-[11px] text-[#AEAEB2]">{recommendation.why}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void turnOn(recommendation)}
+                        disabled={!apiOn}
+                        className={turnOnBtnClass}
+                      >
+                        Turn on
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </div>
-      </section>
+      )}
 
       {editing ? (
         <AutomationBuilder
           key={editing.id || "new"}
           rule={editing}
+          wordings={wordings}
+          saving={saving}
+          error={drawerError}
           onClose={() => setEditing(null)}
-          onSave={saveRule}
-          onTested={() => {
-            setTab("runs");
-            setToast("Test event fired");
-          }}
+          onSave={(rule) => void saveRule(rule)}
         />
       ) : null}
 
       <ConfirmDialog
-        open={Boolean(deleteId)}
-        title="Delete automation?"
-        description="This removes the rule from the local store. Run history is kept."
-        confirmLabel="Delete"
+        open={deleting !== null}
+        title="Delete this automatic message?"
+        description={
+          deleting
+            ? `“${deleting.name}” stops running and cannot be brought back — you would set it up again from the list. No customer is contacted either way, and nothing that has already gone out is affected. If you only want it to stop for now, switch it off instead.`
+            : ""
+        }
+        confirmLabel="Delete it"
+        cancelLabel="Keep it"
         danger
-        onCancel={() => setDeleteId(null)}
+        onCancel={() => setDeleting(null)}
         onConfirm={() => {
-          if (deleteId) void handleDelete(deleteId);
-          setDeleteId(null);
+          const rule = deleting;
+          setDeleting(null);
+          if (rule) void write(() => api.deleteAutomation(rule.id), "Deleted. It will not run again.");
         }}
       />
     </div>
   );
 }
 
-function MetricPill({
-  label,
-  value,
-  detail,
-  accent,
-  warn,
-}: {
-  label: string;
-  value: number;
-  detail?: string;
-  accent?: boolean;
-  warn?: boolean;
-}) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 ${
-        warn
-          ? "border-[#F5C2C0] bg-[#FFF5F5]"
-          : accent
-            ? "border-black/[0.06] bg-white"
-            : "border-black/[0.05] bg-white/70"
-      }`}
-    >
-      <span className="ez-mono text-[8px] font-medium uppercase tracking-[0.12em] text-[#86868B]">
-        {label}
-      </span>
-      <span
-        className={`text-[13px] font-semibold tabular-nums tracking-[-0.03em] ${
-          warn ? "text-[#B42318]" : "text-[#1D1D1F]"
-        }`}
-      >
-        {value}
-      </span>
-      {detail ? (
-        <span className="text-[10px] text-[#AEAEB2]">({detail})</span>
-      ) : null}
-    </span>
-  );
-}
+const turnOnBtnClass =
+  "h-8 shrink-0 rounded-lg bg-[#1D1D1F] px-3 text-[11px] font-semibold text-white transition hover:bg-[#2C2C2E] disabled:cursor-not-allowed disabled:bg-[#C7C7CC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]";
 
-function RuleCard({
-  rule,
-  onEdit,
-  onDelete,
-  onToggle,
-  onTest,
-}: {
-  rule: AdminAutomationRule;
-  onEdit: () => void;
-  onDelete: () => void;
-  onToggle: (enabled: boolean) => void;
-  onTest: () => void;
-}) {
-  const conditionText = rule.conditions.length
-    ? rule.conditions
-        .map((c) => `${c.field} ${operatorShort(c.operator)} ${c.value}`)
-        .join(" · ")
-    : "Always";
-  const actionText =
-    rule.actions
-      .map((a) => actionLabels[a.type] ?? a.type.split("_").join(" "))
-      .join(" → ") || "—";
-
-  return (
-    <article className="group flex flex-col rounded-xl border border-black/[0.06] bg-white p-3.5 shadow-[0_1px_2px_rgba(17,17,19,0.03)] transition hover:border-black/[0.1] hover:shadow-[0_4px_16px_rgba(17,17,19,0.05)]">
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate text-[13px] font-semibold tracking-[-0.02em] text-[#1D1D1F]">
-              {rule.name}
-            </h2>
-            <StatusPill enabled={rule.enabled} />
-          </div>
-          <p className="mt-0.5 line-clamp-1 text-[11px] text-[#86868B]">
-            {rule.description || "No description"}
-          </p>
-        </div>
-        <Toggle
-          checked={rule.enabled}
-          onChange={onToggle}
-          label={`${rule.enabled ? "Pause" : "Enable"} ${rule.name}`}
-        />
-      </div>
-
-      <div className="mt-3 overflow-hidden rounded-lg border border-black/[0.05] bg-[#FAFAFB]">
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-stretch">
-          <FlowStep label="Trigger" value={triggerLabels[rule.trigger]} />
-          <FlowDivider />
-          <FlowStep label="If" value={conditionText} />
-          <FlowDivider />
-          <FlowStep label="Then" value={actionText} />
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-end gap-1 border-t border-black/[0.05] pt-2.5">
-        <CardAction onClick={onTest}>Test</CardAction>
-        <CardAction onClick={onEdit}>Edit</CardAction>
-        <CardAction onClick={onDelete} danger>
-          Delete
-        </CardAction>
-      </div>
-    </article>
-  );
-}
-
-function FlowStep({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 px-3 py-2.5">
-      <div className="ez-mono text-[8px] font-medium uppercase tracking-[0.12em] text-[#AEAEB2]">
-        {label}
-      </div>
-      <div
-        className="mt-0.5 truncate text-[11px] font-semibold tracking-[-0.01em] text-[#1D1D1F]"
-        title={value}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function FlowDivider() {
-  return (
-    <div
-      className="hidden items-center justify-center self-stretch border-x border-black/[0.04] px-1 sm:flex"
-      aria-hidden
-    >
-      <span className="text-[10px] text-[#C7C7CC]">→</span>
-    </div>
-  );
-}
-
-function CardAction({
+function RowAction({
   children,
   onClick,
   danger,
+  disabled,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   danger?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`h-7 rounded-lg px-2.5 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+      disabled={disabled}
+      className={`h-7 rounded-lg px-2.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:text-[#C7C7CC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
         danger
           ? "text-[#B42318] hover:bg-[#FFF5F5] focus-visible:outline-[#B42318]"
           : "text-[#424245] hover:bg-[#F0F0F2] focus-visible:outline-[#1D1D1F]"
@@ -684,105 +440,3 @@ function CardAction({
     </button>
   );
 }
-
-function RunRow({ run }: { run: AdminAutomationRun }) {
-  const meta = runStatusMeta[run.status];
-  return (
-    <li className="flex flex-col gap-2 px-3.5 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4">
-      <div className="shrink-0 sm:w-28">
-        <time className="ez-mono text-[10px] text-[#86868B]" dateTime={run.at}>
-          {formatAdminDateTime(run.at)}
-        </time>
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-semibold tracking-[-0.02em] text-[#1D1D1F]">
-            {run.ruleName}
-          </span>
-          <span className="ez-mono text-[8px] uppercase tracking-[0.12em] text-[#AEAEB2]">
-            {triggerLabels[run.trigger]}
-          </span>
-        </div>
-        <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-[#6E6E73]">
-          {run.summary}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-        <span
-          className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}
-        >
-          {meta.label}
-        </span>
-        {run.delivery ? (
-          <span
-            className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold ${
-              run.delivery === "blocked"
-                ? "bg-[#FFF1E5] text-[#9A3412]"
-                : "bg-[#F0F0F2] text-[#6E6E73]"
-            }`}
-          >
-            {run.delivery}
-          </span>
-        ) : null}
-      </div>
-    </li>
-  );
-}
-
-function StatusPill({ enabled }: { enabled: boolean }) {
-  return (
-    <span
-      className={`inline-flex rounded-md px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] ${
-        enabled ? "bg-[#EAF6ED] text-[#2D6B3C]" : "bg-[#F0F0F2] text-[#6E6E73]"
-      }`}
-    >
-      {enabled ? "Active" : "Paused"}
-    </span>
-  );
-}
-
-function Toggle({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] ${
-        checked ? "bg-[#1D1D1F]" : "bg-[#D1D1D6]"
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition ${
-          checked ? "left-[18px]" : "left-0.5"
-        }`}
-      />
-    </button>
-  );
-}
-
-function SearchGlyph() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <circle cx="6" cy="6" r="4.25" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M9.2 9.2L12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function operatorShort(op: AdminAutomationRule["conditions"][number]["operator"]) {
-  if (op === "equals") return "=";
-  if (op === "not_equals") return "≠";
-  if (op === "contains") return "∋";
-  return "≤";
-}
-

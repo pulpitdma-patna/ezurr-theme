@@ -7,26 +7,38 @@ export type SettingsTabId =
   | "appearance"
   | "checkout"
   | "operations"
-  | "team"
   | "tax"
-  | "shipping"
   | "notifications"
   | "danger";
 
-export const SETTINGS_TABS: {
-  id: SettingsTabId;
-  label: string;
-  hint: string;
-}[] = [
-  { id: "store", label: "Store", hint: "Identity & support" },
-  { id: "appearance", label: "Appearance", hint: "Theme & merch" },
-  { id: "checkout", label: "Checkout", hint: "Payments & cart" },
-  { id: "operations", label: "Operations", hint: "Stock & locale" },
-  { id: "team", label: "Team", hint: "Staff & roles" },
-  { id: "tax", label: "Tax", hint: "GST readiness" },
-  { id: "shipping", label: "Shipping", hint: "Zones & rates" },
-  { id: "notifications", label: "Notifications", hint: "Alert prefs" },
-  { id: "danger", label: "Danger zone", hint: "Reset & demo" },
+/**
+ * The vertical rail stays — it is the best-organised thing in this admin, and
+ * seven items do not fit across a phone. Two things changed:
+ *
+ *  - the second line under each tab ("IDENTITY & SUPPORT", "STOCK & LOCALE") is
+ *    gone. It was 7px uppercase mono, it repeated the tab in different words,
+ *    and it was one of the last places on this screen speaking in capitals;
+ *  - each tab is now named for what the owner would go looking for. "Store" sat
+ *    in a nav group also called Store and meant neither of them.
+ *
+ * Two tabs went with the rewrite: Team, which rendered four invented staff
+ * members to a shop with real ones, and Shipping, which held three fixed
+ * sentences and no control at all.
+ *
+ * "Stock & region" is now just "Stock": the region half was a currency list and
+ * a time-zone list, and neither was read by anything — prices are printed in ₹
+ * and times in IST whatever those two said. The ids are untouched, because
+ * other screens link straight to ?tab=tax and #checkout and a renamed id would
+ * quietly drop those links on the first tab.
+ */
+export const SETTINGS_TABS: { id: SettingsTabId; label: string }[] = [
+  { id: "store", label: "Shop details" },
+  { id: "appearance", label: "Look" },
+  { id: "checkout", label: "Checkout" },
+  { id: "operations", label: "Stock" },
+  { id: "tax", label: "GST & invoices" },
+  { id: "notifications", label: "Alerts" },
+  { id: "danger", label: "Start over" },
 ];
 
 function SettingsTabButton({
@@ -74,7 +86,7 @@ function SettingsTabButton({
       id={`settings-tab-${tab.id}`}
       aria-controls={`settings-panel-${tab.id}`}
       onClick={() => onChange(tab.id)}
-      className={`relative flex w-full flex-col items-start px-3 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#1D1D1F] ${
+      className={`relative flex w-full items-center px-3 py-2.5 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#1D1D1F] ${
         active
           ? danger
             ? "bg-[#FFF5F5] text-[#B42318]"
@@ -99,9 +111,6 @@ function SettingsTabButton({
       >
         {tab.label}
       </span>
-      <span className="mt-0.5 ez-mono text-[7px] uppercase tracking-[0.14em] text-[#AEAEB2]">
-        {tab.hint}
-      </span>
     </button>
   );
 }
@@ -110,10 +119,13 @@ export function SettingsNav({
   activeId,
   onChange,
   children,
+  tabs = SETTINGS_TABS,
 }: {
   activeId: SettingsTabId;
   onChange: (id: SettingsTabId) => void;
   children: ReactNode;
+  /** Lets a tab with nothing on it for this shop not exist, rather than open empty. */
+  tabs?: { id: SettingsTabId; label: string }[];
 }) {
   return (
     <>
@@ -122,7 +134,7 @@ export function SettingsNav({
         aria-label="Settings"
         className="ez-scrollbar-none flex gap-1 overflow-x-auto border-b border-black/[0.05] bg-[#FAFAFB] px-2 py-2 lg:hidden"
       >
-        {SETTINGS_TABS.map((tab) => (
+        {tabs.map((tab) => (
           <SettingsTabButton
             key={tab.id}
             tab={tab}
@@ -140,7 +152,7 @@ export function SettingsNav({
           aria-label="Settings"
           className="hidden shrink-0 border-r border-black/[0.05] bg-[#FAFAFB] py-2 lg:block lg:w-[11.5rem] xl:w-[12.5rem]"
         >
-          {SETTINGS_TABS.map((tab) => (
+          {tabs.map((tab) => (
             <SettingsTabButton
               key={tab.id}
               tab={tab}

@@ -1,176 +1,149 @@
-import type {
-  AutomationAction,
-  AutomationCondition,
-  AutomationTrigger,
-} from "@/data/admin";
+/**
+ * The messages a gaming shop should be sending, whether or not it is.
+ *
+ * This file used to be a gallery of twelve "starter templates" behind its own
+ * route, reachable from three separate controls on one screen. Opening one
+ * filled a four-step form the owner then had to name, describe and save. Four
+ * of the twelve wrote prose into the field the dispatcher reads as a template
+ * lookup key ("Your pre-order is ready"), which matches no wording, so those
+ * four handed out rules that could never send anything — while showing as on.
+ *
+ * They are now the second half of one list: NOT TURNED ON. Same sentence, in
+ * grey, with one button. No gallery, no route, no form.
+ *
+ * Every `value` on a send action here is an `event_key` that the message
+ * wording seeder creates, never a sentence.
+ */
 
-export type AutomationTemplateCategory =
-  | "orders"
-  | "inventory"
-  | "customers"
-  | "payments"
-  | "messaging";
+import type { AutomationAction, AutomationCondition } from "@/data/admin";
+import type { AutomationRule, AutomationTriggerKey } from "@/lib/automationGrammar";
 
-export type AutomationTemplate = {
+export type RecommendedRule = {
   id: string;
+  /** Saved as the rule's name. The sentence is what he reads; this is for the log. */
   name: string;
-  description: string;
-  category: AutomationTemplateCategory;
-  trigger: AutomationTrigger;
+  trigger: AutomationTriggerKey;
   conditions: AutomationCondition[];
   actions: AutomationAction[];
-  /** Short ops note shown on the card */
-  tip?: string;
+  /** One line under the grey sentence: why this is worth switching on. */
+  why: string;
 };
 
-export const automationTemplateCategories: {
-  id: AutomationTemplateCategory | "all";
-  label: string;
-}[] = [
-  { id: "all", label: "All" },
-  { id: "orders", label: "Orders" },
-  { id: "inventory", label: "Inventory" },
-  { id: "customers", label: "Customers" },
-  { id: "payments", label: "Payments" },
-  { id: "messaging", label: "Messaging" },
-];
-
-export const categoryLabels: Record<AutomationTemplateCategory, string> = {
-  orders: "Orders",
-  inventory: "Inventory",
-  customers: "Customers",
-  payments: "Payments",
-  messaging: "Messaging",
-};
-
-/** Starter templates for gaming ecommerce ops — not live rules until used. */
-export const automationTemplates: AutomationTemplate[] = [
+export const RECOMMENDED_RULES: RecommendedRule[] = [
   {
-    id: "tpl-cod-review",
-    name: "Pending COD review",
-    description: "Alert ops when a COD order lands in pending and needs a manual check.",
-    category: "orders",
+    id: "rec-order-accepted",
+    name: "Tell the customer their order is accepted",
     trigger: "order_status_changed",
-    conditions: [
-      { field: "status", operator: "equals", value: "pending" },
-      { field: "payment", operator: "equals", value: "COD" },
-    ],
-    actions: [{ type: "notify_internal", value: "Review pending COD order" }],
-    tip: "Pairs well with high-value COD thresholds.",
+    conditions: [{ field: "status", operator: "equals", value: "confirmed" }],
+    actions: [{ type: "send_whatsapp", value: "order_confirmed" }],
+    why: "Stops the “did my order go through?” call.",
   },
   {
-    id: "tpl-low-stock",
-    name: "Low-stock escalation",
-    description: "Escalate SKUs that hit the low-stock event and ping inventory ops.",
-    category: "inventory",
-    trigger: "stock_low",
-    conditions: [],
-    actions: [
-      { type: "notify_internal", value: "Low stock needs replenishment" },
-      { type: "send_webhook", value: "inventory.low" },
-    ],
-    tip: "Requires Webhooks connected for delivery.",
-  },
-  {
-    id: "tpl-preorder-email",
-    name: "Pre-order release email",
-    description: "Email the customer when a pre-order is allocated for fulfillment.",
-    category: "orders",
-    trigger: "preorder_released",
-    conditions: [],
-    actions: [{ type: "send_email", value: "Your pre-order is ready for fulfillment" }],
-  },
-  {
-    id: "tpl-preorder-whatsapp",
-    name: "Pre-order WhatsApp release",
-    description: "Send a WhatsApp release update when messaging is healthy.",
-    category: "messaging",
-    trigger: "preorder_released",
-    conditions: [],
-    actions: [{ type: "send_whatsapp", value: "Your pre-order is ready" }],
-    tip: "Blocked if WhatsApp integration is paused.",
-  },
-  {
-    id: "tpl-payment-ack",
-    name: "Prepaid payment acknowledgement",
-    description: "Acknowledge successfully captured prepaid payments with an email.",
-    category: "payments",
-    trigger: "payment_captured",
-    conditions: [{ field: "payment", operator: "equals", value: "Prepaid" }],
-    actions: [{ type: "send_email", value: "Payment received" }],
-  },
-  {
-    id: "tpl-welcome-tag",
-    name: "New-customer welcome tagging",
-    description: "Tag newly created customer records for onboarding campaigns.",
-    category: "customers",
-    trigger: "customer_created",
-    conditions: [],
-    actions: [{ type: "add_customer_tag", value: "new-customer" }],
-  },
-  {
-    id: "tpl-payment-failed",
-    name: "Failed payment follow-up",
-    description: "Notify internal ops when a prepaid attempt fails at checkout.",
-    category: "payments",
-    trigger: "payment_failed",
-    conditions: [],
-    actions: [{ type: "notify_internal", value: "Payment failed — follow up with customer" }],
-  },
-  {
-    id: "tpl-payment-authorized",
-    name: "Authorized payment hold note",
-    description: "Log an internal note when a payment is authorized but not yet captured.",
-    category: "payments",
-    trigger: "payment_authorized",
-    conditions: [{ field: "payment", operator: "equals", value: "Prepaid" }],
-    actions: [{ type: "notify_internal", value: "Payment authorized — awaiting capture" }],
-  },
-  {
-    id: "tpl-shipped-email",
-    name: "Shipped status email",
-    description: "Email customers when an order moves to shipped.",
-    category: "orders",
+    id: "rec-order-shipped",
+    name: "Tell the customer the order is on the way",
     trigger: "order_status_changed",
     conditions: [{ field: "status", operator: "equals", value: "shipped" }],
-    actions: [{ type: "send_email", value: "Your order is on the way" }],
+    actions: [{ type: "send_whatsapp", value: "order_shipped" }],
+    why: "Sends the tracking link, so nobody has to ask you for it.",
   },
   {
-    id: "tpl-delivered-tag",
-    name: "Delivered VIP nudge",
-    description: "Tag delivered prepaid customers for a post-purchase VIP list.",
-    category: "customers",
+    id: "rec-order-delivered",
+    name: "Ask how it went after delivery",
     trigger: "order_status_changed",
-    conditions: [
-      { field: "status", operator: "equals", value: "delivered" },
-      { field: "payment", operator: "equals", value: "Prepaid" },
-    ],
-    actions: [{ type: "add_customer_tag", value: "delivered-prepaid" }],
+    conditions: [{ field: "status", operator: "equals", value: "delivered" }],
+    actions: [{ type: "send_whatsapp", value: "order_delivered" }],
+    why: "The best moment to ask for a review is the day it arrives.",
   },
   {
-    id: "tpl-cancelled-alert",
-    name: "Cancellation alert",
-    description: "Ping the team when an order is cancelled so stock and refunds stay in sync.",
-    category: "orders",
+    id: "rec-refunded",
+    name: "Tell the customer their money is on its way back",
     trigger: "order_status_changed",
-    conditions: [{ field: "status", operator: "equals", value: "cancelled" }],
-    actions: [
-      { type: "notify_internal", value: "Order cancelled — review refund & stock" },
-      { type: "send_webhook", value: "orders.cancelled" },
-    ],
+    conditions: [{ field: "status", operator: "equals", value: "refunded" }],
+    actions: [{ type: "send_whatsapp", value: "refund_confirmation" }],
+    why: "A refund takes 3–5 days at the bank. This is what stops the chasing.",
   },
   {
-    id: "tpl-stock-webhook",
-    name: "Inventory webhook only",
-    description: "Fire a webhook on low stock without an internal notification.",
-    category: "inventory",
+    id: "rec-payment-failed",
+    name: "Give a second chance to pay",
+    trigger: "payment_failed",
+    conditions: [],
+    actions: [{ type: "send_whatsapp", value: "payment_failed" }],
+    why: "The customer wanted to buy. The card did not work.",
+  },
+  {
+    id: "rec-cart-abandoned",
+    name: "Remind about a basket left behind",
+    trigger: "cart_abandoned",
+    conditions: [],
+    actions: [{ type: "send_whatsapp", value: "abandoned_cart" }],
+    why: "Only goes to customers who agreed to hear from you on WhatsApp.",
+  },
+  {
+    id: "rec-back-in-stock",
+    name: "Tell people waiting when something is back",
+    trigger: "back_in_stock",
+    conditions: [],
+    actions: [{ type: "send_whatsapp", value: "back_in_stock" }],
+    why: "They already told you they want it.",
+  },
+  {
+    id: "rec-stock-low",
+    name: "Tell me when something is running out",
     trigger: "stock_low",
     conditions: [],
-    actions: [{ type: "send_webhook", value: "inventory.low" }],
-    tip: "Lean template for external WMS hooks.",
+    actions: [{ type: "notify_internal", value: "Running low — order more" }],
+    why: "Goes to you, not to a customer.",
+  },
+  {
+    id: "rec-code-sent",
+    name: "Send the game code",
+    trigger: "digital_code_delivered",
+    conditions: [],
+    actions: [{ type: "send_whatsapp", value: "digital_code_delivered" }],
+    why: "A code the customer cannot find is a refund.",
+  },
+  {
+    id: "rec-welcome",
+    name: "Welcome a new customer",
+    trigger: "customer_created",
+    conditions: [],
+    actions: [{ type: "send_whatsapp", value: "welcome" }],
+    why: "One message, the first time somebody buys from you.",
+  },
+  {
+    id: "rec-new-order",
+    name: "Tell me when a new order comes in",
+    trigger: "order_placed",
+    conditions: [],
+    actions: [{ type: "notify_internal", value: "New order" }],
+    why: "Goes to you, not to a customer.",
   },
 ];
 
-export function getAutomationTemplate(id: string) {
-  return automationTemplates.find((template) => template.id === id) ?? null;
+/**
+ * Is this recommendation already a rule on the shop?
+ *
+ * Matched on what the rule DOES — trigger, the status it watches for, and the
+ * first action — not on its name, because the owner is free to rename a rule
+ * and renaming it must not make the same suggestion reappear underneath.
+ */
+export function isAlreadyARule(
+  recommendation: RecommendedRule,
+  rules: Pick<AutomationRule, "trigger" | "conditions" | "actions">[],
+): boolean {
+  const wanted = recommendation.actions[0];
+  const wantedStatus = recommendation.conditions.find(
+    (c) => c.field === "status" && c.operator === "equals",
+  )?.value;
+
+  return rules.some((rule) => {
+    if (rule.trigger !== recommendation.trigger) return false;
+    if (wantedStatus !== undefined) {
+      const has = rule.conditions.find((c) => c.field === "status" && c.operator === "equals");
+      if (has?.value !== wantedStatus) return false;
+    }
+    return rule.actions.some(
+      (a) => a.type === wanted.type && (wanted.value ? a.value === wanted.value : true),
+    );
+  });
 }

@@ -310,6 +310,19 @@ export type AdminIntegrationField = {
   options?: { value: string; label: string }[];
 };
 
+/**
+ * The connect-button path, for a provider that has one. `available` is the
+ * server saying it holds the app the owner would be approving — without it the
+ * only honest thing to show is the old paste-the-key form.
+ */
+export type AdminIntegrationOauth = {
+  supported: boolean;
+  available: boolean;
+  connected: boolean;
+  /** e.g. mystore.myshopify.com */
+  shop: string | null;
+};
+
 export type AdminIntegration = {
   id: string;
   name: string;
@@ -324,6 +337,8 @@ export type AdminIntegration = {
   /** Undefined in demo mode — the schema only exists on the server. */
   fields?: AdminIntegrationField[];
   missingRequired?: string[];
+  /** Undefined in demo mode and for providers configured by pasting keys. */
+  oauth?: AdminIntegrationOauth;
 };
 
 export type AdminAnalyticsDay = {
@@ -649,7 +664,7 @@ export const adminOrders: AdminOrder[] = [
     city: "Chennai",
     items: [lineItem("game-cards", 1, 1, "digital")],
     timeline: timeline([
-      { at: "2026-07-14T14:55:00", label: "Order placed", detail: "Digital fulfillment" },
+      { at: "2026-07-14T14:55:00", label: "Order placed", detail: "Code goes out by email" },
       { at: "2026-07-14T15:02:00", label: "Confirmed", detail: "Code queue · assign from vault" },
     ]),
   },
@@ -968,7 +983,7 @@ export const adminIntegrations: AdminIntegration[] = [
     id: "cash-on-delivery",
     name: "Cash on Delivery",
     category: "payments",
-    description: "Offer cash collection for eligible orders and serviceable pincodes.",
+    description: "Let customers pay cash when the parcel reaches them.",
     status: "connected",
     enabled: true,
     lastSync: "2026-07-18T08:31:00",
@@ -978,7 +993,7 @@ export const adminIntegrations: AdminIntegration[] = [
     id: "shiprocket",
     name: "Shiprocket",
     category: "shipping",
-    description: "Create shipments, print labels, and track carrier handoffs.",
+    description: "Book a pickup, print the label, and follow the parcel.",
     status: "connected",
     enabled: true,
     lastSync: "2026-07-18T07:55:00",
@@ -988,7 +1003,7 @@ export const adminIntegrations: AdminIntegration[] = [
     id: "whatsapp",
     name: "WhatsApp Business",
     category: "messaging",
-    description: "Send order, dispatch, and pre-order release updates.",
+    description: "Message customers when an order is accepted, sent, or ready.",
     status: "needs_attention",
     enabled: true,
     lastSync: "2026-07-17T18:10:00",
@@ -998,7 +1013,7 @@ export const adminIntegrations: AdminIntegration[] = [
     id: "google-analytics",
     name: "Google Analytics",
     category: "analytics",
-    description: "Measure storefront journeys, conversion, and campaign performance.",
+    description: "See how many people visit your shop and what they end up buying.",
     status: "connected",
     enabled: true,
     lastSync: "2026-07-18T08:15:00",
@@ -1008,7 +1023,7 @@ export const adminIntegrations: AdminIntegration[] = [
     id: "meta-pixel",
     name: "Meta Pixel",
     category: "analytics",
-    description: "Keep catalog and conversion events ready for Meta campaigns.",
+    description: "Tell Facebook and Instagram ads what people bought.",
     status: "not_connected",
     enabled: false,
   },
@@ -1016,19 +1031,19 @@ export const adminIntegrations: AdminIntegration[] = [
     id: "zoho-books",
     name: "Zoho Books",
     category: "other",
-    description: "Export GST-ready order and payment records to accounting.",
+    description: "Send your sales and payments through to your accountant's books.",
     status: "not_connected",
     enabled: false,
   },
   {
     id: "webhooks",
-    name: "Custom webhooks",
+    name: "Your own software",
     category: "other",
-    description: "Send order, stock, and fulfillment events to your own endpoint.",
+    description: "Tell another program you run whenever an order or your stock changes.",
     status: "connected",
     enabled: true,
     lastSync: "2026-07-18T08:40:00",
-    accountLabel: "3 event subscriptions",
+    accountLabel: "Told about 3 kinds of change",
   },
 ];
 
@@ -1062,8 +1077,8 @@ export const adminAlerts: AdminAlert[] = [
   {
     id: "alert-3",
     tone: "success",
-    title: "Dispatch on track",
-    detail: "Packed console order EZX24081177 ready for pickup.",
+    title: "Ready to go out",
+    detail: "The packed console order EZX24081177 is waiting for the courier.",
     href: "/admin/orders/EZX24081177",
   },
 ];
@@ -1135,7 +1150,7 @@ export function deriveAlerts(
       id: "alert-stock",
       tone: "warning",
       title: "Low stock",
-      detail: `${lowStock.length} SKU${lowStock.length === 1 ? "" : "s"} at or below ${threshold} units.`,
+      detail: `${lowStock.length} product${lowStock.length === 1 ? " has" : "s have"} ${threshold} or fewer left.`,
       href: "/admin/inventory?filter=low",
     });
   }
@@ -1374,6 +1389,39 @@ export const productStatusLabels: Record<AdminProductStatus, string> = {
   draft: "Draft",
   published: "Published",
   sold_out: "Sold out",
+};
+
+/**
+ * What each kind of customer is called on screen.
+ *
+ * The badge used to print the stored value with a CSS `capitalize` on it, so a
+ * customer he had blocked read "Banned" and his best customers read "Vip" — the
+ * database's words, in the database's spelling. "Regular" and "Blocked" are what
+ * he says at the counter, and the map means the list, the profile and any future
+ * screen cannot drift apart.
+ */
+export const customerStatusLabels: Record<AdminCustomerStatus, string> = {
+  vip: "VIP",
+  active: "Regular",
+  new: "New",
+  banned: "Blocked",
+};
+
+/**
+ * The part of the shop a recorded change belongs to.
+ *
+ * "What changed" printed the raw column — "Inventory", "Automation", "Settings",
+ * "System" — as both a filter option and a tag on every row. He does not have an
+ * inventory; he has stock.
+ */
+export const activityAreaLabels: Record<AdminActivityEntry["entityType"], string> = {
+  order: "Order",
+  product: "Product",
+  customer: "Customer",
+  inventory: "Stock",
+  settings: "Shop settings",
+  automation: "Automatic message",
+  system: "The shop itself",
 };
 
 export function maskDigitalCode(code: string) {

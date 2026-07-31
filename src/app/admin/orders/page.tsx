@@ -13,7 +13,7 @@ import type { AdminOrder } from "@/data/admin";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useSearchQueryParam } from "@/hooks/useListQuery";
 import { adminErrorMessage } from "@/lib/adminError";
-import { formatAdminDate } from "@/lib/adminFormat";
+import { formatAdminDate, formatAdminTime } from "@/lib/adminFormat";
 import { bulkUpdateOrderStatus } from "@/lib/adminStore";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import { mapApiOrderToAdmin } from "@/lib/apiMappers";
@@ -64,21 +64,19 @@ const MOCK_BUCKETS: Record<string, string[]> = {
 /** "Today 4:12 pm" for something from today, the date otherwise. */
 function whenPlaced(iso: string): string {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "Date not recorded";
   const now = new Date();
   const sameDay =
     d.getDate() === now.getDate() &&
     d.getMonth() === now.getMonth() &&
     d.getFullYear() === now.getFullYear();
   if (!sameDay) return formatAdminDate(iso);
-  return `Today ${d
-    .toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })
-    .toLowerCase()}`;
+  return `Today ${formatAdminTime(iso).toLowerCase()}`;
 }
 
 function describeItems(order: AdminOrder): string {
   const items = order.items ?? [];
-  if (items.length === 0) return "—";
+  if (items.length === 0) return "Nothing on this order";
   if (items.length === 1) return `${items[0].qty} × ${items[0].name}`;
   return `${items[0].name} + ${items.length - 1} more`;
 }
@@ -359,7 +357,9 @@ export default function AdminOrdersPage() {
       <AdminPageHeader
         title="Orders"
         description="Your work, in the order it needs doing."
-        breadcrumbs={[{ label: "Fulfillment", href: "/admin/orders" }, { label: "Orders" }]}
+        // "Fulfillment" was the crumb here. It is not a word he has ever said,
+        // and it named a section of the old nav that no longer exists.
+        breadcrumbs={[{ label: "Orders" }]}
       />
 
       {listError ? <AdminNotice tone="error">{listError}</AdminNotice> : null}
@@ -399,7 +399,7 @@ export default function AdminOrdersPage() {
           placeholder: "Search by name, phone, or order number",
         }}
         actions={
-          <IconButton label="Export CSV" onClick={exportCsv} size="md">
+          <IconButton label="Download this list for Excel" onClick={exportCsv} size="md">
             <ExportIcon />
           </IconButton>
         }
@@ -414,9 +414,13 @@ export default function AdminOrdersPage() {
         density="compact"
         emptyMessage={
           query.trim()
-            ? "Nothing matched that search."
+            ? `Nothing matched "${query.trim()}". Try the customer's phone number, or part of their name.`
             : readOnly
-              ? "Nothing here."
+              ? tab === "money-problem"
+                ? "No money problems. Every payment has gone through."
+                : tab === "delivered"
+                  ? "Nothing delivered yet. Orders land here once you mark them delivered."
+                  : "Nothing closed yet. Cancelled and refunded orders end up here."
               : "Nothing waiting — you're all caught up."
         }
         onRowClick={(row) => router.push(`/admin/orders/${row.id}`)}

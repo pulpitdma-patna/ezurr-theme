@@ -287,37 +287,50 @@ function IconSidebarToggle({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+/**
+ * The title and breadcrumb over each screen.
+ *
+ * This map is the last thing in the admin that still spoke the old vocabulary,
+ * and being the one file the rework agents were forbidden to touch is exactly
+ * why: every screen underneath had been rewritten while the bar above it went on
+ * saying "Fulfillment", "Grow", "Online store" and "System". A page whose own
+ * heading disagrees with its sidebar is worse than one that was never touched —
+ * he cannot tell which of the two names the thing he is looking at.
+ *
+ * Crumbs name the group in the sidebar, or the parent screen the child belongs
+ * to. The five daily destinations have no crumb: they ARE the top level.
+ */
 const pageTitles: { match: (path: string) => boolean; title: string; crumb?: string; crumbHref?: string }[] = [
-  { match: (p) => p === "/admin", title: "Today", crumb: "Overview", crumbHref: "/admin" },
-  { match: (p) => p.startsWith("/admin/analytics"), title: "Analytics", crumb: "Overview", crumbHref: "/admin" },
-  { match: (p) => p.startsWith("/admin/reports"), title: "Reports", crumb: "Overview", crumbHref: "/admin" },
-  { match: (p) => p.startsWith("/admin/products"), title: "Products", crumb: "Catalog", crumbHref: "/admin/products" },
-  { match: (p) => p.startsWith("/admin/categories"), title: "Categories", crumb: "Catalog", crumbHref: "/admin/products" },
-  { match: (p) => p.startsWith("/admin/brands"), title: "Brands", crumb: "Catalog", crumbHref: "/admin/products" },
+  { match: (p) => p === "/admin", title: "Today" },
+  { match: (p) => p.startsWith("/admin/analytics"), title: "Money", crumb: "Money", crumbHref: "/admin/reports" },
+  { match: (p) => p.startsWith("/admin/reports"), title: "Money" },
+  { match: (p) => p.startsWith("/admin/products"), title: "Products" },
+  { match: (p) => p.startsWith("/admin/categories"), title: "Categories", crumb: "Products", crumbHref: "/admin/products" },
+  { match: (p) => p.startsWith("/admin/brands"), title: "Brands", crumb: "Products", crumbHref: "/admin/products" },
   // Retired routes that now redirect into Products — kept so a bookmarked URL
   // still shows the right chrome for the frame before the redirect lands.
-  { match: (p) => p.startsWith("/admin/inventory"), title: "Inventory", crumb: "Catalog", crumbHref: "/admin/products" },
-  { match: (p) => p.startsWith("/admin/preorders"), title: "Pre-orders", crumb: "Catalog", crumbHref: "/admin/products" },
-  { match: (p) => p.startsWith("/admin/media"), title: "Media", crumb: "Catalog", crumbHref: "/admin/products" },
-  { match: (p) => p.startsWith("/admin/orders"), title: "Orders", crumb: "Fulfillment", crumbHref: "/admin/orders" },
-  { match: (p) => p.startsWith("/admin/digital-codes"), title: "Digital codes", crumb: "Fulfillment", crumbHref: "/admin/orders" },
-  { match: (p) => p.startsWith("/admin/customers"), title: "Customers", crumb: "Grow", crumbHref: "/admin/customers" },
-  { match: (p) => p.startsWith("/admin/coupons"), title: "Coupons", crumb: "Grow", crumbHref: "/admin/coupons" },
-  { match: (p) => p.startsWith("/admin/recovery"), title: "Recovery", crumb: "Grow", crumbHref: "/admin/recovery" },
-  { match: (p) => p === "/admin/cms", title: "Pages", crumb: "Online store", crumbHref: "/admin/cms" },
-  { match: (p) => p === "/admin/cms/code", title: "Custom code", crumb: "Online store", crumbHref: "/admin/cms" },
-  { match: (p) => p.startsWith("/admin/cms/"), title: "Page builder", crumb: "Online store", crumbHref: "/admin/cms" },
-  { match: (p) => p === "/admin/checkout-rules/templates", title: "Templates", crumb: "Online store", crumbHref: "/admin/checkout-rules" },
-  { match: (p) => p.startsWith("/admin/checkout-rules"), title: "Checkout rules", crumb: "Online store", crumbHref: "/admin/checkout-rules" },
-  { match: (p) => p.startsWith("/admin/system"), title: "System health", crumb: "System", crumbHref: "/admin/settings" },
-  { match: (p) => p.startsWith("/admin/team"), title: "Team", crumb: "System", crumbHref: "/admin/settings" },
-  { match: (p) => p.startsWith("/admin/integrations"), title: "Integrations", crumb: "System", crumbHref: "/admin/settings" },
-  { match: (p) => p.startsWith("/admin/automations"), title: "Automations", crumb: "System", crumbHref: "/admin/settings" },
-  { match: (p) => p.startsWith("/admin/message-templates"), title: "Message templates", crumb: "System", crumbHref: "/admin/settings" },
-  { match: (p) => p.startsWith("/admin/activity"), title: "Activity", crumb: "System", crumbHref: "/admin/settings" },
-  { match: (p) => p.startsWith("/admin/tools"), title: "Import", crumb: "System", crumbHref: "/admin/settings" },
-  { match: (p) => p.startsWith("/admin/settings"), title: "Settings", crumb: "System", crumbHref: "/admin/settings" },
+  { match: (p) => p.startsWith("/admin/inventory"), title: "Products", crumb: "Products", crumbHref: "/admin/products" },
+  { match: (p) => p.startsWith("/admin/preorders"), title: "Pre-orders", crumb: "Products", crumbHref: "/admin/products" },
+  { match: (p) => p.startsWith("/admin/media"), title: "Pictures", crumb: "Products", crumbHref: "/admin/products" },
+  { match: (p) => p.startsWith("/admin/orders"), title: "Orders" },
+  { match: (p) => p.startsWith("/admin/digital-codes"), title: "Game codes", crumb: "Orders", crumbHref: "/admin/orders" },
+  { match: (p) => p.startsWith("/admin/customers"), title: "Customers" },
+  { match: (p) => p.startsWith("/admin/coupons"), title: "Discount codes", crumb: "Selling more" },
+  { match: (p) => p.startsWith("/admin/recovery"), title: "Baskets left behind", crumb: "Selling more" },
+  { match: (p) => p.startsWith("/admin/automations"), title: "Automatic messages", crumb: "Selling more" },
+  { match: (p) => p.startsWith("/admin/message-templates"), title: "Message wording", crumb: "Automatic messages", crumbHref: "/admin/automations" },
+  { match: (p) => p === "/admin/cms", title: "Website", crumb: "Selling more" },
+  { match: (p) => p === "/admin/cms/code", title: "Custom code", crumb: "Website", crumbHref: "/admin/cms" },
+  { match: (p) => p.startsWith("/admin/cms/"), title: "Page builder", crumb: "Website", crumbHref: "/admin/cms" },
+  { match: (p) => p.startsWith("/admin/checkout-rules"), title: "Checkout rules", crumb: "Setup" },
+  { match: (p) => p.startsWith("/admin/system"), title: "What's working", crumb: "Setup" },
+  { match: (p) => p.startsWith("/admin/team"), title: "People", crumb: "Setup" },
+  { match: (p) => p.startsWith("/admin/integrations"), title: "Other companies", crumb: "Setup" },
+  { match: (p) => p.startsWith("/admin/activity"), title: "What changed", crumb: "Setup" },
+  { match: (p) => p.startsWith("/admin/tools"), title: "Import products", crumb: "Products", crumbHref: "/admin/products" },
+  { match: (p) => p.startsWith("/admin/settings"), title: "Shop settings", crumb: "Setup" },
 ];
+
 
 function resolvePageMeta(pathname: string) {
   return (
@@ -367,69 +380,51 @@ function IconPlatform() {
   );
 }
 
-/** Top-level links — never wrapped in a collapsible submenu. */
+/**
+ * The five things he opens without a reason, flat.
+ *
+ * The old tree was 24 entries under two section labels and five groups, and the
+ * group names were the problem as much as the depth: "Overview" was a heading
+ * over the front door, "Workspace" is Slack's word for a tenant and labelled 21
+ * of the 24, "Catalog" and "Fulfillment" are software and warehouse words, and
+ * "Online store" implied a second shop while sitting next to a Settings tab
+ * called "Store" that meant the physical one.
+ *
+ * The rule for earning a slot: a destination is in the nav if he opens it
+ * WITHOUT a reason. Everything else is reached from the screen that gives him
+ * the reason — categories and brands from Products, message wording from
+ * Automatic messages, the order's documents from the order's Print card.
+ */
 const topLevelNav: NavItem[] = [
-  // "Today" rather than "Dashboard": the screen answers what came in and
-  // what needs doing now, which is what he opens it for.
   { href: "/admin", label: "Today", icon: <IconDash /> },
-  { href: "/admin/analytics", label: "Analytics", icon: <IconChart /> },
-  { href: "/admin/reports", label: "Reports", icon: <IconReports /> },
+  { href: "/admin/orders", label: "Orders", icon: <IconOrders /> },
+  { href: "/admin/products", label: "Products", icon: <IconBox /> },
+  { href: "/admin/customers", label: "Customers", icon: <IconUsers /> },
+  { href: "/admin/reports", label: "Money", icon: <IconChart /> },
 ];
 
-/** Multi-item groups rendered as collapsible NavSubmenus. */
+/** Two groups, both named for what he is trying to do rather than for a subsystem. */
 const navSubmenus: NavGroup[] = [
   {
-    label: "Catalog",
-    icon: <IconBox />,
-    items: [
-      // Inventory and Pre-orders are Products views now (stock is edited inline
-      // on the row; pre-order is the `fulfillment_type` tab), so they no longer
-      // get their own nav entries.
-      { href: "/admin/products", label: "Products", icon: <IconBox /> },
-      { href: "/admin/categories", label: "Categories", icon: <IconTags /> },
-      { href: "/admin/brands", label: "Brands", icon: <IconBrand /> },
-      { href: "/admin/media", label: "Media", icon: <IconMedia /> },
-    ],
-  },
-  {
-    label: "Fulfillment",
-    icon: <IconOrders />,
-    items: [
-      { href: "/admin/orders", label: "Orders", icon: <IconOrders /> },
-      { href: "/admin/digital-codes", label: "Digital codes", icon: <IconKey /> },
-    ],
-  },
-  {
-    label: "Grow",
+    label: "Selling more",
     icon: <IconGrow />,
     items: [
-      { href: "/admin/customers", label: "Customers", icon: <IconUsers /> },
-      { href: "/admin/coupons", label: "Coupons", icon: <IconTag /> },
-      { href: "/admin/recovery", label: "Recovery", icon: <IconGrow /> },
+      { href: "/admin/coupons", label: "Discount codes", icon: <IconTag /> },
+      { href: "/admin/automations", label: "Automatic messages", icon: <IconBolt /> },
+      { href: "/admin/recovery", label: "Baskets left behind", icon: <IconGrow /> },
+      { href: "/admin/cms", label: "Website", icon: <IconMedia /> },
     ],
   },
   {
-    label: "Online store",
-    icon: <IconMedia />,
-    items: [
-      { href: "/admin/cms", label: "Pages", icon: <IconReports /> },
-      { href: "/admin/cms/code", label: "Custom code", icon: <IconBolt /> },
-      { href: "/admin/checkout-rules", label: "Checkout rules", icon: <IconStore /> },
-      { href: "/admin/settings#appearance", label: "Appearance", icon: <IconGear /> },
-    ],
-  },
-  {
-    label: "System",
+    // "Setup" is a promise he can check off: things you do once.
+    label: "Setup",
     icon: <IconGear />,
     items: [
-      { href: "/admin/system", label: "System health", icon: <IconPlatform /> },
-      { href: "/admin/team", label: "Team", icon: <IconUsers /> },
-      { href: "/admin/integrations", label: "Integrations", icon: <IconPlug /> },
-      { href: "/admin/automations", label: "Automations", icon: <IconBolt /> },
-      { href: "/admin/message-templates", label: "Message templates", icon: <IconReports /> },
-      { href: "/admin/activity", label: "Activity", icon: <IconActivity /> },
-      { href: "/admin/tools/import", label: "Import", icon: <IconReports /> },
-      { href: "/admin/settings", label: "Settings", icon: <IconGear /> },
+      { href: "/admin/settings", label: "Shop settings", icon: <IconGear /> },
+      { href: "/admin/integrations", label: "Other companies", icon: <IconPlug /> },
+      { href: "/admin/team", label: "People", icon: <IconUsers /> },
+      { href: "/admin/system", label: "What's working", icon: <IconPlatform /> },
+      { href: "/admin/activity", label: "What changed", icon: <IconActivity /> },
     ],
   },
 ];

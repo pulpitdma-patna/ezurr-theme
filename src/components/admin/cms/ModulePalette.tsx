@@ -26,25 +26,28 @@ export function ModulePalette({ onAdd, nestParentId }: ModulePaletteProps) {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-black/[0.06] px-3 py-3">
+        {/* The rest of this screen already calls these "blocks" — the banner at
+            the top of a category page says "the Category products block". This
+            panel was the only place still calling them modules. */}
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#86868B]">
-          Modules
+          Blocks
         </p>
         {nestParentId ? (
           <p className="mt-1 text-[11px] text-[#AF52DE]">
-            Nesting into selected container
+            Adding inside the block you picked
           </p>
         ) : null}
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search modules…"
+          placeholder="Search blocks"
           className="mt-2 w-full rounded-lg border border-black/[0.1] bg-white px-2.5 py-2 text-xs outline-none focus:border-[#1D1D1F]"
         />
       </div>
       <div className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
         <div>
           <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#A1A1A6]">
-            Built-in
+            Things you can add
           </p>
           <ul className="mt-1.5 space-y-1">
             {modules.builtIns.map((entry) => (
