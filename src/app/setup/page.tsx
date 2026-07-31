@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, ApiError, isApiEnabled, setApiToken, type ApiInstallState } from "@/lib/apiClient";
-import { setStaffRole, type StaffRole } from "@/lib/adminPermissions";
+import { asStaffRole, setStaffRole } from "@/lib/adminPermissions";
 import { isValidMobile, normalizeMobile, setSession } from "@/lib/auth";
 
 /**
@@ -71,13 +71,6 @@ function isCriticalSimulating(simulating: { name: string; variable: string }[]):
       item.variable.includes("CASHFREE") ||
       item.variable.includes("MSG91"),
   );
-}
-
-function asStaffRole(value: string | undefined): StaffRole | null {
-  if (value === "owner" || value === "manager" || value === "support" || value === "viewer") {
-    return value;
-  }
-  return null;
 }
 
 export default function SetupPage() {

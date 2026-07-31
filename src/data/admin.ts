@@ -267,7 +267,10 @@ export type AdminIntegrationField = {
   readOnly: boolean;
   envVar: string | null;
   help: string | null;
+  /** Present in the Integration DB / Settings — not env. */
   configured: boolean;
+  /** Runtime would still work from a legacy env fallback. */
+  viaFallback?: boolean;
   /** Present for non-secret fields only. */
   value: string | null;
   /** Last-4 marker for non-password secrets. */

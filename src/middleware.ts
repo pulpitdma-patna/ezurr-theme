@@ -92,7 +92,9 @@ export function middleware(request: NextRequest) {
   // checkout.razorpay.com (script-src fallback for non-strict-dynamic browsers)
   // and calls api/lumberjack (connect-src). Harmless when payments are unused.
   const rzpScript = "https://checkout.razorpay.com";
+  const cfScript = "https://sdk.cashfree.com";
   const rzpConnect = "https://api.razorpay.com https://lumberjack.razorpay.com";
+  const cfConnect = "https://api.cashfree.com https://sandbox.cashfree.com";
   // Checkout location helpers: India Post pincode→city lookup + GPS reverse-geocode.
   const geoConnect = "https://api.postalpincode.in https://api.bigdatacloud.net";
   // Analytics beacons (GA4 /g/collect + Meta Pixel /tr). Scripts load via
@@ -100,6 +102,7 @@ export function middleware(request: NextRequest) {
   const analyticsConnect =
     "https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://www.facebook.com https://connect.facebook.net";
   const rzpFrame = "https://api.razorpay.com https://checkout.razorpay.com";
+  const cfFrame = "https://sdk.cashfree.com https://payments.cashfree.com https://sandbox.cashfree.com";
   // CMS custom code runs only inside a cross-origin, opaque-origin sandbox frame
   // served from this origin (its own tight CSP). Parent CSP only needs frame-src.
   const sandbox = sandboxOrigin();
@@ -108,12 +111,12 @@ export function middleware(request: NextRequest) {
   // per-request nonce + strict-dynamic so injected inline scripts can't run.
   const scriptSrc = isDev
     ? "'self' 'unsafe-inline' 'unsafe-eval'"
-    : `'self' 'nonce-${nonce}' 'strict-dynamic' ${rzpScript}`;
+    : `'self' 'nonce-${nonce}' 'strict-dynamic' ${rzpScript} ${cfScript}`;
 
   // When the browser uses the same-origin API proxy, API calls need only
   // 'self'. Keep the absolute API origin too so direct mode and image/beacon
   // hosts that still point at Laravel stay allowed.
-  const connectSrc = ["'self'", api, rzpConnect, geoConnect, analyticsConnect, isDev ? "ws: wss:" : ""]
+  const connectSrc = ["'self'", api, rzpConnect, cfConnect, geoConnect, analyticsConnect, isDev ? "ws: wss:" : ""]
     .filter(Boolean)
     .join(" ");
 
@@ -124,7 +127,7 @@ export function middleware(request: NextRequest) {
     `img-src 'self' data: blob: https: ${api}`.trim(),
     "font-src 'self' data:",
     `connect-src ${connectSrc}`,
-    `frame-src 'self' ${rzpFrame} ${sandbox}`.trim(),
+    `frame-src 'self' ${rzpFrame} ${cfFrame} ${sandbox}`.trim(),
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "object-src 'none'",

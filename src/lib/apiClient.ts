@@ -1102,6 +1102,8 @@ export type ApiIntegrationField = {
   envVar: string | null;
   help: string | null;
   configured: boolean;
+  /** True when DB is empty but a legacy env/config fallback would still work. */
+  viaFallback?: boolean;
   value: string | null;
   hint?: string;
   options?: { value: string; label: string }[];
@@ -1124,13 +1126,16 @@ export type ApiIntegration = {
   missingRequired?: string[];
 };
 
-/** Omitted credential keys keep their stored value — never send blanks to clear. */
+/**
+ * Omitted keys keep their stored value. JSON `null` clears an optional field.
+ * Do not send empty strings to clear — omit the key to leave it untouched.
+ */
 export type ApiIntegrationPatch = {
   enabled?: boolean;
   status?: string;
   accountLabel?: string | null;
-  config?: Record<string, string>;
-  credentials?: Record<string, string>;
+  config?: Record<string, string | null>;
+  credentials?: Record<string, string | null>;
 };
 
 export type ApiIntegrationTestResult = {

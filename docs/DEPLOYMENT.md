@@ -131,11 +131,12 @@ In Vercel (or your Next host), set:
 | Variable | Example | Notes |
 |----------|---------|--------|
 | `NEXT_PUBLIC_API_URL` | `https://api.yourdomain.com` | Upstream Laravel origin |
-| `NEXT_PUBLIC_API_PROXY` | `1` | Recommended — browser calls same-origin `/api/*` |
+| `NEXT_PUBLIC_API_PROXY` | `1` | Production **defaults on** when `NEXT_PUBLIC_API_URL` is set |
 
-With the proxy on, shoppers never talk cross-origin to the API; Next rewrites
-`/api/*` to Laravel. Keep `CORS_ORIGINS` matching the storefront origin anyway
-(RSC / server calls and any direct clients still need it).
+In production, the browser already uses same-origin `/api/*` unless you set
+`NEXT_PUBLIC_API_PROXY=0` (direct/CORS mode). Next still rewrites `/api/*` to
+Laravel when the API URL is set. Keep `CORS_ORIGINS` matching the storefront
+origin (RSC / server calls and any direct clients still need it).
 
 Deploy the theme, then open the storefront URL.
 
@@ -153,7 +154,7 @@ A fresh install has **no owner**. The home page sends you to `/setup`.
 2. Confirm the green checks: database + schema ready.
 3. Enter store name, your name, and the **mobile number you will use to sign in**.
 4. If you generated a claim token, enter that setup code.
-5. Click **Claim store & continue**.
+5. Click **Create my owner account**.
 
 You are signed in as owner immediately (OTP is not used for claim — messaging
 may still be in practice mode).
@@ -170,11 +171,11 @@ Open **Admin → Integrations**.
 
 *Illustrative. Configure each provider you need; leave the rest disconnected.*
 
-For each provider you use, click **Configure** and paste real values:
+For each provider you use, click **Manage** and paste real values:
 
 | Integration | Typical fields |
 |-------------|----------------|
-| WhatsApp Business | MSG91 auth key, sender number, namespace, OTP SMS template, DLR secret |
+| WhatsApp Business | MSG91 auth key, sender number, namespace, OTP SMS template, DLR secret *(this sender number is not the storefront chat number on Settings → Store)* |
 | Razorpay / Cashfree | Key / app id, secret, webhook signing secret |
 | Shiprocket | Panel email + password, tracking webhook token |
 | Shopify | Access token, `*.myshopify.com` domain, webhook secret |

@@ -2,12 +2,14 @@
 
 import { useEffect } from "react";
 import { clearSession, setSession, type AuthSession } from "@/lib/auth";
+import { asStaffRole, clearStaffRole, setStaffRole } from "@/lib/adminPermissions";
 import { api, getApiToken, isApiEnabled } from "@/lib/apiClient";
 
 function sessionFromApiUser(user: {
   name: string;
   mobile: string;
   role: string;
+  staffRole?: string | null;
 }): AuthSession {
   const role = user.role === "admin" ? "admin" : "customer";
   const parts = user.name.split(/\s+/).filter(Boolean);
@@ -36,6 +38,7 @@ export function ApiAuthBoot() {
       } catch {
         /* ignore */
       }
+      clearStaffRole();
       return;
     }
 
@@ -45,10 +48,14 @@ export function ApiAuthBoot() {
       .then((user) => {
         if (cancelled) return;
         setSession(sessionFromApiUser(user));
+        const staffRole = asStaffRole(user.staffRole);
+        if (staffRole) setStaffRole(staffRole);
+        else clearStaffRole();
       })
       .catch(() => {
         if (cancelled) return;
         clearSession();
+        clearStaffRole();
       });
     return () => {
       cancelled = true;

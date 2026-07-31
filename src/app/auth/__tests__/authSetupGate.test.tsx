@@ -65,4 +65,31 @@ describe("auth setup gate", () => {
     expect(screen.getByRole("link", { name: /continue to account/i })).toBeTruthy();
     expect(screen.queryByLabelText(/mobile number/i)).toBeNull();
   });
+
+  it("does not flash the OTP form before installState resolves", async () => {
+    let resolveState: (value: { needsSetup: boolean; storeName: null }) => void = () => {};
+    installState.mockReturnValue(
+      new Promise((resolve) => {
+        resolveState = resolve;
+      }),
+    );
+
+    render(<AuthPage />);
+
+    expect(screen.getByText(/checking/i)).toBeTruthy();
+    expect(screen.queryByLabelText(/mobile number/i)).toBeNull();
+
+    resolveState({ needsSetup: true, storeName: null });
+    expect(await screen.findByRole("link", { name: /start setup/i })).toBeTruthy();
+    expect(screen.queryByLabelText(/mobile number/i)).toBeNull();
+  });
+
+  it("fails closed to setup when installState errors", async () => {
+    installState.mockRejectedValue(new Error("network"));
+
+    render(<AuthPage />);
+
+    expect(await screen.findByRole("link", { name: /start setup/i })).toBeTruthy();
+    expect(screen.queryByLabelText(/mobile number/i)).toBeNull();
+  });
 });

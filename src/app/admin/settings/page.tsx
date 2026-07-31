@@ -18,7 +18,7 @@ import { ADMIN_SETTING_KEYS, useAdminSettingsSync } from "@/hooks/useAdminSettin
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { formatReleaseLabel } from "@/hooks/useLiveThemeSettings";
 import { useStaffRole } from "@/hooks/useStaffRole";
-import { STAFF_ROLE_OPTIONS } from "@/lib/adminPermissions";
+import { can, STAFF_ROLE_OPTIONS } from "@/lib/adminPermissions";
 import { resetAdminStore, updateSettings } from "@/lib/adminStore";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import { invalidateApiSettings } from "@/hooks/useApiSettings";
@@ -54,6 +54,8 @@ function isValidTab(value: string | null): value is SettingsTabId {
 
 export default function AdminSettingsPage() {
   const { settings } = useAdminStore();
+  const apiOn = isApiEnabled();
+  const canWriteSettings = !apiOn || can("settings.write");
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("tab");
@@ -134,8 +136,12 @@ export default function AdminSettingsPage() {
   useEffect(() => () => flushSettings("Saved just now"), [flushSettings]);
 
   function patch(partial: Partial<AdminSettings>, successMessage = "Saved just now") {
+    if (!canWriteSettings) {
+      toast.push("You do not have permission to change settings.", "danger");
+      return;
+    }
     updateSettings(partial);
-    if (!isApiEnabled()) {
+    if (!apiOn) {
       toast.push(successMessage, "success");
       return;
     }
@@ -156,23 +162,25 @@ export default function AdminSettingsPage() {
   }
 
   function resetKnobs() {
-    updateSettings({
-      accentHue: defaultAdminSettings.accentHue,
-      showOffer: defaultAdminSettings.showOffer,
-      releaseDate: defaultAdminSettings.releaseDate,
-      prepaidDiscount: defaultAdminSettings.prepaidDiscount,
-      codEnabled: defaultAdminSettings.codEnabled,
-      codLimit: defaultAdminSettings.codLimit,
-      freeShippingMin: defaultAdminSettings.freeShippingMin,
-      orderIdPrefix: defaultAdminSettings.orderIdPrefix,
-      lowStockThreshold: defaultAdminSettings.lowStockThreshold,
-      timezone: defaultAdminSettings.timezone,
-      currencyLabel: defaultAdminSettings.currencyLabel,
-      notifyNewOrder: defaultAdminSettings.notifyNewOrder,
-      notifyLowStock: defaultAdminSettings.notifyLowStock,
-      notifyPreorderRelease: defaultAdminSettings.notifyPreorderRelease,
-    });
-    toast.push("Theme & commerce knobs reset", "success");
+    patch(
+      {
+        accentHue: defaultAdminSettings.accentHue,
+        showOffer: defaultAdminSettings.showOffer,
+        releaseDate: defaultAdminSettings.releaseDate,
+        prepaidDiscount: defaultAdminSettings.prepaidDiscount,
+        codEnabled: defaultAdminSettings.codEnabled,
+        codLimit: defaultAdminSettings.codLimit,
+        freeShippingMin: defaultAdminSettings.freeShippingMin,
+        orderIdPrefix: defaultAdminSettings.orderIdPrefix,
+        lowStockThreshold: defaultAdminSettings.lowStockThreshold,
+        timezone: defaultAdminSettings.timezone,
+        currencyLabel: defaultAdminSettings.currencyLabel,
+        notifyNewOrder: defaultAdminSettings.notifyNewOrder,
+        notifyLowStock: defaultAdminSettings.notifyLowStock,
+        notifyPreorderRelease: defaultAdminSettings.notifyPreorderRelease,
+      },
+      "Theme & commerce knobs reset",
+    );
   }
 
   function resetDemo() {
@@ -917,7 +925,7 @@ export default function AdminSettingsPage() {
             description="Irreversible demo actions for this browser’s localStorage."
             danger
           >
-            <DemoRolePicker />
+            {!apiOn ? <DemoRolePicker /> : null}
             <div className="grid gap-2.5 sm:grid-cols-2">
               <div className={`${insetPanelClass} bg-white p-3`}>
                 <div className="text-xs font-semibold text-[#1D1D1F]">Reset theme knobs</div>
@@ -927,24 +935,27 @@ export default function AdminSettingsPage() {
                 <button
                   type="button"
                   onClick={resetKnobs}
-                  className="mt-3 inline-flex h-8 items-center rounded-md border border-black/10 bg-[#FAFAFB] px-3 text-[11px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
+                  disabled={!canWriteSettings}
+                  className="mt-3 inline-flex h-8 items-center rounded-md border border-black/10 bg-[#FAFAFB] px-3 text-[11px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F] disabled:opacity-50"
                 >
                   Reset knobs
                 </button>
               </div>
-              <div className="rounded-lg border border-[#F5C2C0] bg-[#FFF8F8] p-3">
-                <div className="text-xs font-semibold text-[#B42318]">Reset demo data</div>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-[#912018]/80">
-                  Wipes localStorage and restores seed catalog, orders, codes, and settings.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setConfirmReset(true)}
-                  className="mt-3 inline-flex h-8 items-center rounded-md bg-[#B42318] px-3 text-[11px] font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B42318]"
-                >
-                  Reset everything
-                </button>
-              </div>
+              {!apiOn ? (
+                <div className="rounded-lg border border-[#F5C2C0] bg-[#FFF8F8] p-3">
+                  <div className="text-xs font-semibold text-[#B42318]">Reset demo data</div>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-[#912018]/80">
+                    Wipes localStorage and restores seed catalog, orders, codes, and settings.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmReset(true)}
+                    className="mt-3 inline-flex h-8 items-center rounded-md bg-[#B42318] px-3 text-[11px] font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B42318]"
+                  >
+                    Reset everything
+                  </button>
+                </div>
+              ) : null}
             </div>
             <details className={`${calloutClass} [&_summary]:cursor-pointer [&_summary]:font-semibold [&_summary]:text-[#6E6E73]`}>
               <summary>Sign-in note</summary>

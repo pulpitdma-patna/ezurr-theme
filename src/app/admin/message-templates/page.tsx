@@ -397,24 +397,38 @@ export default function AdminMessageTemplatesPage() {
                 onChange={(e) => setEditing({ ...editing, name: e.target.value })}
               />
             </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Provider template name (Meta-approved)</span>
-              <input
-                className={fieldClass}
-                value={editing.provider_template_name ?? ""}
-                onChange={(e) => setEditing({ ...editing, provider_template_name: e.target.value })}
-                placeholder="ezurr_login_verification"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className={labelClass}>Template namespace</span>
-              <input
-                className={fieldClass}
-                value={editing.namespace ?? ""}
-                onChange={(e) => setEditing({ ...editing, namespace: e.target.value })}
-                placeholder="Falls back to Integrations → WhatsApp default"
-              />
-            </label>
+            {editing.channel === "sms" ? (
+              <label className="flex flex-col gap-1.5">
+                <span className={labelClass}>MSG91 SMS Flow template id</span>
+                <input
+                  className={fieldClass}
+                  value={editing.provider_template_id ?? ""}
+                  onChange={(e) => setEditing({ ...editing, provider_template_id: e.target.value })}
+                  placeholder="Flow template id from MSG91"
+                />
+              </label>
+            ) : (
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className={labelClass}>Provider template name (Meta-approved)</span>
+                  <input
+                    className={fieldClass}
+                    value={editing.provider_template_name ?? ""}
+                    onChange={(e) => setEditing({ ...editing, provider_template_name: e.target.value })}
+                    placeholder="ezurr_login_verification"
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className={labelClass}>Template namespace</span>
+                  <input
+                    className={fieldClass}
+                    value={editing.namespace ?? ""}
+                    onChange={(e) => setEditing({ ...editing, namespace: e.target.value })}
+                    placeholder="Falls back to Integrations → WhatsApp default"
+                  />
+                </label>
+              </>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1.5">
                 <span className={labelClass}>Status</span>

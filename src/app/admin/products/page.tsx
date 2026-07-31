@@ -223,6 +223,7 @@ export default function AdminProductsPage() {
   const [listLoading, setListLoading] = useState(true);
   const [apiProducts, setApiProducts] = useState<AdminCatalogRow[]>([]);
   const [apiRaw, setApiRaw] = useState<Record<string, ApiProductFulfilment>>({});
+  const [apiBrandOptions, setApiBrandOptions] = useState<{ value: string; label: string }[]>([]);
   const [listError, setListError] = useState<string | null>(null);
   const { views, removeView } = useListSavedViews("products");
 
@@ -238,7 +239,10 @@ export default function AdminProductsPage() {
       // Page through the full catalog (server clamps per_page to 100) instead
       // of showing only the first page.
       const perPage = 100;
-      const first = await api.adminProducts({ page: 1, per_page: perPage });
+      const [first, brandsRes] = await Promise.all([
+        api.adminProducts({ page: 1, per_page: perPage }),
+        api.adminBrands().catch(() => ({ data: [] as Awaited<ReturnType<typeof api.adminBrands>>["data"] })),
+      ]);
       let all = Array.isArray(first.data) ? first.data : [];
       const lastPage = Number(first.last_page ?? 1);
       for (let p = 2; p <= lastPage; p += 1) {
@@ -251,10 +255,18 @@ export default function AdminProductsPage() {
       const raw: Record<string, ApiProductFulfilment> = {};
       for (const p of all) raw[p.key] = p as ApiProductFulfilment;
       setApiRaw(raw);
+      const brands = Array.isArray(brandsRes.data) ? brandsRes.data : [];
+      setApiBrandOptions(
+        brands
+          .filter((b) => b.active !== false)
+          .map((b) => ({ value: b.slug, label: b.name || b.slug }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      );
       setListError(null);
     } catch (err) {
       setApiProducts([]);
       setApiRaw({});
+      setApiBrandOptions([]);
       setListError(err instanceof Error ? err.message : "Could not load products");
     } finally {
       setListLoading(false);
@@ -300,14 +312,15 @@ export default function AdminProductsPage() {
     return () => document.removeEventListener("keydown", onKey);
   }, [drawerMode]);
 
-  const brandOptions = useMemo(
-    () =>
-      store.brands
-        .filter((b) => b.active)
-        .map((b) => b.name)
-        .sort((a, b) => a.localeCompare(b)),
-    [store.brands],
-  );
+  const brandOptions = useMemo(() => {
+    if (isApiEnabled()) {
+      return apiBrandOptions.map((b) => b.value);
+    }
+    return store.brands
+      .filter((b) => b.active)
+      .map((b) => b.name)
+      .sort((a, b) => a.localeCompare(b));
+  }, [store.brands, apiBrandOptions]);
 
   const brandFilter = brand !== "all" && brandOptions.includes(brand) ? brand : "all";
 
@@ -821,9 +834,11 @@ export default function AdminProductsPage() {
               onChange={setBrand}
               options={[
                 { value: "all", label: "All brands" },
-                ...store.brands
-                  .filter((b) => b.active)
-                  .map((b) => ({ value: b.name, label: b.name })),
+                ...(isApiEnabled()
+                  ? apiBrandOptions
+                  : store.brands
+                      .filter((b) => b.active)
+                      .map((b) => ({ value: b.name, label: b.name }))),
               ]}
             />
             <AdminSelect

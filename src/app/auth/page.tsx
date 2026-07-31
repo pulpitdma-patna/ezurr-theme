@@ -17,6 +17,7 @@ import {
   setSession,
   type AuthSession,
 } from "@/lib/auth";
+import { asStaffRole, clearStaffRole, setStaffRole } from "@/lib/adminPermissions";
 import { api, isApiEnabled, setApiToken } from "@/lib/apiClient";
 
 const RESEND_SECONDS = 30;
@@ -229,7 +230,17 @@ function AuthStepIndicator({ step }: { step: "mobile" | "otp" }) {
 
 function safeNextPath(raw: string | null) {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
-  return raw;
+  // Reject path traversal and encoded tricks that still start with "/".
+  if (raw.includes("..") || raw.includes("\\") || raw.includes("%2e") || raw.includes("%2E")) {
+    return null;
+  }
+  try {
+    const url = new URL(raw, "https://ezurr.local");
+    if (url.origin !== "https://ezurr.local" || url.pathname.includes("..")) return null;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
 }
 
 function AuthPageContent() {
@@ -245,7 +256,8 @@ function AuthPageContent() {
   const [resendIn, setResendIn] = useState(0);
   const [existingSession, setExistingSession] = useState<AuthSession | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
-  const [needsSetup, setNeedsSetup] = useState(false);
+  /** unknown until installState settles — never flash OTP on an unclaimed store. */
+  const [installGate, setInstallGate] = useState<"unknown" | "needsSetup" | "claimed">("unknown");
 
   function destination(session: AuthSession) {
     if (isAdminSession(session)) return "/admin";
@@ -267,19 +279,22 @@ function AuthPageContent() {
     };
   }, []);
 
-  // A store nobody has claimed cannot sign anyone in, so say so here rather than
-  // letting the owner request an OTP that goes to a log file. Failure is silent
-  // on purpose: an unreachable API is already reported by the sign-in attempt.
+  // A store nobody has claimed cannot sign anyone in. Fail closed: until we know
+  // the store is claimed, keep OTP hidden (including when installState errors).
   useEffect(() => {
-    if (!isApiEnabled()) return;
+    if (!isApiEnabled()) {
+      setInstallGate("claimed");
+      return;
+    }
     let cancelled = false;
+    setInstallGate("unknown");
     api
       .installState()
       .then((s) => {
-        if (!cancelled) setNeedsSetup(s.needsSetup);
+        if (!cancelled) setInstallGate(s.needsSetup ? "needsSetup" : "claimed");
       })
       .catch(() => {
-        /* nothing to add — sign-in reports its own failure */
+        if (!cancelled) setInstallGate("needsSetup");
       });
     return () => {
       cancelled = true;
@@ -309,6 +324,10 @@ function AuthPageContent() {
     }
     if (!isApiEnabled()) {
       setError(API_UNAVAILABLE);
+      return;
+    }
+    if (installGate !== "claimed") {
+      setError("This store still needs setup before a sign-in code can be sent.");
       return;
     }
 
@@ -356,6 +375,9 @@ function AuthPageContent() {
         role: res.user.role === "admin" ? "admin" : "customer",
       };
       setSession(session);
+      const staffRole = asStaffRole(res.user.staffRole);
+      if (staffRole) setStaffRole(staffRole);
+      else clearStaffRole();
       router.push(destination(session));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Invalid OTP.");
@@ -383,11 +405,11 @@ function AuthPageContent() {
             <span aria-hidden="true">←</span> Storefront
           </Link>
 
-          {!sessionReady ? (
+          {!sessionReady || (isApiEnabled() && installGate === "unknown") ? (
             <div className="ez-mono text-xs uppercase tracking-[0.16em] text-[var(--ez-subtle)] animate-pulse">
-              Checking session…
+              Checking…
             </div>
-          ) : needsSetup ? (
+          ) : installGate === "needsSetup" ? (
             // Nobody owns this store yet. OTP would go to a log file on a fresh
             // install, so the form is hidden entirely — setup is the only path.
             <div className="auth-form-body">
@@ -411,6 +433,19 @@ function AuthPageContent() {
                 >
                   Start setup <span aria-hidden="true" className="text-white/70">→</span>
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInstallGate("unknown");
+                    api
+                      .installState()
+                      .then((s) => setInstallGate(s.needsSetup ? "needsSetup" : "claimed"))
+                      .catch(() => setInstallGate("needsSetup"));
+                  }}
+                  className="inline-flex min-h-[2.75rem] items-center justify-center rounded-[10px] text-sm font-semibold text-[var(--ez-muted)] transition hover:text-[var(--ez-ink)]"
+                >
+                  Retry check
+                </button>
                 {existingSession ? (
                   <>
                     <Link

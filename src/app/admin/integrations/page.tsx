@@ -72,18 +72,27 @@ function apiToIntegration(i: ApiIntegration): AdminIntegration {
   };
 }
 
+function missingFieldLabels(integration: AdminIntegration): string[] {
+  const byKey = Object.fromEntries((integration.fields ?? []).map((f) => [f.key, f.label]));
+  return (integration.missingRequired ?? []).map((key) => byKey[key] ?? key);
+}
+
 export default function AdminIntegrationsPage() {
   const store = useAdminStore();
   const apiOn = isApiEnabled();
   const [apiIntegrations, setApiIntegrations] = useState<AdminIntegration[]>([]);
+
+  const [loadError, setLoadError] = useState("");
 
   const loadIntegrations = useCallback(async () => {
     if (!apiOn) return;
     try {
       const res = await api.integrations();
       setApiIntegrations((res.data ?? []).map(apiToIntegration));
-    } catch {
-      setApiIntegrations([]);
+      setLoadError("");
+    } catch (error) {
+      // Keep previous rows so a blip does not look like an empty catalog.
+      setLoadError(errorMessage(error, "Could not load integrations"));
     }
   }, [apiOn]);
 
@@ -131,7 +140,9 @@ export default function AdminIntegrationsPage() {
       // to the config form rather than POSTing {} and flipping to "connected".
       if (integration.missingRequired?.length) {
         openManage(integration);
-        setToast(`${integration.name} needs ${integration.missingRequired.join(", ")} first`);
+        setToast(
+          `${integration.name} needs ${missingFieldLabels(integration).join(", ")} first`,
+        );
         return;
       }
       try {
@@ -171,7 +182,7 @@ export default function AdminIntegrationsPage() {
     if (!active) return;
     if (!apiOn) {
       setToast("Configuration needs a running API");
-      return;
+      throw new Error("Configuration needs a running API");
     }
     setSaving(true);
     try {
@@ -180,6 +191,7 @@ export default function AdminIntegrationsPage() {
       setToast(`${active.name} configuration saved (secrets encrypted server-side)`);
     } catch (error) {
       setToast(errorMessage(error, "Could not save configuration"));
+      throw error;
     } finally {
       setSaving(false);
     }
@@ -235,6 +247,19 @@ export default function AdminIntegrationsPage() {
           {simulatedCount
             ? ` ${simulatedCount} provider${simulatedCount === 1 ? " is" : "s are"} in simulated (log) mode: requests are built and logged, but nothing is sent.`
             : ""}
+        </AdminNotice>
+      ) : null}
+
+      {loadError ? (
+        <AdminNotice tone="error">
+          {loadError}{" "}
+          <button
+            type="button"
+            onClick={() => void loadIntegrations()}
+            className="font-semibold underline underline-offset-2"
+          >
+            Retry
+          </button>
         </AdminNotice>
       ) : null}
 
@@ -363,7 +388,7 @@ function IntegrationCard({
         <p className="mt-1.5 text-xs leading-relaxed text-[#6E6E73]">{integration.description}</p>
         {integration.missingRequired?.length ? (
           <p className="mt-2 text-[11px] font-medium leading-relaxed text-[#9A3412]">
-            Needs {integration.missingRequired.join(", ")}
+            Needs {missingFieldLabels(integration).join(", ")}
           </p>
         ) : null}
       </div>

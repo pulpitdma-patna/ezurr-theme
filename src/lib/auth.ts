@@ -130,6 +130,15 @@ export function clearSession() {
   } catch {
     /* ignore */
   }
+  // Staff UI gates live in a separate key — leaving it set after sign-out
+  // would keep the next customer session looking like an owner until boot.
+  try {
+    // Lazy import avoided: keep auth.ts free of admin cycles by clearing the key directly.
+    window.localStorage.removeItem("ezurr_admin_staff_role");
+    window.dispatchEvent(new Event("ezurr-staff-role"));
+  } catch {
+    /* ignore */
+  }
   window.dispatchEvent(new Event("ezurr-auth-change"));
 }
 

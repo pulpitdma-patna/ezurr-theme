@@ -56,7 +56,8 @@ const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
 const STORAGE_KEY = "ezurr_admin_staff_role";
 
 export function getStaffRole(): StaffRole {
-  if (typeof window === "undefined") return "owner";
+  // Default deny: unset / unknown must not unlock owner controls in the UI.
+  if (typeof window === "undefined") return "viewer";
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw === "manager" || raw === "support" || raw === "viewer" || raw === "owner") {
@@ -65,7 +66,25 @@ export function getStaffRole(): StaffRole {
   } catch {
     /* ignore */
   }
-  return "owner";
+  return "viewer";
+}
+
+export function asStaffRole(value: unknown): StaffRole | null {
+  if (value === "owner" || value === "manager" || value === "support" || value === "viewer") {
+    return value;
+  }
+  return null;
+}
+
+/** Clear the browser staff-role override (e.g. on sign-out). */
+export function clearStaffRole() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new Event("ezurr-staff-role"));
+  } catch {
+    /* ignore */
+  }
 }
 
 export function setStaffRole(role: StaffRole) {

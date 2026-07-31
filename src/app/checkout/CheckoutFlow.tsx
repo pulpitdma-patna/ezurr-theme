@@ -11,6 +11,7 @@ import { formatReleaseLabel, useLiveThemeSettings } from "@/hooks/useLiveThemeSe
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { createDemoCheckoutOrder } from "@/lib/adminStore";
 import { api, isApiEnabled, type ApiProduct } from "@/lib/apiClient";
+import { cashfreeMode, loadCashfree } from "@/lib/cashfree";
 import { loadRazorpay } from "@/lib/razorpay";
 import { useCart } from "@/lib/cart";
 import {
@@ -1308,37 +1309,42 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
             gaClientId: getGaClientId(),
           });
           const publicId = order?.public_id ?? null;
-          const handle = order?.gatewayCheckout;
+          const handle = order?.gatewayCheckout as
+            | {
+                provider?: string;
+                simulated?: boolean;
+                key?: string | null;
+                gatewayOrderId?: string | null;
+                sessionId?: string | null;
+                amount?: number;
+                currency?: string;
+              }
+            | undefined;
           // Capture BEFORE clearing — the success screen reads this.
           setPlacedSummary({ title: displayTitle, total: lockedTotal, preorder: isPreorder });
-          if (isCart) cart.clear(); // order created — empty the cart
 
-          // Real prepaid order → open the gateway payment sheet. The webhook is
-          // the source of truth for capture; the handler only advances the UI.
-          if (
-            handle &&
-            handle.provider === "razorpay" &&
-            !handle.simulated &&
-            handle.key &&
-            handle.gatewayOrderId
-          ) {
+          const markSuccess = () => {
+            attemptKeyRef.current = null;
+            if (isCart) cart.clear();
+            setOrderId(publicId);
+            setPlaced(true);
+            window.scrollTo(0, 0);
+          };
+
+          // Real prepaid / COD-advance → open the gateway sheet. Webhook is source of truth.
+          if (handle && !handle.simulated && handle.provider === "razorpay" && handle.key && handle.gatewayOrderId) {
             const Razorpay = await loadRazorpay();
             const rzp = new Razorpay({
               key: handle.key,
               order_id: handle.gatewayOrderId,
-              amount: handle.amount * 100,
-              currency: handle.currency,
+              amount: Number(handle.amount ?? (dueTodayNum > 0 ? dueTodayNum : effTotalNum)) * 100,
+              currency: handle.currency ?? "INR",
               name: "Ezurr",
               prefill: {
                 name: fullName || undefined,
                 contact: form.mobile || session?.mobile || undefined,
               },
-              handler: () => {
-                attemptKeyRef.current = null; // attempt done — next buy is a new order
-                setOrderId(publicId);
-                setPlaced(true);
-                window.scrollTo(0, 0);
-              },
+              handler: () => markSuccess(),
               modal: {
                 ondismiss: () =>
                   setOrderError(
@@ -1350,11 +1356,44 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
             return;
           }
 
-          // COD, or a simulated (log-mode) prepaid order → straight to success.
-          attemptKeyRef.current = null; // attempt done — next buy is a new order
-          setOrderId(publicId);
-          setPlaced(true);
-          window.scrollTo(0, 0);
+          if (handle && !handle.simulated && handle.provider === "cashfree" && handle.sessionId) {
+            try {
+              const Cashfree = await loadCashfree();
+              const cf = Cashfree({ mode: cashfreeMode(handle.sessionId) });
+              const result = await cf.checkout({
+                paymentSessionId: handle.sessionId,
+                redirectTarget: "_modal",
+              });
+              if (result?.error) {
+                setOrderError(
+                  result.error.message ||
+                    "Payment was not completed. Your order is saved — you can retry payment.",
+                );
+                return;
+              }
+              markSuccess();
+            } catch (err) {
+              setOrderError(
+                err instanceof Error
+                  ? err.message
+                  : "Could not open Cashfree checkout. Your order is saved — try again.",
+              );
+            }
+            return;
+          }
+
+          // Expected an online payment (prepaid or deposit due) but no usable live sheet.
+          if ((isPrepaid || dueTodayNum > 0) && !handle?.simulated) {
+            setOrderId(publicId);
+            setOrderError(
+              "Payment could not be started for this order. It is saved unpaid — check Integrations or try again.",
+            );
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+          }
+
+          // COD with no advance, or a simulated (log-mode) prepaid order → success.
+          markSuccess();
           return;
         } catch (err) {
           // Leave attemptKeyRef set: a retry of THIS attempt must reuse the key
@@ -1368,6 +1407,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
         }
       }
 
+      setPlacedSummary({ title: displayTitle, total: lockedTotal, preorder: isPreorder });
       const result = createDemoCheckoutOrder({
         name: fullName || session?.name || "Guest Player",
         mobile: form.mobile || session?.mobile || "9876500001",
@@ -1377,6 +1417,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
         addressLine1: form.address || undefined,
         pincode: form.pincode || undefined,
       });
+      if (isCart) cart.clear();
       setOrderId(result.orderId);
       setPlaced(true);
       window.scrollTo(0, 0);
@@ -2131,17 +2172,22 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                           autoComplete="off"
                         />
                         <p className="m-0 text-[12px] leading-relaxed text-[#86868B]">
-                          We authorize now and charge {prepaidTotal} when it ships on {releaseLabel}.
+                          {isPreorder
+                            ? `We authorize now and charge ${prepaidTotal} when it ships on ${releaseLabel}.`
+                            : `Pay ${dueToday} now with UPI.`}
                         </p>
                       </div>
                     ) : isPrepaid ? (
                       <p className="m-0 text-[12px] leading-relaxed text-[#86868B]">
-                        We authorize now and charge {prepaidTotal} when it ships on {releaseLabel}.
+                        {isPreorder
+                          ? `We authorize now and charge ${prepaidTotal} when it ships on ${releaseLabel}.`
+                          : `Pay ${dueToday} now. Your card or wallet is charged immediately.`}
                       </p>
                     ) : codAvailable ? (
                       <p className="m-0 rounded-[14px] border border-black/[0.06] bg-[#F7F7F8] px-4 py-3.5 text-[13px] leading-relaxed text-[#6E6E73]">
-                        Pay {fmt(codTotalNum)} in cash or UPI when the courier arrives. Available
-                        under {formatInr(policy.codMax)}.
+                        {codAdvanceNum > 0 || dueTodayNum > 0
+                          ? `Pay ${dueToday} online now to confirm COD. Balance ${fmt(balanceDueNum)} in cash or UPI when the courier arrives.`
+                          : `Pay ${fmt(codTotalNum)} in cash or UPI when the courier arrives. Available under ${formatInr(policy.codMax)}.`}
                       </p>
                     ) : null}
 
