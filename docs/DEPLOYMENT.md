@@ -98,13 +98,22 @@ Admin → Integrations** — not in `.env`. Only drivers (and base URLs) stay in
 
 ### 2b. Install code & prepare the database
 
-On the API host (SSH, deploy hook, or one-off console):
+**Preferred (Cloudways / cPanel):** after `.env` has real `DB_*` from the host
+panel, from the Laravel root (folder with `artisan`):
+
+```bash
+bash deploy/hosting-deploy.sh
+# Optional: bash deploy/hosting-deploy.sh --claim-token
+```
+
+See `ezurr-api/deploy/README.md`. The script refuses empty DB credentials, runs
+`composer install`, then `ezurr:install` or `ezurr:update`.
+
+Manual equivalent:
 
 ```bash
 composer install --no-dev --optimize-autoloader
-php artisan ezurr:install --force
-# Optional: require a one-time code on the setup screen
-# php artisan ezurr:install --force --claim-token
+php artisan ezurr:install
 php artisan config:cache
 php artisan route:cache
 ```
