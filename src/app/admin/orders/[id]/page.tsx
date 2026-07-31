@@ -6,7 +6,6 @@ import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { OrderTimeline } from "@/components/admin/OrderTimeline";
-import { OrderTaxInvoicePanel } from "@/components/admin/OrderTaxInvoicePanel";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import {
   formatInr,
@@ -31,7 +30,14 @@ import { formatAdminDateTime } from "@/lib/adminFormat";
 import { formatMobileDisplay } from "@/lib/auth";
 import { can } from "@/lib/adminPermissions";
 
+/**
+ * Demo-mode fallback only — the server sends `next.allowed` on every order and
+ * that is what the screen uses when the API is on. Kept because mock mode has no
+ * server to ask, and deliberately NOT relied on: it is missing `payment_failed`,
+ * which is exactly the drift that made a failed-payment order look finished.
+ */
 const nextActions: Partial<Record<AdminOrderStatus, AdminOrderStatus[]>> = {
+  payment_failed: ["cancelled"],
   pending_payment: ["cancelled"],
   pending: ["confirmed", "cancelled"],
   confirmed: ["packed", "cancelled"],
@@ -160,7 +166,13 @@ export default function AdminOrderDetailPage({
     );
   }
 
-  const actions = nextActions[order.status] ?? [];
+  // The server's list, not ours. This local map had already drifted: it has no
+  // `payment_failed` key, so an order whose payment failed showed nothing to do
+  // while OrderController::TRANSITIONS would happily accept `cancelled`. In API
+  // mode the server answers; the map is the fallback for demo data only.
+  const actions = (order.next?.allowed as AdminOrderStatus[] | undefined)
+    ?? nextActions[order.status]
+    ?? [];
   const digitalLines = order.items.filter((item) => item.fulfillmentType === "digital");
   // Local vault only — when the API is on, codes come from apiVaultCodes.
   const assignedCodes = apiOn
@@ -522,13 +534,6 @@ export default function AdminOrderDetailPage({
                 Create shipment
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="mt-2 h-9 w-full rounded-xl border border-black/10 text-xs font-semibold"
-            >
-              Print packing slip
-            </button>
           </div>
 
           <div className="admin-print-slip rounded-2xl border border-black/[0.06] bg-white p-4">
@@ -574,13 +579,36 @@ export default function AdminOrderDetailPage({
                 Refunded {formatInr(order.refundAmount ?? parsePrice(order.total))}
               </p>
             ) : null}
-            {order.stockDeducted ? (
-              <p className="mt-1 text-[11px] text-[#86868B]">Stock reserved in ledger</p>
-            ) : null}
           </div>
 
-          <div className="admin-print-hide">
-            <OrderTaxInvoicePanel order={order} />
+          {/* The tax panel that used to sit here printed a GST breakdown of
+              9% + 9% of the total with an invented invoice number, badged
+              "Phase 2 · estimated". It was not a calculation of anything — the
+              same two percentages on every order regardless of what was sold or
+              where it went. The correct CGST/SGST/IGST by place of supply, with
+              per-line HSN, has always existed one route away and was never
+              linked from anywhere. On the one job with a legal deadline, this
+              page showed invented numbers and hid the real ones. */}
+          <div className="admin-print-hide space-y-2 rounded-2xl border border-black/[0.06] bg-white p-4">
+            <span className="ez-mono text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
+              Print
+            </span>
+            <Link
+              href={`/admin/orders/${order.id}/documents?type=packing_slip`}
+              className="flex h-9 items-center justify-center rounded-xl border border-black/10 text-xs font-semibold hover:bg-[#FAFAFB]"
+            >
+              Packing list
+            </Link>
+            <Link
+              href={`/admin/orders/${order.id}/documents?type=invoice`}
+              className="flex h-9 items-center justify-center rounded-xl border border-black/10 text-xs font-semibold hover:bg-[#FAFAFB]"
+            >
+              Bill with GST
+            </Link>
+            <p className="text-[11px] text-[#86868B]">
+              The bill works out CGST, SGST or IGST from where it is going, and the HSN code for
+              every line.
+            </p>
           </div>
 
           <form
@@ -616,11 +644,11 @@ export default function AdminOrderDetailPage({
       <ConfirmDialog
         open={confirmCancel}
         title="Cancel this order?"
-        description={
-          order.stockDeducted
-            ? "Stock reserved for physical lines will be restocked via the ledger."
-            : "This order will be marked cancelled. No stock was reserved yet."
-        }
+        // `stockDeducted` is never set by the API mapper, so in live mode this
+        // always printed "No stock was reserved yet" — while the server restocked
+        // every item. It said the opposite of what happened, every time.
+        description="The items go back into your stock straight away. Anything already paid online is NOT sent back — use Send the money back for that."
+
         confirmLabel="Cancel order"
         danger
         onConfirm={confirmCancelAction}
