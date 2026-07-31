@@ -5,7 +5,13 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminNotice } from "@/components/admin/AdminNotice";
 import { formatAdminDateTime } from "@/lib/adminFormat";
 import { adminErrorMessage } from "@/lib/adminError";
-import { api, ApiError, isApiEnabled, type ApiSystemHealth } from "@/lib/apiClient";
+import {
+  api,
+  ApiError,
+  getApiUpstreamUrl,
+  isApiEnabled,
+  type ApiSystemHealth,
+} from "@/lib/apiClient";
 
 /**
  * What this install is, and what is quietly not working.
@@ -184,6 +190,21 @@ export default function AdminSystemPage() {
                 </p>
                 <p className="mt-3 text-[12px] text-[#8A5A00]">
                   Ask whoever runs your server for <Command>php artisan ezurr:update</Command>
+                  {getApiUpstreamUrl() ? (
+                    <>
+                      {" "}
+                      or open the API{" "}
+                      <a
+                        href={`${getApiUpstreamUrl()}/update`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold underline underline-offset-2"
+                      >
+                        /update
+                      </a>{" "}
+                      console (status only — it does not migrate from the browser).
+                    </>
+                  ) : null}
                 </p>
               </div>
             </section>

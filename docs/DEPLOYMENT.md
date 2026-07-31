@@ -4,12 +4,14 @@ This walks you from an empty server to a store you can claim, configure, and
 take live. Screens below are **illustrative** — your exact theme may differ
 slightly, but the steps match.
 
-You deploy **two apps on two hosts**:
+You deploy **two apps on two hosts** — and they have **two separate installers**:
 
-| Piece | Repo | Typical host |
-|-------|------|----------------|
-| Storefront + Admin UI | `ezurr-theme` (Next.js) | Vercel |
-| JSON API | `ezurr-api` (Laravel) | Railway, Render, Cloudways, VPS |
+| Host | Repo | Typical host | Installer |
+|------|------|----------------|-----------|
+| JSON API | `ezurr-api` (Laravel) | Cloudways / VPS | `php artisan ezurr:install` → open `https://api…/install` |
+| Storefront + Admin UI | `ezurr-theme` (Next.js) | Vercel | Claim only at `https://www…/setup` after the API console is green |
+
+Do **not** treat Vercel `/setup` as “install the whole app.” It only claims the owner after the API host is already prepared.
 
 ```
   Shoppers & staff  →  https://www.yourstore.com   (Next)
@@ -21,6 +23,12 @@ You deploy **two apps on two hosts**:
                               ▼
                            MySQL / Postgres
 ```
+
+### Two-installer checklist (order matters)
+
+1. **API (Cloudways / Laravel)** — web root → Laravel `public/` → env → `php artisan ezurr:install` → open `https://api…/install` until green (`/api/health` JSON, not a “PHP Stack” HTML page).
+2. **Theme (Vercel)** — set `NEXT_PUBLIC_API_URL` to the API origin **with no `/api` suffix** → deploy succeeds → confirm `https://www…/api/health` returns JSON via the proxy.
+3. **Claim** — open storefront `/setup` only after step 1 is green. Home redirects there when the API reports unclaimed.
 
 ---
 
@@ -118,9 +126,16 @@ Smoke-test:
 
 ```bash
 curl -sS https://api.yourdomain.com/api/health
+# then open in a browser:
+# https://api.yourdomain.com/install
 ```
 
-You want a healthy JSON response, not an HTML error page.
+You want healthy JSON from `/api/health` and a green **Backend install** console
+at `/install` — not an HTML “PHP Stack” / default host page. If you see HTML,
+the web root is wrong (point it at Laravel’s `public/`).
+
+The `/install` console is API-only. It does not create the owner. Finish it
+before deploying or claiming on Vercel.
 
 ---
 
@@ -130,7 +145,7 @@ In Vercel (or your Next host), set:
 
 | Variable | Example | Notes |
 |----------|---------|--------|
-| `NEXT_PUBLIC_API_URL` | `https://api.yourdomain.com` | Upstream Laravel origin |
+| `NEXT_PUBLIC_API_URL` | `https://api.yourdomain.com` | Upstream Laravel origin — **no `/api` suffix** |
 | `NEXT_PUBLIC_API_PROXY` | `1` | Production **defaults on** when `NEXT_PUBLIC_API_URL` is set |
 
 In production, the browser already uses same-origin `/api/*` unless you set
@@ -138,13 +153,34 @@ In production, the browser already uses same-origin `/api/*` unless you set
 Laravel when the API URL is set. Keep `CORS_ORIGINS` matching the storefront
 origin (RSC / server calls and any direct clients still need it).
 
-Deploy the theme, then open the storefront URL.
+Deploy the theme, then confirm the proxy:
+
+```bash
+curl -sS https://www.yourstore.com/api/health
+```
+
+If that 404s or returns HTML, the theme build/env is wrong — fix it before `/setup`.
+
+### Browser API discovery (when the proxy looks dead)
+
+Production **still requires** `NEXT_PUBLIC_API_URL` at build time (rewrites + RSC).
+The browser can still recover without a rebuild:
+
+1. Same-origin probe — home / `/setup` try `GET /api/health` on the storefront.
+   If the JSON includes `"service":"ezurr-api"`, the proxy is working and no paste is needed.
+2. Paste override — if that fails, paste the Laravel origin (no `/api` suffix).
+   It is stored in this browser only (`localStorage`) and uses direct CORS.
+   The API must already list the storefront in `CORS_ORIGINS` / `THEME_URL`.
+3. Use **Forget saved API URL** when the env/proxy path is fixed.
+
+Do not rely on paste for every visitor — set the Vercel env and redeploy for a durable fix.
 
 ---
 
 ## Step 4 — Claim the store (`/setup`)
 
-A fresh install has **no owner**. The home page sends you to `/setup`.
+A fresh install has **no owner**. After the API `/install` console is green, the
+storefront home page sends you to `/setup` (frontend claim wizard only).
 
 ![Claim your store — setup wizard](images/deploy-01-setup-wizard.jpg)
 
@@ -256,16 +292,31 @@ Work through this once after go-live:
 
 ## Updating an existing store
 
+Two consoles on the API host:
+
+| URL | When |
+|-----|------|
+| `https://api…/install` | First prepare (unclaimed) |
+| `https://api…/update` | After each API code deploy (status + CLI) |
+
 ```bash
-# On the API host after pulling a new release
+# 1. Deploy new Laravel code to the API host
+# 2. Open https://api.yourdomain.com/update — confirm it says “Update needed”
+# 3. On the API host:
 php artisan ezurr:update
+# unattended:
+# php artisan ezurr:update --yes
 php artisan config:cache
 php artisan route:cache
 # Restart web + worker + scheduler
+# 4. Refresh /update until green
+# 5. Redeploy the theme on Vercel if the UI changed
 ```
 
-Redeploy the theme on Vercel as usual. Do not re-run the setup wizard — the
-store is already claimed.
+`/update` is **status only** — it does not migrate from the browser. Admin → System
+also links to it when `updateNeeded` is true.
+
+Do **not** re-run storefront `/setup` — the store is already claimed.
 
 ---
 
@@ -276,7 +327,9 @@ store is already claimed.
 | App key, DB, CORS, drivers | API `.env` |
 | Payment / MSG91 / Shopify / Shiprocket secrets | Admin → Integrations |
 | GA measurement id / Meta pixel id | Settings → Store |
-| Owner phone / store name (first time) | `/setup` |
+| Owner phone / store name (first time) | Storefront `/setup` |
+| Backend prepare / update status | API `/install` · `/update` |
+| Browser API URL override (emergency) | Storefront paste → `localStorage` |
 | Queue + scheduler | Host process manager (`Procfile` / systemd) |
 
 ---

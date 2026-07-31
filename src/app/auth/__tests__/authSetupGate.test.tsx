@@ -84,12 +84,13 @@ describe("auth setup gate", () => {
     expect(screen.queryByLabelText(/mobile number/i)).toBeNull();
   });
 
-  it("fails closed to setup when installState errors", async () => {
+  it("shows unreachable, not setup, when installState errors", async () => {
     installState.mockRejectedValue(new Error("network"));
 
     render(<AuthPage />);
 
-    expect(await screen.findByRole("link", { name: /start setup/i })).toBeTruthy();
+    expect(await screen.findByText(/can't reach the store server/i)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /start setup/i })).toBeNull();
     expect(screen.queryByLabelText(/mobile number/i)).toBeNull();
   });
 });

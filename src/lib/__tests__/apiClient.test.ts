@@ -18,6 +18,8 @@ describe("getApiBaseUrl / isApiEnabled", () => {
 
   it("returns null and disabled when the URL is unset", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     expect(getApiBaseUrl()).toBeNull();
     expect(isApiEnabled()).toBe(false);
   });

@@ -3,7 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api, ApiError, isApiEnabled, setApiToken, type ApiInstallState } from "@/lib/apiClient";
+import { ApiOriginPasteForm } from "@/components/storefront/ApiOriginPasteForm";
+import {
+  api,
+  ApiError,
+  clearSameOriginApiDiscovered,
+  hasApiUrlOverride,
+  isApiEnabled,
+  markSameOriginApiDiscovered,
+  probeSameOriginApiHealth,
+  setApiToken,
+  type ApiInstallState,
+} from "@/lib/apiClient";
 import { asStaffRole, setStaffRole } from "@/lib/adminPermissions";
 import { isValidMobile, normalizeMobile, setSession } from "@/lib/auth";
 
@@ -73,10 +84,15 @@ function isCriticalSimulating(simulating: { name: string; variable: string }[]):
   );
 }
 
+type SetupLoadError = {
+  code: "missing_url" | "unreachable" | "not_migrated";
+  message: string;
+};
+
 export default function SetupPage() {
   const router = useRouter();
   const [state, setState] = useState<ApiInstallState | null>(null);
-  const [loadError, setLoadError] = useState("");
+  const [loadError, setLoadError] = useState<SetupLoadError | null>(null);
   const [storeName, setStoreName] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [ownerMobile, setOwnerMobile] = useState("");
@@ -84,30 +100,66 @@ export default function SetupPage() {
   const [acknowledgedSimulating, setAcknowledgedSimulating] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [discoverTick, setDiscoverTick] = useState(0);
 
   useEffect(() => {
-    if (!isApiEnabled()) {
-      setLoadError("The store server is not configured, so there is nothing to set up yet.");
-      return;
-    }
     let cancelled = false;
-    api
-      .installState()
-      .then((s) => {
+    (async () => {
+      setLoadError(null);
+      setState(null);
+
+      if (!hasApiUrlOverride()) {
+        const same = await probeSameOriginApiHealth();
+        if (cancelled) return;
+        if (same) markSameOriginApiDiscovered();
+        else clearSameOriginApiDiscovered();
+      }
+
+      if (!isApiEnabled()) {
+        setLoadError({
+          code: "missing_url",
+          message:
+            "No API URL yet. Paste the Laravel origin below, or set NEXT_PUBLIC_API_URL and redeploy. Same-origin /api/health did not answer.",
+        });
+        return;
+      }
+
+      try {
+        await api.health();
+      } catch {
+        if (cancelled) return;
+        setLoadError({
+          code: "unreachable",
+          message:
+            "Could not reach GET /api/health. Confirm the API is deployed with Laravel’s public/ web root, open https://your-api-host/install until it is green, then retry — or paste the correct API origin below.",
+        });
+        return;
+      }
+      try {
+        const s = await api.installState();
         if (cancelled) return;
         setState(s);
         if (s.storeName) setStoreName(s.storeName);
-      })
-      .catch(() => {
+        if (s.needsSetup && s.ready && (!s.ready.database || !s.ready.schema)) {
+          setLoadError({
+            code: "not_migrated",
+            message:
+              "The API is reachable but not prepared. On the API host run php artisan ezurr:install, then open /install until database and schema are green.",
+          });
+        }
+      } catch {
         if (cancelled) return;
-        setLoadError(
-          "Couldn't reach the store server. Check that it is running and that its address is correct.",
-        );
-      });
+        setLoadError({
+          code: "unreachable",
+          message:
+            "Health answered but /api/install/state did not. Check THEME_URL / CORS and that the API deploy finished — or paste the correct API origin below.",
+        });
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [discoverTick]);
 
   const ready = state?.ready;
   const hostNotReady = Boolean(ready && (!ready.database || !ready.schema));
@@ -173,13 +225,30 @@ export default function SetupPage() {
     }
   }
 
-  if (loadError) {
+  if (loadError && (loadError.code === "missing_url" || loadError.code === "unreachable")) {
+    const title =
+      loadError.code === "missing_url"
+        ? "API URL missing"
+        : "API unreachable";
     return (
       <Panel>
-        <h1 className="text-[clamp(1.6rem,3vw,2.1rem)] font-semibold tracking-[-0.045em] text-[var(--ez-ink)]">
-          Setup can&apos;t start yet
+        <p className="ez-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--ez-accent-text)]">
+          Frontend claim wizard
+        </p>
+        <h1 className="mt-3 text-[clamp(1.6rem,3vw,2.1rem)] font-semibold tracking-[-0.045em] text-[var(--ez-ink)]">
+          {title}
         </h1>
-        <p className="mt-3 text-[14px] leading-relaxed text-[var(--ez-muted)]">{loadError}</p>
+        <p className="mt-3 text-[14px] leading-relaxed text-[var(--ez-muted)]">{loadError.message}</p>
+        <ApiOriginPasteForm onSaved={() => setDiscoverTick((n) => n + 1)} />
+        {hasApiUrlOverride() ? (
+          <p className="mt-3 text-[12px] text-[var(--ez-subtle)]">
+            A saved API URL is active in this browser (direct CORS, not the Next proxy).
+          </p>
+        ) : null}
+        <p className="mt-4 text-[13px] leading-relaxed text-[var(--ez-subtle)]">
+          This page only claims the store after the backend installer is ready. It does not
+          migrate the database or write Cloudways env.
+        </p>
       </Panel>
     );
   }
@@ -197,7 +266,10 @@ export default function SetupPage() {
   if (!state.needsSetup) {
     return (
       <Panel>
-        <h1 className="text-[clamp(1.6rem,3vw,2.1rem)] font-semibold tracking-[-0.045em] text-[var(--ez-ink)]">
+        <p className="ez-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--ez-accent-text)]">
+          Already claimed
+        </p>
+        <h1 className="mt-3 text-[clamp(1.6rem,3vw,2.1rem)] font-semibold tracking-[-0.045em] text-[var(--ez-ink)]">
           {state.storeName ?? "This store"} is already set up
         </h1>
         <p className="mt-3 text-[14px] leading-relaxed text-[var(--ez-muted)]">
@@ -218,15 +290,25 @@ export default function SetupPage() {
   return (
     <Panel>
       <p className="ez-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--ez-accent-text)]">
-        One-time setup
+        Frontend claim wizard
       </p>
       <h1 className="mt-3 text-[clamp(1.9rem,4vw,2.6rem)] font-semibold leading-[1.02] tracking-[-0.05em] text-[var(--ez-ink)]">
         Make this store yours
       </h1>
       <p className="mt-3 text-[14px] leading-relaxed text-[var(--ez-muted)]">
-        Your server is running but nobody owns it yet. Fill this in and you&apos;ll be signed in
-        as the owner — this page then closes for good.
+        {hostNotReady
+          ? "The API answered, but backend prepare is incomplete. Fix the checklist below on the API host before claiming."
+          : "Backend prepare is done; nobody owns the store yet. Fill this in and you'll be signed in as the owner — this page then closes for good."}
       </p>
+
+      {loadError?.code === "not_migrated" ? (
+        <section className="mt-6 rounded-[14px] border border-[#F1C7B8] bg-[#FEF3EE] p-5">
+          <h2 className="ez-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#9A3412]">
+            API not migrated
+          </h2>
+          <p className="mt-2.5 text-[13px] leading-relaxed text-[#7C3A16]">{loadError.message}</p>
+        </section>
+      ) : null}
 
       {simulating.length > 0 ? (
         <section className="mt-6 rounded-[14px] border border-[#F1C7B8] bg-[#FEF3EE] p-5">

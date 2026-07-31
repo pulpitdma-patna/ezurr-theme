@@ -257,7 +257,9 @@ function AuthPageContent() {
   const [existingSession, setExistingSession] = useState<AuthSession | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   /** unknown until installState settles — never flash OTP on an unclaimed store. */
-  const [installGate, setInstallGate] = useState<"unknown" | "needsSetup" | "claimed">("unknown");
+  const [installGate, setInstallGate] = useState<
+    "unknown" | "needsSetup" | "claimed" | "unreachable"
+  >("unknown");
 
   function destination(session: AuthSession) {
     if (isAdminSession(session)) return "/admin";
@@ -279,11 +281,11 @@ function AuthPageContent() {
     };
   }, []);
 
-  // A store nobody has claimed cannot sign anyone in. Fail closed: until we know
-  // the store is claimed, keep OTP hidden (including when installState errors).
+  // A store nobody has claimed cannot sign anyone in. Keep OTP hidden until we
+  // know the store is claimed. Unreachable API is its own gate — not "needs setup".
   useEffect(() => {
     if (!isApiEnabled()) {
-      setInstallGate("claimed");
+      setInstallGate("unreachable");
       return;
     }
     let cancelled = false;
@@ -294,7 +296,7 @@ function AuthPageContent() {
         if (!cancelled) setInstallGate(s.needsSetup ? "needsSetup" : "claimed");
       })
       .catch(() => {
-        if (!cancelled) setInstallGate("needsSetup");
+        if (!cancelled) setInstallGate("unreachable");
       });
     return () => {
       cancelled = true;
@@ -326,8 +328,12 @@ function AuthPageContent() {
       setError(API_UNAVAILABLE);
       return;
     }
-    if (installGate !== "claimed") {
+    if (installGate === "needsSetup") {
       setError("This store still needs setup before a sign-in code can be sent.");
+      return;
+    }
+    if (installGate !== "claimed") {
+      setError(API_UNAVAILABLE);
       return;
     }
 
@@ -409,6 +415,38 @@ function AuthPageContent() {
             <div className="ez-mono text-xs uppercase tracking-[0.16em] text-[var(--ez-subtle)] animate-pulse">
               Checking…
             </div>
+          ) : installGate === "unreachable" ? (
+            <div className="auth-form-body">
+              <div className="mb-8">
+                <span className="ez-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#9A3412]">
+                  API unreachable
+                </span>
+                <h2 className="mt-5 text-[clamp(1.75rem,3vw,2.35rem)] font-semibold leading-[1.02] tracking-[-0.045em] text-[var(--ez-ink)]">
+                  Can&apos;t reach the store server
+                </h2>
+                <p className="mt-3 text-[13px] leading-relaxed text-[var(--ez-muted)] sm:text-sm">
+                  {API_UNAVAILABLE} This is not the claim wizard — finish backend
+                  install on the API host first, then retry.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setInstallGate("unknown");
+                  if (!isApiEnabled()) {
+                    setInstallGate("unreachable");
+                    return;
+                  }
+                  api
+                    .installState()
+                    .then((s) => setInstallGate(s.needsSetup ? "needsSetup" : "claimed"))
+                    .catch(() => setInstallGate("unreachable"));
+                }}
+                className="auth-submit inline-flex min-h-[3.25rem] w-full items-center justify-center rounded-[10px] bg-[var(--ez-ink)] px-5 text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-[#2a2a2d] hover:text-white"
+              >
+                Retry check
+              </button>
+            </div>
           ) : installGate === "needsSetup" ? (
             // Nobody owns this store yet. OTP would go to a log file on a fresh
             // install, so the form is hidden entirely — setup is the only path.
@@ -418,11 +456,11 @@ function AuthPageContent() {
                   Not set up yet
                 </span>
                 <h2 className="mt-5 text-[clamp(1.75rem,3vw,2.35rem)] font-semibold leading-[1.02] tracking-[-0.045em] text-[var(--ez-ink)]">
-                  Set up this store first
+                  Claim this store first
                 </h2>
                 <p className="mt-3 text-[13px] leading-relaxed text-[var(--ez-muted)] sm:text-sm">
-                  There is no owner account yet. Setup takes a minute and signs you
-                  straight in — a sign-in code cannot reach anyone until then.
+                  The API is up but there is no owner yet. Open the frontend claim
+                  wizard — a sign-in code cannot reach anyone until then.
                 </p>
               </div>
 
@@ -440,7 +478,7 @@ function AuthPageContent() {
                     api
                       .installState()
                       .then((s) => setInstallGate(s.needsSetup ? "needsSetup" : "claimed"))
-                      .catch(() => setInstallGate("needsSetup"));
+                      .catch(() => setInstallGate("unreachable"));
                   }}
                   className="inline-flex min-h-[2.75rem] items-center justify-center rounded-[10px] text-sm font-semibold text-[var(--ez-muted)] transition hover:text-[var(--ez-ink)]"
                 >

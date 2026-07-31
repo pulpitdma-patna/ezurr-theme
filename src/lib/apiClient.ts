@@ -6,24 +6,53 @@
  * With NEXT_PUBLIC_API_PROXY=1 (default in production when the API URL is set),
  * browser fetch goes same-origin `/api/...` and Next rewrites to the Laravel host.
  * Server-side code still uses the absolute upstream via getApiUpstreamUrl().
+ *
+ * Browser discovery (see apiOrigin.ts): same-origin `/api/health` can enable the
+ * client without an absolute URL; a pasted localStorage override forces direct
+ * CORS to Laravel when the proxy path is broken.
  */
+
+import {
+  getApiUrlOverride,
+  getEnvApiUpstreamUrl,
+  isSameOriginApiDiscovered,
+} from "@/lib/apiOrigin";
 
 const TOKEN_KEY = "ezurr_api_token";
 
-/** Absolute Laravel origin (rewrite target, RSC fetches, image hosts). */
+export {
+  clearApiUrlOverride,
+  clearSameOriginApiDiscovered,
+  getApiUrlOverride,
+  getEnvApiUpstreamUrl,
+  hasApiUrlOverride,
+  isEzurrHealthBody,
+  isSameOriginApiDiscovered,
+  markSameOriginApiDiscovered,
+  normalizeApiOrigin,
+  probeSameOriginApiHealth,
+  setApiUrlOverride,
+} from "@/lib/apiOrigin";
+
+/**
+ * Absolute Laravel origin for RSC, image hosts, and direct CORS.
+ * Explicit paste override wins over env so a wrong build-time URL can be
+ * corrected in the browser without a redeploy. Same-origin discovery has no
+ * absolute upstream — use getApiBaseUrl() for fetches in that mode.
+ */
 export function getApiUpstreamUrl(): string | null {
-  const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (!raw) return null;
-  return raw.replace(/\/$/, "");
+  return getApiUrlOverride() ?? getEnvApiUpstreamUrl();
 }
 
 /**
  * Whether the browser should call same-origin `/api` (proxied) instead of the
  * Laravel origin directly. On in production when the API URL is set; override
- * with NEXT_PUBLIC_API_PROXY=0|1.
+ * with NEXT_PUBLIC_API_PROXY=0|1. A paste override always uses direct CORS.
  */
 export function isApiProxyEnabled(): boolean {
-  const upstream = getApiUpstreamUrl();
+  if (getApiUrlOverride()) return false;
+  if (isSameOriginApiDiscovered() && !getEnvApiUpstreamUrl()) return true;
+  const upstream = getEnvApiUpstreamUrl();
   if (!upstream) return false;
   const flag = process.env.NEXT_PUBLIC_API_PROXY?.trim().toLowerCase();
   if (flag === "0" || flag === "false" || flag === "off") return false;
@@ -38,14 +67,26 @@ export function isApiProxyEnabled(): boolean {
  * null means the API is not configured.
  */
 export function getApiBaseUrl(): string | null {
+  if (typeof window !== "undefined") {
+    if (getApiUrlOverride()) return getApiUrlOverride();
+    if (isApiProxyEnabled()) {
+      // Env proxy or same-origin discovery — browser hits the storefront origin.
+      if (getEnvApiUpstreamUrl() || isSameOriginApiDiscovered()) return "";
+    }
+    if (isSameOriginApiDiscovered()) return "";
+  }
+
   const upstream = getApiUpstreamUrl();
-  if (!upstream) return null;
+  if (!upstream) {
+    if (typeof window !== "undefined" && isSameOriginApiDiscovered()) return "";
+    return null;
+  }
   if (typeof window !== "undefined" && isApiProxyEnabled()) return "";
   return upstream;
 }
 
 export function isApiEnabled(): boolean {
-  return getApiUpstreamUrl() !== null;
+  return getApiBaseUrl() !== null;
 }
 
 export function getApiToken(): string | null {

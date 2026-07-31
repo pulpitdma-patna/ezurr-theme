@@ -15,18 +15,25 @@ import SetupPage from "@/app/setup/page";
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
+const health = vi.fn();
 const installState = vi.fn();
 const installComplete = vi.fn();
 const setApiToken = vi.fn();
+const probeSameOriginApiHealth = vi.fn();
 
 vi.mock("@/lib/apiClient", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/apiClient")>();
   return {
     ...actual,
     isApiEnabled: () => true,
+    hasApiUrlOverride: () => false,
+    probeSameOriginApiHealth: () => probeSameOriginApiHealth(),
+    markSameOriginApiDiscovered: vi.fn(),
+    clearSameOriginApiDiscovered: vi.fn(),
     setApiToken: (t: string | null) => setApiToken(t),
     api: {
       ...actual.api,
+      health: () => health(),
       installState: () => installState(),
       installComplete: (p: unknown) => installComplete(p),
     },
@@ -46,10 +53,15 @@ const UNCLAIMED = {
 
 beforeEach(() => {
   push.mockReset();
+  health.mockReset();
+  health.mockResolvedValue({ ok: true });
   installState.mockReset();
   installComplete.mockReset();
   setApiToken.mockReset();
+  probeSameOriginApiHealth.mockReset();
+  probeSameOriginApiHealth.mockResolvedValue(false);
   window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 afterEach(cleanup);
@@ -82,6 +94,16 @@ describe("setup wizard", () => {
     render(<SetupPage />);
 
     expect(await screen.findByText(/already set up/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /create my owner account/i })).toBeNull();
+  });
+
+  it("shows API unreachable when health fails, without calling installState", async () => {
+    health.mockRejectedValue(new Error("network"));
+
+    render(<SetupPage />);
+
+    expect(await screen.findByText(/api unreachable/i)).toBeTruthy();
+    expect(installState).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /create my owner account/i })).toBeNull();
   });
 

@@ -11,7 +11,12 @@ import {
   needsClientWidgetCatalog,
   sectionsFromSnapshot,
 } from "@/lib/cms/publicPages";
-import { fetchInstallNeedsSetup, shouldRedirectHomeToSetup } from "@/lib/installState";
+import { ConnectingToStoreServer } from "@/components/storefront/ConnectingToStoreServer";
+import {
+  fetchInstallNeedsSetup,
+  shouldRedirectHomeToSetup,
+  shouldShowConnectingScreen,
+} from "@/lib/installState";
 
 /**
  * The homepage, rendered from the CMS.
@@ -23,9 +28,9 @@ import { fetchInstallNeedsSetup, shouldRedirectHomeToSetup } from "@/lib/install
  *
  * `HomePageSeeder` installs that same layout as a real published page, so this
  * now reads `/` from the API and server-renders it exactly like
- * `/pages/[slug]`. The code seed stays as the fallback for a store whose API is
- * unreachable, or before the seeder has run — the storefront should still come
- * up when the backend is down, just not editably.
+ * `/pages/[slug]`. If the API URL is missing or unreachable we show a
+ * connecting screen instead of a fake shop — claim and browse only after the
+ * backend answers.
  */
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -43,12 +48,21 @@ export default async function HomePage() {
   if (shouldRedirectHomeToSetup(install)) {
     redirect("/setup");
   }
+  if (shouldShowConnectingScreen(install)) {
+    const reason =
+      install.reason === "missing_url" ||
+      install.reason === "unreachable" ||
+      install.reason === "http_error"
+        ? install.reason
+        : "unreachable";
+    return <ConnectingToStoreServer reason={reason} />;
+  }
 
   const page = await fetchPublishedCmsPage("/");
   const sections = page ? sectionsFromSnapshot(page.snapshot) : [];
 
   // No published server copy, or a widget only the browser store can resolve —
-  // fall back to the client path and its code seed.
+  // fall back to the client path and its code seed (API is known + claimed).
   if (!page || sections.length === 0 || needsClientWidgetCatalog(sections)) {
     return <StorefrontCmsPage pageId="home" />;
   }
