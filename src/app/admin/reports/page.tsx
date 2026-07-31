@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminNotice } from "@/components/admin/AdminNotice";
+import { GstReturnPanel } from "@/components/admin/GstReturnPanel";
 import { StatCard } from "@/components/admin/StatCard";
 import { formatInr } from "@/data/admin";
 import { api, isApiEnabled } from "@/lib/apiClient";
@@ -73,6 +74,13 @@ export default function AdminReportsHubPage() {
           </span>
         }
       />
+
+      {/* The one job on this screen with a legal deadline, and the one the admin
+          could not do at all: every figure existed per order and nothing summed
+          them. */}
+      <div className="mb-4">
+        <GstReturnPanel />
+      </div>
 
       {apiOn && liveError ? (
         <p className="mb-4 text-sm text-[#B42318]" role="alert">

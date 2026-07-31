@@ -612,6 +612,20 @@ export interface ApiToday {
   simulating: { messaging: boolean; payments: boolean };
 }
 
+export interface ApiGstReturn {
+  from: string;
+  to: string;
+  orders: number;
+  sales: number;
+  taxableValue: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  totalTax: number;
+  /** Orders whose place of supply could not be resolved — taxed as IGST. */
+  unresolvedPlaceOfSupply: number;
+}
+
 export const api = {
   health: () => apiFetch<{ ok: boolean }>("/health"),
   /**
@@ -877,6 +891,14 @@ export const api = {
   reportSeries: (window?: ReportWindow) =>
     apiFetch<{ data: ApiReportSeriesPoint[] }>(`/admin/reports/series${reportQuery(window)}`).then(
       (r) => r.data,
+    ),
+  /**
+   * What to file this month. Summed from the same OrderDocumentService the
+   * invoice uses, so a return and an invoice can never disagree.
+   */
+  reportGst: (window?: { from: string; to: string }) =>
+    apiFetch<ApiGstReturn>(
+      `/admin/reports/gst${window ? `?from=${window.from}&to=${window.to}` : ""}`,
     ),
   reportTopSkus: () =>
     apiFetch<{ data: ApiReportSku[] }>("/admin/reports/top-skus").then((r) => r.data),
