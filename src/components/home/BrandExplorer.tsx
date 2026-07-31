@@ -93,7 +93,8 @@ function ShelfControls({
   brand,
   onScroll,
 }: {
-  brand: BrandName;
+  /** Display name only — any brand the shop has, not just the bundled six. */
+  brand: string;
   onScroll: (direction: -1 | 1) => void;
 }) {
   return (
@@ -119,9 +120,20 @@ function ShelfControls({
 }
 
 /**
- * The heading was hardcoded, so this section offered nothing but a visibility
- * checkbox in the builder. The brand shelves themselves stay data-driven — they
- * come from the catalogue, which is the point of the section.
+ * The brands themselves come from the shop now, not from this file.
+ *
+ * The tab list was a fixed six declared in data/home.ts, so a brand the owner
+ * added in the admin never appeared here and one he removed kept showing. On
+ * this store that meant 7 active brands and 6 on the homepage — Roblox was
+ * invisible to customers, and nothing in the admin hinted at why.
+ *
+ * Matching was worse than the list. Products were pulled by fuzzy string hints
+ * against the brand label AND the product title — the PlayStation hints included
+ * "ezurr" and "rockstar" — so a tab could show products that are not that
+ * brand's at all. The API already filters exactly on brand_slug, which is the
+ * relation the admin actually edits, so that is what is used.
+ *
+ * The bundled list survives as the offline fallback only.
  */
 export function BrandExplorer({
   eyebrow = "Brand discovery",
@@ -132,49 +144,82 @@ export function BrandExplorer({
   title?: string;
   description?: string;
 } = {}) {
-  const [activeBrand, setActiveBrand] = useState<BrandName>("PlayStation");
   const scrollerRef = useRef<HTMLDivElement>(null);
   const apiOn = isApiEnabled();
-  const [apiPool, setApiPool] = useState<CatalogProduct[] | null>(null);
+
+  /** {slug, name} from the shop, or the bundled six when the API is off. */
+  const [shopBrands, setShopBrands] = useState<{ slug: string; name: string }[] | null>(null);
+  const [activeSlug, setActiveSlug] = useState<string | null>(null);
+  const [products, setProducts] = useState<CatalogProduct[] | null>(null);
 
   useEffect(() => {
     if (!apiOn) {
-      setApiPool(null);
+      setShopBrands(null);
       return;
     }
     let cancelled = false;
     void api
-      .products({ per_page: 50 })
+      .brands()
       .then((res) => {
         if (cancelled) return;
-        const rows = Array.isArray(res.data) ? res.data : [];
-        setApiPool(rows.map(mapApiProductToCatalog));
+        const live = (Array.isArray(res.data) ? res.data : [])
+          .filter((b) => b.active)
+          .map((b) => ({ slug: b.slug, name: b.name }));
+        setShopBrands(live);
+        setActiveSlug((prev) => prev ?? live[0]?.slug ?? null);
       })
       .catch(() => {
-        if (!cancelled) setApiPool(null);
+        if (!cancelled) setShopBrands([]);
       });
     return () => {
       cancelled = true;
     };
   }, [apiOn]);
 
-  const products = useMemo(() => {
-    if (!apiOn) return brandCollections[activeBrand];
-    // Loading or failed: stay empty — never open bundled brand shelves.
-    if (apiPool === null) return [];
-    const hints = brandSlugHints[activeBrand].map((h) => h.toLowerCase());
-    const filtered = apiPool.filter((p) => {
-      const brand = (p.brand || "").toLowerCase();
-      const name = (p.name || "").toLowerCase();
-      return hints.some((h) => brand.includes(h) || name.includes(h));
-    });
-    return filtered.slice(0, 10);
-  }, [apiOn, apiPool, activeBrand]);
+  // Exact, server-side, by the same brand_slug the admin edits — no guessing
+  // from titles, and no shelf showing another brand's products.
+  useEffect(() => {
+    if (!apiOn || !activeSlug) return;
+    let cancelled = false;
+    setProducts(null);
+    void api
+      .products({ brand: activeSlug, per_page: 10 })
+      .then((res) => {
+        if (cancelled) return;
+        setProducts((Array.isArray(res.data) ? res.data : []).map(mapApiProductToCatalog));
+      })
+      .catch(() => {
+        if (!cancelled) setProducts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn, activeSlug]);
 
-  const featured = products[0];
-  const stage = brandStage[activeBrand];
-  const useSquare =
-    activeBrand !== "PlayStation" && activeBrand !== "Nintendo";
+  const tabs = apiOn
+    ? (shopBrands ?? []).map((b) => ({ key: b.slug, label: b.name }))
+    : brandNames.map((b) => ({ key: b, label: b }));
+
+  const activeKey = apiOn ? activeSlug : (activeSlug ?? brandNames[0]);
+  const shelf: CatalogProduct[] = apiOn
+    ? (products ?? [])
+    : brandCollections[(activeKey as BrandName) ?? "PlayStation"];
+
+  const featured = shelf[0];
+  const activeLabel = tabs.find((t) => t.key === activeKey)?.label ?? "";
+
+  // Per-brand artwork, mark and blurb are a nicety for the brands this theme
+  // shipped with. A brand the owner adds gets a neutral treatment and its own
+  // initial rather than being excluded from the section for want of a colour.
+  const stage = brandStage[activeLabel as BrandName] ?? {
+    tone: "from-[#101014] via-[#1D1D22] to-[#2C2C33]",
+    accent: "#8E8E93",
+    label: activeLabel,
+  };
+  const mark = brandMarks[activeLabel as BrandName] ?? activeLabel.slice(0, 1).toUpperCase();
+  const note =
+    brandNotes[activeLabel as BrandName] ?? `Everything we stock from ${activeLabel}.`;
+  const useSquare = activeLabel !== "PlayStation" && activeLabel !== "Nintendo";
 
   function scroll(direction: -1 | 1) {
     const scroller = scrollerRef.current;
@@ -212,17 +257,21 @@ export function BrandExplorer({
           aria-label="Gaming brands"
         >
           <div className="flex min-w-max gap-0">
-            {brandNames.map((brand) => {
-              const active = brand === activeBrand;
-              const accent = brandStage[brand].accent;
+            {tabs.map((tab) => {
+              const active = tab.key === activeKey;
+              // A brand the theme has no artwork for still gets a tab — a
+              // neutral accent, and its own initial as the mark.
+              const accent = brandStage[tab.label as BrandName]?.accent ?? "#8E8E93";
+              const tabMark =
+                brandMarks[tab.label as BrandName] ?? tab.label.slice(0, 1).toUpperCase();
               return (
                 <button
-                  key={brand}
+                  key={tab.key}
                   type="button"
                   role="tab"
                   aria-selected={active}
                   aria-controls="brand-products"
-                  onClick={() => setActiveBrand(brand)}
+                  onClick={() => setActiveSlug(tab.key)}
                   className={`group relative flex min-h-11 shrink-0 items-center gap-2.5 px-4 pb-3.5 pt-1 text-sm font-semibold transition sm:min-h-12 sm:px-5 sm:pb-4 ${
                     active
                       ? "text-[#1D1D1F]"
@@ -237,9 +286,9 @@ export function BrandExplorer({
                         : "bg-[#F0F0F2] text-[#6E6E73] group-hover:bg-[#E8E8ED] group-hover:text-[#424245]"
                     }`}
                   >
-                    {brandMarks[brand]}
+                    {tabMark}
                   </span>
-                  <span className="whitespace-nowrap tracking-[-0.01em]">{brand}</span>
+                  <span className="whitespace-nowrap tracking-[-0.01em]">{tab.label}</span>
                   <span
                     aria-hidden="true"
                     className="absolute inset-x-3 bottom-0 h-[2px] rounded-full transition-opacity duration-300 sm:inset-x-4"
@@ -257,7 +306,7 @@ export function BrandExplorer({
         <div
           id="brand-products"
           role="tabpanel"
-          aria-label={`${activeBrand} products`}
+          aria-label={`${activeLabel} products`}
           className="overflow-hidden rounded-[22px] border border-black/[0.07] bg-white shadow-[0_1px_0_rgba(17,17,19,0.04),0_24px_64px_rgba(17,17,19,0.08)] sm:rounded-[28px] lg:rounded-[32px]"
         >
           <div className="grid lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
@@ -303,16 +352,16 @@ export function BrandExplorer({
                         aria-hidden="true"
                         className="ez-mono flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.08] text-base font-bold text-white backdrop-blur-sm sm:h-14 sm:w-14 sm:rounded-2xl sm:text-lg"
                       >
-                        {brandMarks[activeBrand]}
+                        {mark}
                       </span>
                       <h3 className="text-[clamp(1.85rem,4.5vw,3rem)] font-semibold leading-[0.95] tracking-[-0.05em] text-white">
-                        {activeBrand}
+                        {activeLabel}
                       </h3>
                     </div>
                   </div>
 
                   <p className="mt-4 max-w-[320px] text-sm leading-relaxed text-white/60 sm:mt-5 sm:text-[15px] sm:leading-relaxed">
-                    {brandNotes[activeBrand]}
+                    {note}
                   </p>
                 </div>
 
@@ -320,7 +369,7 @@ export function BrandExplorer({
                   <div className="flex items-end gap-5">
                     <div>
                       <div className="text-[2rem] font-semibold leading-none tracking-[-0.04em] text-white sm:text-[2.25rem]">
-                        {String(products.length).padStart(2, "0")}
+                        {String(shelf.length).padStart(2, "0")}
                       </div>
                       <div className="ez-mono mt-1.5 text-[8px] uppercase tracking-[0.16em] text-white/35">
                         curated picks
@@ -365,10 +414,10 @@ export function BrandExplorer({
                     Featured shelf
                   </p>
                   <p className="mt-0.5 truncate text-[15px] font-semibold tracking-[-0.02em] text-[#1D1D1F] sm:text-base">
-                    {activeBrand} picks
+                    {activeLabel} picks
                   </p>
                 </div>
-                <ShelfControls brand={activeBrand} onScroll={scroll} />
+                <ShelfControls brand={activeLabel} onScroll={scroll} />
               </div>
 
               <div className="relative flex-1 px-5 py-4 sm:px-7 sm:py-5 lg:px-8 lg:py-6">
@@ -386,14 +435,14 @@ export function BrandExplorer({
                   className="ez-scrollbar-none -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-1 sm:gap-3.5"
                   tabIndex={0}
                   role="region"
-                  aria-label={`${activeBrand} products`}
+                  aria-label={`${activeLabel} shelf`}
                 >
-                  {apiOn && products.length === 0 ? (
+                  {apiOn && shelf.length === 0 ? (
                     <p className="px-1 py-8 text-sm text-[#86868B]">
-                      No {activeBrand} products from the catalog yet.
+                      No {activeLabel} shelf from the catalog yet.
                     </p>
                   ) : null}
-                  {products.map((product, index) => (
+                  {shelf.map((product, index) => (
                     <div
                       key={getCatalogProductKey(product, index)}
                       className={`min-w-0 shrink-0 snap-start ${
