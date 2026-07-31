@@ -59,6 +59,7 @@ import {
   seedCheckoutRules,
   type AdminCheckoutRule,
 } from "@/lib/checkoutRules";
+import { isApiEnabled } from "@/lib/apiClient";
 
 export const STORAGE_KEY = "ezurr_admin_store";
 export const STORE_VERSION = 10;
@@ -86,6 +87,7 @@ export type AdminStoreState = {
 
 type Listener = () => void;
 
+/** Offline demo workspace — catalog, orders, ledger, etc. */
 function createSeedState(): AdminStoreState {
   const products = buildSeedCatalog();
   const orders = structuredClone(adminOrders);
@@ -113,6 +115,37 @@ function createSeedState(): AdminStoreState {
     cmsGlobalCode: { headCss: "", footerJs: "" },
     checkoutRules: seedCheckoutRules(),
   };
+}
+
+/**
+ * Empty commerce collections for API-backed installs. Keeps a CMS home shell
+ * and default settings so the builder still has a document to edit offline.
+ */
+function emptyAdminState(): AdminStoreState {
+  return {
+    version: STORE_VERSION,
+    products: [],
+    orders: [],
+    customers: [],
+    coupons: [],
+    digitalCodes: [],
+    ledger: [],
+    categories: [],
+    brands: [],
+    settings: { ...defaultAdminSettings },
+    integrations: [],
+    automations: [],
+    automationRuns: [],
+    activityLog: [],
+    cmsPages: [createDefaultHomePage()],
+    cmsWidgets: createWidgetCatalogSeed(),
+    cmsGlobalCode: { headCss: "", footerJs: "" },
+    checkoutRules: [],
+  };
+}
+
+function hydrateBaseState(): AdminStoreState {
+  return isApiEnabled() ? emptyAdminState() : createSeedState();
 }
 
 function seedActivity(): AdminActivityEntry[] {
@@ -150,13 +183,13 @@ function seedAutomations(): AdminAutomationRule[] {
   ];
 }
 
-let state: AdminStoreState = createSeedState();
+// Start empty so SSR/API mode never flashes demo catalog; offline hydrate fills seed.
+let state: AdminStoreState = emptyAdminState();
 let hydrated = false;
 const listeners = new Set<Listener>();
 
-// Stable seed for SSR / hydration — never mutated, never reads localStorage,
-// so getServerSnapshot matches the server-rendered HTML.
-const SERVER_SNAPSHOT: AdminStoreState = createSeedState();
+// Stable empty snapshot for SSR — never mutated, never reads localStorage.
+const SERVER_SNAPSHOT: AdminStoreState = emptyAdminState();
 export function getServerAdminState(): AdminStoreState {
   return SERVER_SNAPSHOT;
 }
@@ -197,12 +230,17 @@ function hydrate() {
   hydrated = true;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
+    if (!raw) {
+      // First visit: demo catalog only when the API is unset.
+      state = hydrateBaseState();
+      return;
+    }
     const parsed = JSON.parse(raw) as Partial<AdminStoreState> & {
       analytics?: unknown;
       alerts?: unknown;
     };
-    const seed = createSeedState();
+    // When the API is live, do not re-fill missing collections from demo seed.
+    const seed = hydrateBaseState();
     const versionOk = parsed.version === STORE_VERSION;
     const ordersRaw =
       versionOk && Array.isArray(parsed.orders) && parsed.orders.length > 0
@@ -277,7 +315,7 @@ function hydrate() {
       ),
     };
   } catch {
-    state = createSeedState();
+    state = hydrateBaseState();
   }
 }
 

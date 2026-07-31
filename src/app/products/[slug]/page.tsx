@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ProductView } from "@/components/product/ProductView";
 import { findStaticCatalogProduct } from "@/data/home";
-import { ApiError, api } from "@/lib/apiClient";
+import { ApiError, api, isApiEnabled } from "@/lib/apiClient";
 import { toPlainSnippet } from "@/lib/apiMappers";
 import { fromApi, fromStatic, type ResolvedProduct } from "@/lib/productResolve";
 
@@ -24,16 +24,18 @@ type Resolution = {
 // The URL segment is the product's business handle (its `key`, e.g.
 // "gta-vi-preorder"); the API resolves it by key OR slug.
 const resolveProduct = cache(async (handle: string): Promise<Resolution> => {
-  // Server-side resolve: prefer the live API, fall back to the static catalog.
+  // Server-side resolve: prefer the live API. Bundled JSON is offline-only —
+  // serving it when the API is configured made missing SKUs look like real PDPs.
   try {
     return { product: fromApi(await api.product(handle)), gone: false };
   } catch (err) {
-    const staticHit = findStaticCatalogProduct(handle);
-    if (staticHit) return { product: fromStatic(staticHit, handle), gone: false };
-    // Only a 404/410 from the API proves the URL is junk. A 5xx, an unreachable
-    // host or an unset API URL means we simply don't know — answering 404 then
-    // would hand search engines a deindex signal for the entire live catalogue
-    // every time the API blips.
+    if (!isApiEnabled()) {
+      const staticHit = findStaticCatalogProduct(handle);
+      if (staticHit) return { product: fromStatic(staticHit, handle), gone: false };
+    }
+    // Only a 404/410 from the API proves the URL is junk. A 5xx or unreachable
+    // host means we simply don't know — answering 404 then would hand search
+    // engines a deindex signal for the entire live catalogue on a blip.
     const gone = err instanceof ApiError && (err.status === 404 || err.status === 410);
     return { product: null, gone };
   }

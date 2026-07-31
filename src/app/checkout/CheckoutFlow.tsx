@@ -29,10 +29,7 @@ import {
   isValidMobile,
   type AuthSession,
 } from "@/lib/auth";
-
-const PRICE = 5999;
-const PRODUCT_IMG =
-  "https://ezurr.com/cdn/shop/files/GAMPLAY540.jpg?v=1782735956&width=533";
+import { DEFAULT_IMG } from "@/lib/productResolve";
 
 const GATEWAY_LABELS: Record<CheckoutGateway, string> = {
   upi: "UPI",
@@ -642,7 +639,7 @@ function MobileSummarySheet({
 
 export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string }) {
   // Single-product buy-now when a handle is in the path; otherwise cart mode.
-  const productKey = buyNowKey?.trim() || "gta-vi-preorder";
+  const productKey = buyNowKey?.trim() || "";
   const apiOn = isApiEnabled();
 
   const [step, setStep] = useState(1);
@@ -651,8 +648,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   const [orderError, setOrderError] = useState<string | null>(null);
   // Snapshot of what was actually bought, captured before cart.clear(). Without
   // it the success screen recomputes from an emptied cart, flips out of cart
-  // mode, and shows the single-product fallback title/price instead of the
-  // real order.
+  // mode, and shows a blank title/price instead of the real order.
   const [placedSummary, setPlacedSummary] = useState<{
     title: string;
     total: string;
@@ -660,6 +656,8 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   } | null>(null);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [checkoutProduct, setCheckoutProduct] = useState<ApiProduct | null>(null);
+  const [productLoading, setProductLoading] = useState(Boolean(productKey && apiOn));
+  const [productMissing, setProductMissing] = useState(false);
   const [method, setMethod] = useState<"prepaid" | "cod">("prepaid");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [session, setSessionState] = useState<AuthSession | null>(null);
@@ -701,17 +699,17 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   const liveTheme = useLiveThemeSettings();
   const { checkoutRules } = useAdminStore();
   const releaseLabel = formatReleaseLabel(liveTheme.releaseDate);
-  const unitPrice = checkoutProduct?.price ?? PRICE;
-  const productTitle = checkoutProduct?.title ?? "Ezurr Play Console";
+  const unitPrice = checkoutProduct?.price ?? 0;
+  const productTitle = checkoutProduct?.title ?? "";
   const productSubtitle = checkoutProduct?.category_slug
     ? checkoutProduct.category_slug.replace(/-/g, " ")
-    : "Pre-order";
-  const productImage = checkoutProduct?.image_url || PRODUCT_IMG;
+    : "";
+  const productImage = checkoutProduct?.image_url || DEFAULT_IMG;
   // Cart mode (?cart=1): order the whole cart instead of the single ?key product.
   // The server quote re-prices authoritatively from these items, so all money
   // (subtotal/discount/tax/total) stays server-driven for both modes.
   const cart = useCart();
-  const isCart = !buyNowKey?.trim() && cart.items.length > 0;
+  const isCart = !productKey && cart.items.length > 0;
 
   // In cart mode there is no single ?key product, so derive the fulfillment from
   // the cart (which only ever holds in-stock items) rather than defaulting to
@@ -727,7 +725,9 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
       : checkoutProduct?.fulfillment_type ?? "physical"
   ) as "digital" | "preorder" | "physical";
   const isPreorder = fulfillmentType === "preorder";
-  const productCategory = isCart ? "games" : checkoutProduct?.category_slug ?? "preorders";
+  const productCategory = isCart
+    ? "games"
+    : checkoutProduct?.category_slug ?? "games";
 
   const subtotalBase = isCart ? cart.subtotal : unitPrice;
 
@@ -742,7 +742,9 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
       : undefined;
   const orderLineItems = isCart
     ? cart.items.map((i) => ({ productKey: i.productKey, title: i.title, qty: i.qty }))
-    : [{ productKey: checkoutProduct?.key ?? productKey, title: productTitle, qty: 1 }];
+    : checkoutProduct?.key
+      ? [{ productKey: checkoutProduct.key, title: productTitle, qty: 1 }]
+      : [];
   const quoteItems = orderLineItems.map((i) => ({ productKey: i.productKey, qty: i.qty }));
   const itemsKey = quoteItems.map((i) => `${i.productKey}:${i.qty}`).join(",");
   const displayTitle = isCart
@@ -752,15 +754,36 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   const displayImage = isCart ? cart.items[0]?.image || productImage : productImage;
 
   useEffect(() => {
-    if (!apiOn) return;
+    if (!productKey) {
+      setCheckoutProduct(null);
+      setProductLoading(false);
+      setProductMissing(false);
+      return;
+    }
+    if (!apiOn) {
+      // Offline buy-now has no live catalog — do not invent a demo SKU.
+      setCheckoutProduct(null);
+      setProductLoading(false);
+      setProductMissing(true);
+      return;
+    }
     let cancelled = false;
+    setProductLoading(true);
+    setProductMissing(false);
     void api
       .product(productKey)
       .then((p) => {
-        if (!cancelled) setCheckoutProduct(p);
+        if (cancelled) return;
+        setCheckoutProduct(p);
+        setProductMissing(false);
       })
       .catch(() => {
-        if (!cancelled) setCheckoutProduct(null);
+        if (cancelled) return;
+        setCheckoutProduct(null);
+        setProductMissing(true);
+      })
+      .finally(() => {
+        if (!cancelled) setProductLoading(false);
       });
     return () => {
       cancelled = true;
@@ -1614,12 +1637,9 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
     }
   };
 
-  // Cart checkout with nothing in the cart: previously this fell through to a
-  // hardcoded demo product ("Ezurr Play Console" / key `gta-vi-preorder`) that
-  // does not exist in the catalog, so Place order always died on the server
-  // with "One or more items are unavailable." Show an honest empty state.
+  // Cart checkout with nothing in the cart — honest empty state (never invent a SKU).
   // (Guarded on `hydrated` so we never flash it before localStorage is read.)
-  if (!buyNowKey?.trim() && cart.hydrated && cart.items.length === 0 && !placed) {
+  if (!productKey && cart.hydrated && cart.items.length === 0 && !placed) {
     return (
       <div className="ez-checkout-bg min-h-screen">
         <div className="ez-checkout-shell">
@@ -1628,6 +1648,41 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
             <h1 className="m-0 text-[24px] font-bold tracking-[-0.03em]">Your cart is empty</h1>
             <p className="m-0 text-[14px] leading-relaxed text-[#6E6E73]">
               Add something you love and it will show up here, ready to check out.
+            </p>
+            <Link
+              href="/games"
+              className="ez-checkout-btn-dark mt-2 rounded-full px-7 py-3.5 text-[15px] font-semibold no-underline"
+            >
+              Browse games
+            </Link>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (productKey && productLoading && !placed) {
+    return (
+      <div className="ez-checkout-bg min-h-screen">
+        <div className="ez-checkout-shell">
+          <CheckoutHeader label="Secure checkout" shortLabel="Secure" />
+          <main id="ez-main" className="mx-auto flex max-w-[520px] flex-col items-center gap-4 px-5 py-24 text-center">
+            <p className="m-0 text-[14px] text-[#6E6E73]">Loading product…</p>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (productKey && (productMissing || !checkoutProduct) && !placed) {
+    return (
+      <div className="ez-checkout-bg min-h-screen">
+        <div className="ez-checkout-shell">
+          <CheckoutHeader label="Secure checkout" shortLabel="Secure" />
+          <main id="ez-main" className="mx-auto flex max-w-[520px] flex-col items-center gap-4 px-5 py-24 text-center">
+            <h1 className="m-0 text-[24px] font-bold tracking-[-0.03em]">Product unavailable</h1>
+            <p className="m-0 text-[14px] leading-relaxed text-[#6E6E73]">
+              This item is not in the catalog right now. Browse the store and try again.
             </p>
             <Link
               href="/games"

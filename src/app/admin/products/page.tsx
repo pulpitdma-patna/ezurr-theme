@@ -998,32 +998,6 @@ export default function AdminProductsPage() {
         }
       />
 
-      {store.ledger.length > 0 ? (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold tracking-[-0.02em]">Recent stock ledger</h2>
-          <ul className="divide-y divide-black/[0.05] overflow-hidden rounded-lg border border-black/[0.08] bg-white">
-            {store.ledger.slice(0, 8).map((entry) => (
-              <li
-                key={entry.id}
-                className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-xs"
-              >
-                <Link
-                  href={`/admin/products/${encodeURIComponent(entry.productKey)}/edit`}
-                  className="ez-mono font-medium hover:underline"
-                >
-                  {entry.sku}
-                </Link>
-                <span className={entry.delta >= 0 ? "text-[#2D6B3C]" : "text-[#B42318]"}>
-                  {entry.delta >= 0 ? "+" : ""}
-                  {entry.delta}
-                </span>
-                <span className="text-[#86868B]">{entry.reason}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       <AdminDrawer
         open={drawerMode !== null}
         title={drawerTitle}

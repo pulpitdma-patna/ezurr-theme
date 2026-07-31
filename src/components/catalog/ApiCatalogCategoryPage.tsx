@@ -65,10 +65,14 @@ export function ApiCatalogCategoryPage({
   collection?: string;
 }) {
   const apiOn = isApiEnabled();
-  // SSR the static fallback so the page has content on first paint; the effect
-  // refreshes from the API on the client.
+  // When the API is wired, start from SSR/API rows only — never seed demo JSON.
+  // Offline (no API URL) still uses the checked-in fallback for local browsing.
   const [products, setProducts] = useState<CatalogProduct[]>(
-    initialProducts?.length ? initialProducts : fallbackProducts,
+    initialProducts?.length
+      ? initialProducts
+      : apiOn
+        ? []
+        : fallbackProducts,
   );
   const [total, setTotal] = useState<number>(initialTotal ?? 0);
   const [loading, setLoading] = useState(false);
@@ -191,8 +195,10 @@ export function ApiGameCardsPage({
   fallbackCards: GameCardProduct[];
 }) {
   const apiOn = isApiEnabled();
-  const [cards, setCards] = useState<GameCardProduct[]>(fallbackCards);
-  const [loading, setLoading] = useState(false);
+  const [cards, setCards] = useState<GameCardProduct[]>(
+    apiOn ? [] : fallbackCards,
+  );
+  const [loading, setLoading] = useState(apiOn);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

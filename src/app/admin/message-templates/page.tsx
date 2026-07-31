@@ -42,6 +42,7 @@ const CHANNEL_OPTIONS = [
   { value: "whatsapp", label: "WhatsApp" },
   { value: "sms", label: "SMS" },
   { value: "email", label: "Email" },
+  { value: "in_app", label: "In-app" },
 ];
 
 const STATUS_OPTIONS = [
@@ -177,7 +178,7 @@ export default function AdminMessageTemplatesPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Message templates"
-        description="Map events to MSG91 WhatsApp/SMS templates. Only approved templates send live."
+        description="All outbound copy — WhatsApp, SMS, email, and in-app — mapped by event. Only approved + enabled templates send live."
         breadcrumbs={[
           { label: "System", href: "/admin/settings" },
           { label: "Message templates" },
@@ -199,9 +200,9 @@ export default function AdminMessageTemplatesPage() {
         <div className="border-b border-black/[0.05] bg-[#FAFAFB]">
           {apiOn ? (
             <p className="border-b border-black/[0.04] px-3.5 py-2 text-[11px] leading-relaxed text-[#6E6E73] sm:px-4">
-              Set <code className="rounded bg-white px-1 py-0.5 text-[10px]">provider_template_name</code>{" "}
-              to your Meta-approved name and flip status to <strong>approved</strong> to enable live
-              sends for that event.
+              WhatsApp needs a Meta-approved template name; SMS needs an MSG91 Flow id (including Login
+              OTP). Filter by channel above. Flip status to <strong>approved</strong> to enable live sends.
+              Credentials stay under Integrations → WhatsApp Business.
             </p>
           ) : null}
 
@@ -386,6 +387,7 @@ export default function AdminMessageTemplatesPage() {
                   <option value="whatsapp">WhatsApp</option>
                   <option value="sms">SMS</option>
                   <option value="email">Email</option>
+                  <option value="in_app">In-app</option>
                 </select>
               </label>
             </div>
@@ -407,7 +409,8 @@ export default function AdminMessageTemplatesPage() {
                   placeholder="Flow template id from MSG91"
                 />
               </label>
-            ) : (
+            ) : null}
+            {editing.channel === "whatsapp" ? (
               <>
                 <label className="flex flex-col gap-1.5">
                   <span className={labelClass}>Provider template name (Meta-approved)</span>
@@ -428,7 +431,14 @@ export default function AdminMessageTemplatesPage() {
                   />
                 </label>
               </>
-            )}
+            ) : null}
+            {editing.channel === "email" || editing.channel === "in_app" ? (
+              <p className="rounded-lg border border-black/[0.06] bg-[#F7F7F8] px-3 py-2 text-xs text-[#6E6E73]">
+                {editing.channel === "email"
+                  ? "Email uses body preview + variables (include a subject key). Delivery goes through the store mailer."
+                  : "In-app templates store notification copy. Delivery is handled inside the app, not MSG91."}
+              </p>
+            ) : null}
             <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1.5">
                 <span className={labelClass}>Status</span>

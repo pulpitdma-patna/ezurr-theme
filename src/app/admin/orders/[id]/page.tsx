@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
-import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import { OrderTimeline } from "@/components/admin/OrderTimeline";
@@ -26,7 +25,7 @@ import {
   updateOrderStatus,
   updateOrderTracking,
 } from "@/lib/adminStore";
-import { api, isApiEnabled } from "@/lib/apiClient";
+import { api, isApiEnabled, type ApiDigitalCode } from "@/lib/apiClient";
 import { mapApiOrderToAdmin } from "@/lib/apiMappers";
 import { formatAdminDateTime } from "@/lib/adminFormat";
 import { formatMobileDisplay } from "@/lib/auth";
@@ -52,6 +51,8 @@ export default function AdminOrderDetailPage({
   const store = useAdminStore();
   const apiOn = isApiEnabled();
   const [apiOrder, setApiOrder] = useState<AdminOrder | null>(null);
+  const [numericOrderId, setNumericOrderId] = useState<number | null>(null);
+  const [apiVaultCodes, setApiVaultCodes] = useState<ApiDigitalCode[]>([]);
   const [loading, setLoading] = useState(apiOn);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -61,9 +62,12 @@ export default function AdminOrderDetailPage({
     try {
       const raw = await api.adminOrder(id);
       setApiOrder(mapApiOrderToAdmin(raw));
+      const nid = Number(raw.id);
+      setNumericOrderId(Number.isFinite(nid) && nid > 0 ? nid : null);
       setLoadError(null);
     } catch (err) {
       setApiOrder(null);
+      setNumericOrderId(null);
       setLoadError(err instanceof Error ? err.message : "Could not load order");
     } finally {
       setLoading(false);
@@ -73,6 +77,25 @@ export default function AdminOrderDetailPage({
   useEffect(() => {
     void loadOrder();
   }, [loadOrder]);
+
+  useEffect(() => {
+    if (!apiOn || numericOrderId == null) {
+      setApiVaultCodes([]);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .adminDigitalCodes({ order_id: numericOrderId, per_page: 100 })
+      .then((res) => {
+        if (!cancelled) setApiVaultCodes(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setApiVaultCodes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn, numericOrderId]);
 
   const localOrder = useMemo(() => store.orders.find((o) => o.id === id) ?? null, [store.orders, id]);
   const order = apiOn ? apiOrder : localOrder;
@@ -139,15 +162,20 @@ export default function AdminOrderDetailPage({
 
   const actions = nextActions[order.status] ?? [];
   const digitalLines = order.items.filter((item) => item.fulfillmentType === "digital");
-  const assignedCodes = store.digitalCodes.filter((c) => c.assignedOrderId === order.id);
-  const availableForLines = store.digitalCodes.filter((code) => {
-    if (code.status !== "available") return false;
-    return digitalLines.some(
-      (line) =>
-        code.productKey === line.productKey ||
-        code.productName.toLowerCase().includes(line.name.toLowerCase().slice(0, 12)),
-    );
-  });
+  // Local vault only — when the API is on, codes come from apiVaultCodes.
+  const assignedCodes = apiOn
+    ? []
+    : store.digitalCodes.filter((c) => c.assignedOrderId === order.id);
+  const availableForLines = apiOn
+    ? []
+    : store.digitalCodes.filter((code) => {
+        if (code.status !== "available") return false;
+        return digitalLines.some(
+          (line) =>
+            code.productKey === line.productKey ||
+            code.productName.toLowerCase().includes(line.name.toLowerCase().slice(0, 12)),
+        );
+      });
 
   function persistStatus(next: AdminOrderStatus) {
     if (apiOn) {
@@ -296,87 +324,123 @@ export default function AdminOrderDetailPage({
           {digitalLines.length > 0 ? (
             <section className="admin-print-hide rounded-2xl border border-black/[0.06] bg-white p-4">
               <h2 className="mb-1 text-sm font-semibold tracking-[-0.02em]">Digital fulfillment</h2>
-              <p className="mb-3 text-xs text-[#86868B]">
-                Assign vault codes to this order. Digital lines do not decrement physical stock.
-              </p>
               {apiOn ? (
-                <AdminNotice tone="demo">
-                  The code vault runs on local demo data — assignments are not saved to the API yet.
-                </AdminNotice>
-              ) : null}
-
-              {assignedCodes.length > 0 ? (
-                <ul className="mb-3 space-y-2">
-                  {assignedCodes.map((code) => (
-                    <li
-                      key={code.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/[0.06] bg-[#F7F7F8] px-3 py-2"
-                    >
-                      <div>
-                        <div className="ez-mono text-[11px] font-medium">
-                          {revealedCode === code.id ? code.code : maskDigitalCode(code.code)}
-                        </div>
-                        <div className="text-[11px] text-[#86868B]">{code.productName}</div>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setRevealedCode((prev) => (prev === code.id ? null : code.id))
-                          }
-                          className="h-7 rounded-md border border-black/10 px-2 text-[11px] font-semibold"
+                <>
+                  <p className="mb-3 text-xs text-[#86868B]">
+                    Codes are reserved and delivered automatically when payment clears.
+                    Digital lines do not decrement physical stock.{" "}
+                    <Link href="/admin/digital-codes" className="font-semibold text-[#424245]">
+                      Manage vault →
+                    </Link>
+                  </p>
+                  {apiVaultCodes.length > 0 ? (
+                    <ul className="space-y-2">
+                      {apiVaultCodes.map((code) => (
+                        <li
+                          key={code.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/[0.06] bg-[#F7F7F8] px-3 py-2"
                         >
-                          {revealedCode === code.id ? "Hide" : "Reveal"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => copyCode(code.id, code.code)}
-                          className="h-7 rounded-md border border-black/10 px-2 text-[11px] font-semibold"
+                          <div>
+                            <div className="ez-mono text-[11px] font-medium">
+                              {code.masked_code}
+                            </div>
+                            <div className="text-[11px] text-[#86868B]">
+                              {code.product_key}
+                              {code.status ? ` · ${code.status}` : ""}
+                            </div>
+                          </div>
+                          {code.assigned_at ? (
+                            <span className="ez-mono text-[10px] text-[#86868B]">
+                              {formatAdminDateTime(code.assigned_at)}
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-[#86868B]">
+                      No vault codes linked to this order yet
+                      {order.status === "pending_payment"
+                        ? " — they appear after payment clears."
+                        : "."}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="mb-3 text-xs text-[#86868B]">
+                    Assign vault codes to this order. Digital lines do not decrement physical stock.
+                  </p>
+                  {assignedCodes.length > 0 ? (
+                    <ul className="mb-3 space-y-2">
+                      {assignedCodes.map((code) => (
+                        <li
+                          key={code.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/[0.06] bg-[#F7F7F8] px-3 py-2"
                         >
-                          {copiedId === code.id ? "Copied" : "Copy"}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+                          <div>
+                            <div className="ez-mono text-[11px] font-medium">
+                              {revealedCode === code.id ? code.code : maskDigitalCode(code.code)}
+                            </div>
+                            <div className="text-[11px] text-[#86868B]">{code.productName}</div>
+                          </div>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setRevealedCode((prev) => (prev === code.id ? null : code.id))
+                              }
+                              className="h-7 rounded-md border border-black/10 px-2 text-[11px] font-semibold"
+                            >
+                              {revealedCode === code.id ? "Hide" : "Reveal"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyCode(code.id, code.code)}
+                              className="h-7 rounded-md border border-black/10 px-2 text-[11px] font-semibold"
+                            >
+                              {copiedId === code.id ? "Copied" : "Copy"}
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
 
-              {availableForLines.length > 0 ? (
-                <ul className="space-y-2">
-                  {availableForLines.map((code) => (
-                    <li
-                      key={code.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-black/[0.1] px-3 py-2"
-                    >
-                      <div>
-                        <div className="ez-mono text-[11px]">{maskDigitalCode(code.code)}</div>
-                        <div className="text-[11px] text-[#86868B]">{code.productName}</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (apiOn) {
-                            setSavedMsg("Code vault isn't wired to the API yet — not saved");
-                            return;
-                          }
-                          assignDigitalCodeToOrder(code.id, order.id);
-                          setSavedMsg("Code assigned to order");
-                        }}
-                        className="h-7 rounded-md bg-[#1D1D1F] px-2.5 text-[11px] font-semibold text-white"
-                      >
-                        Assign
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : assignedCodes.length === 0 ? (
-                <p className="text-sm text-[#86868B]">
-                  No matching available codes.{" "}
-                  <Link href="/admin/digital-codes" className="font-semibold text-[#424245]">
-                    Open vault →
-                  </Link>
-                </p>
-              ) : null}
+                  {availableForLines.length > 0 ? (
+                    <ul className="space-y-2">
+                      {availableForLines.map((code) => (
+                        <li
+                          key={code.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-black/[0.1] px-3 py-2"
+                        >
+                          <div>
+                            <div className="ez-mono text-[11px]">{maskDigitalCode(code.code)}</div>
+                            <div className="text-[11px] text-[#86868B]">{code.productName}</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              assignDigitalCodeToOrder(code.id, order.id);
+                              setSavedMsg("Code assigned to order");
+                            }}
+                            className="h-7 rounded-md bg-[#1D1D1F] px-2.5 text-[11px] font-semibold text-white"
+                          >
+                            Assign
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : assignedCodes.length === 0 ? (
+                    <p className="text-sm text-[#86868B]">
+                      No matching available codes.{" "}
+                      <Link href="/admin/digital-codes" className="font-semibold text-[#424245]">
+                        Open vault →
+                      </Link>
+                    </p>
+                  ) : null}
+                </>
+              )}
             </section>
           ) : null}
 

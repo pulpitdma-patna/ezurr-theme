@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ApiGameCardsPage } from "@/components/catalog/ApiCatalogCategoryPage";
 import gameCards from "@/data/gameCards.json";
+import { isApiEnabled } from "@/lib/apiClient";
 import type { GameCardProduct } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -13,5 +14,9 @@ export const metadata: Metadata = {
 };
 
 export default function GameCardsPage() {
-  return <ApiGameCardsPage fallbackCards={gameCards as GameCardProduct[]} />;
+  return (
+    <ApiGameCardsPage
+      fallbackCards={isApiEnabled() ? [] : (gameCards as GameCardProduct[])}
+    />
+  );
 }

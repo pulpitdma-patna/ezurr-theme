@@ -14,9 +14,10 @@ import { formatRangeLabel, latestOrderAnchor } from "@/lib/reports/dateRange";
 
 export default function AdminReportsHubPage() {
   const store = useAdminStore();
-  const { range } = useReportFilters(store.orders, "30d");
-  const anchor = latestOrderAnchor(store.orders);
   const apiOn = isApiEnabled();
+  const filterOrders = apiOn ? [] : store.orders;
+  const { range } = useReportFilters(filterOrders, "30d");
+  const anchor = apiOn ? "live" : latestOrderAnchor(store.orders);
   const [summary, setSummary] = useState<{
     revenue: number;
     orders: number;

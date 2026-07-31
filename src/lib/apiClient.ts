@@ -769,11 +769,19 @@ export const api = {
     apiFetch<{ data: ApiAccountDigitalCode[] }>("/account/digital-codes").then((r) => r.data),
 
   // ---- Admin: digital-code vault ----
-  adminDigitalCodes: (params?: { productKey?: string; status?: string; page?: number }) => {
+  adminDigitalCodes: (params?: {
+    productKey?: string;
+    status?: string;
+    page?: number;
+    per_page?: number;
+    order_id?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.productKey) qs.set("productKey", params.productKey);
     if (params?.status) qs.set("status", params.status);
     if (params?.page) qs.set("page", String(params.page));
+    if (params?.per_page) qs.set("per_page", String(params.per_page));
+    if (params?.order_id != null) qs.set("order_id", String(params.order_id));
     const suffix = qs.toString() ? `?${qs}` : "";
     return apiFetch<ApiPaginated<ApiDigitalCode>>(`/admin/digital-codes${suffix}`);
   },

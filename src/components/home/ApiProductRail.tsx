@@ -73,11 +73,7 @@ export function ApiProductRail({
             const res = await api.products({ per_page: Math.max(limit, 24) });
             const rows = Array.isArray(res.data) ? res.data : [];
             if (!cancelled) {
-              setProducts(
-                rows.length
-                  ? rows.slice(0, limit).map(mapApiProductToCatalog)
-                  : staticProducts,
-              );
+              setProducts(rows.slice(0, limit).map(mapApiProductToCatalog));
             }
             return;
           }
@@ -88,9 +84,6 @@ export function ApiProductRail({
           );
           if (!cancelled) {
             // A hand-picked rail shows exactly what was picked, in that order.
-            // Falling back to the demo catalogue here meant choosing five
-            // products and getting ten unrelated ones, with no error — the most
-            // trust-destroying behaviour in the builder.
             setProducts(
               fetched.filter(Boolean).map((p) => mapApiProductToCatalog(p!)),
             );
@@ -106,15 +99,11 @@ export function ApiProductRail({
         );
         const rows = Array.isArray(res.data) ? res.data : [];
         if (!cancelled) {
-          setProducts(
-            rows.length
-              ? rows.slice(0, limit).map(mapApiProductToCatalog)
-              : staticProducts,
-          );
+          // Empty API catalog stays empty — never open bundled demo JSON.
+          setProducts(rows.slice(0, limit).map(mapApiProductToCatalog));
         }
-      } catch (err: unknown) {
-        // Keep CMS/static shelf visible when API/CORS is unavailable.
-        if (!cancelled) setProducts(staticProducts);
+      } catch {
+        if (!cancelled) setProducts([]);
       } finally {
         if (!cancelled) setLoading(false);
       }

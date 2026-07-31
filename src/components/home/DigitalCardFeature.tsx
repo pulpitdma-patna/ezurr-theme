@@ -25,7 +25,7 @@ export function DigitalCardFeature({
 }: DigitalCardFeatureProps) {
   const apiOn = isApiEnabled();
   const [cards, setCards] = useState<GameCardProduct[]>(
-    staticGameCards.slice(0, 3),
+    apiOn ? [] : staticGameCards.slice(0, 3),
   );
 
   useEffect(() => {
@@ -39,14 +39,10 @@ export function DigitalCardFeature({
       .then((res) => {
         if (cancelled) return;
         const rows = Array.isArray(res.data) ? res.data : [];
-        setCards(
-          rows.length
-            ? rows.slice(0, 3).map((p, i) => mapApiProductToGameCard(p, i))
-            : staticGameCards.slice(0, 3),
-        );
+        setCards(rows.slice(0, 3).map((p, i) => mapApiProductToGameCard(p, i)));
       })
       .catch(() => {
-        if (!cancelled) setCards(staticGameCards.slice(0, 3));
+        if (!cancelled) setCards([]);
       });
     return () => {
       cancelled = true;

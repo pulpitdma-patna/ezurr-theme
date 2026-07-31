@@ -159,18 +159,16 @@ export function BrandExplorer({
   }, [apiOn]);
 
   const products = useMemo(() => {
-    if (!apiOn || apiPool === null) {
-      return brandCollections[activeBrand];
-    }
+    if (!apiOn) return brandCollections[activeBrand];
+    // Loading or failed: stay empty — never open bundled brand shelves.
+    if (apiPool === null) return [];
     const hints = brandSlugHints[activeBrand].map((h) => h.toLowerCase());
     const filtered = apiPool.filter((p) => {
       const brand = (p.brand || "").toLowerCase();
       const name = (p.name || "").toLowerCase();
       return hints.some((h) => brand.includes(h) || name.includes(h));
     });
-    if (filtered.length) return filtered.slice(0, 10);
-    if (apiPool.length) return apiPool.slice(0, 10);
-    return brandCollections[activeBrand];
+    return filtered.slice(0, 10);
   }, [apiOn, apiPool, activeBrand]);
 
   const featured = products[0];
@@ -390,6 +388,11 @@ export function BrandExplorer({
                   role="region"
                   aria-label={`${activeBrand} products`}
                 >
+                  {apiOn && products.length === 0 ? (
+                    <p className="px-1 py-8 text-sm text-[#86868B]">
+                      No {activeBrand} products from the catalog yet.
+                    </p>
+                  ) : null}
                   {products.map((product, index) => (
                     <div
                       key={getCatalogProductKey(product, index)}

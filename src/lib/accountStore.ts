@@ -2,6 +2,7 @@
 
 import games from "@/data/games.json";
 import accessories from "@/data/accessories.json";
+import { isApiEnabled } from "@/lib/apiClient";
 import type { CatalogProduct } from "@/lib/types";
 import { getCatalogProductKey } from "@/lib/productKey";
 
@@ -101,7 +102,21 @@ function seedLedger(): PointsEntry[] {
   ];
 }
 
-function defaultState(): AccountStoreState {
+/** Empty shell — used when the live API is the source of truth. */
+export function emptyAccountState(): AccountStoreState {
+  return {
+    wishlistKeys: [],
+    addresses: [],
+    dob: "",
+    gender: "",
+    notify: { email: true, whatsapp: true, marketing: false },
+    points: 0,
+    pointsLedger: [],
+  };
+}
+
+/** Offline / demo seed — only for first init when the API is unset. */
+export function demoAccountState(): AccountStoreState {
   return {
     wishlistKeys: seedWishlist(),
     addresses: seedAddresses(),
@@ -113,29 +128,38 @@ function defaultState(): AccountStoreState {
   };
 }
 
+function initialState(): AccountStoreState {
+  return isApiEnabled() ? emptyAccountState() : demoAccountState();
+}
+
 let memory: AccountStoreState | null = null;
 const listeners = new Set<() => void>();
 
-// Stable seed for SSR / hydration (never reads localStorage).
-const SERVER_SNAPSHOT: AccountStoreState = defaultState();
+// SSR snapshot is empty so we never flash fake wishlist/points into API mode.
+const SERVER_SNAPSHOT: AccountStoreState = emptyAccountState();
 export function getServerAccountState(): AccountStoreState {
   return SERVER_SNAPSHOT;
 }
 
 function read(): AccountStoreState {
-  if (typeof window === "undefined") return defaultState();
+  if (typeof window === "undefined") return emptyAccountState();
   if (memory) return memory;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      memory = defaultState();
+      memory = initialState();
       return memory;
     }
     const parsed = JSON.parse(raw) as Partial<AccountStoreState>;
-    memory = { ...defaultState(), ...parsed };
+    const base = emptyAccountState();
+    memory = {
+      ...base,
+      ...parsed,
+      notify: { ...base.notify, ...parsed.notify },
+    };
     return memory;
   } catch {
-    memory = defaultState();
+    memory = initialState();
     return memory;
   }
 }

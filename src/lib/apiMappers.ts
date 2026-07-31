@@ -203,23 +203,39 @@ export function mapApiProductToAdminRow(p: ApiProduct, index = 0): AdminCatalogR
   };
 }
 
+const API_ORDER_STATUSES: AdminOrderStatus[] = [
+  "pending",
+  "pending_payment",
+  "confirmed",
+  "paid",
+  "payment_failed",
+  "packed",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "preorder",
+  "refunded",
+];
+
+/**
+ * Map an API order status onto the admin one.
+ *
+ * This list used to omit `pending_payment`, `paid` and `payment_failed` — all
+ * three of which are legal AdminOrderStatus values with their own badge styling
+ * — and then fell through to `return "confirmed"`. So an order whose payment had
+ * FAILED was displayed to the owner, and to the customer, as confirmed. The
+ * owner's next step on a confirmed order is to pack and ship it, for money that
+ * never arrived.
+ *
+ * An unknown status now reports itself as pending rather than confirmed. If this
+ * is ever wrong it is wrong in the direction of someone looking again, which is
+ * the only safe direction for a fallback on the money path.
+ */
 export function normalizeApiOrderStatus(raw: string): AdminOrderStatus {
-  if (
-    [
-      "pending",
-      "confirmed",
-      "packed",
-      "shipped",
-      "delivered",
-      "cancelled",
-      "preorder",
-      "refunded",
-    ].includes(raw)
-  ) {
+  if ((API_ORDER_STATUSES as string[]).includes(raw)) {
     return raw as AdminOrderStatus;
   }
-  if (raw === "pending_payment") return "pending";
-  return "confirmed";
+  return "pending";
 }
 
 export function mapApiOrderToAdmin(raw: Record<string, unknown>): AdminOrder {

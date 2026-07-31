@@ -92,14 +92,29 @@ export default function AdminReportDetailPage() {
   }, [apiOn]);
 
   const meta = getReportMeta(reportId);
+  // When the API is live, never derive the table from localStorage seed orders —
+  // that painted demo sales under live KPI cards.
+  const reportStore = useMemo(
+    () =>
+      apiOn
+        ? {
+            ...store,
+            orders: [],
+            products: [],
+            customers: [],
+            ledger: [],
+          }
+        : store,
+    [apiOn, store],
+  );
   const report = useMemo(
-    () => deriveReport(store, reportId, filters.range),
-    [store, reportId, filters.range],
+    () => deriveReport(reportStore, reportId, filters.range),
+    [reportStore, reportId, filters.range],
   );
   const priorRange = useMemo(() => previousPeriodRange(filters.range), [filters.range]);
   const priorReport = useMemo(
-    () => deriveReport(store, reportId, priorRange),
-    [store, reportId, priorRange],
+    () => deriveReport(reportStore, reportId, priorRange),
+    [reportStore, reportId, priorRange],
   );
 
   if (!valid) notFound();
@@ -169,8 +184,8 @@ export default function AdminReportDetailPage() {
     <div>
       {apiOn ? (
         <AdminNotice tone="info">
-          Live KPIs and CSV come from the API. The table shell below may still
-          show local demo rows for layout until each report type is fully wired.
+          Live KPIs and top SKUs come from the API. Detailed report tables are
+          empty until each report type is fully wired to live data.
         </AdminNotice>
       ) : null}
       {apiOn && liveSummary ? (

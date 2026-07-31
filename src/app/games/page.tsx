@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ServerCategoryView } from "@/components/catalog/ServerCategoryView";
 import games from "@/data/games.json";
+import { isApiEnabled } from "@/lib/apiClient";
 import type { CatalogProduct } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -13,18 +14,15 @@ export const metadata: Metadata = {
 };
 
 export default async function GamesPage() {
-  // Server-rendered from the API now, sharing one renderer with
-  // /categories/[slug]. This used to SSR the checked-in JSON below and
-  // report its length as the category size — "22 titles"
-  // for a category that has many more, with none of the real ones in the
-  // HTML a crawler sees. The JSON stays as the API-unreachable fallback.
   return (
     <ServerCategoryView
       slug="games"
       title="Games"
       breadcrumb="Games"
       description="Physical game discs — new releases, pre-orders and back catalogue, region India."
-      fallbackProducts={games as CatalogProduct[]}
+      fallbackProducts={
+        isApiEnabled() ? [] : (games as CatalogProduct[])
+      }
     />
   );
 }
