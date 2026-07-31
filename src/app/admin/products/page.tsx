@@ -1167,9 +1167,8 @@ function ProductViewPanel({
         <ViewField
           label="Category"
           value={
-            (isApiEnabled()
-              ? apiCategoryOptions.find((t) => t.value === product.category)?.label
-              : store.categories.find((t) => t.key === product.category)?.label) ?? product.category
+            store.categories.find((t) => t.key === product.category)?.label ??
+            product.category
           }
         />
         <ViewField label="Stock qty" value={String(product.stock)} mono />

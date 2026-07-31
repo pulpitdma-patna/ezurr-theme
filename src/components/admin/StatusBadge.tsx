@@ -3,7 +3,10 @@ import { orderStatusLabels, productStatusLabels } from "@/data/admin";
 
 const orderTones: Record<AdminOrderStatus, string> = {
   pending: "text-[#92400E] bg-[#FEF3C7]",
+  pending_payment: "text-[#92400E] bg-[#FEF3C7]",
   confirmed: "text-[#1D4ED8] bg-[#DBEAFE]",
+  paid: "text-[#2D6B3C] bg-[#EAF6ED]",
+  payment_failed: "text-[#B42318] bg-[#FEE4E2]",
   packed: "text-[#5B21B6] bg-[#EDE9FE]",
   shipped: "text-[#2D6B3C] bg-[#EAF6ED]",
   delivered: "text-[#6E6E73] bg-[#F0F0F2]",

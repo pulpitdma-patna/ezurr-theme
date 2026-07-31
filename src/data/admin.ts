@@ -38,7 +38,10 @@ export type AdminPlatform =
 
 export type AdminOrderStatus =
   | "pending"
+  | "pending_payment"
   | "confirmed"
+  | "paid"
+  | "payment_failed"
   | "packed"
   | "shipped"
   | "delivered"
@@ -1294,7 +1297,10 @@ export function getAdminOrderById(id: string) {
 
 export const orderStatusLabels: Record<AdminOrderStatus, string> = {
   pending: "Pending",
+  pending_payment: "Pending payment",
   confirmed: "Confirmed",
+  paid: "Paid",
+  payment_failed: "Payment failed",
   packed: "Packed",
   shipped: "Shipped",
   delivered: "Delivered",
@@ -1322,7 +1328,12 @@ export function statusTone(status: AdminOrderStatus): string {
       return "bg-[#E8F0FE] text-[#1A56C4]";
     case "cancelled":
     case "refunded":
+    case "payment_failed":
       return "bg-[#FDECEC] text-[#B42318]";
+    case "paid":
+      return "bg-[#E7F6EC] text-[#1E7B3C]";
+    case "pending_payment":
+      return "bg-[#FEF3C7] text-[#92400E]";
     case "preorder":
       return "bg-[#F2ECFB] text-[#6B3FA0]";
     default:

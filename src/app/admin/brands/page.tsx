@@ -59,10 +59,7 @@ export default function AdminBrandsPage() {
             parentId: b.parentId ?? null,
             parentKey: b.parentKey ?? null,
             active: b.active,
-            product_count:
-              typeof (b as { product_count?: number }).product_count === "number"
-                ? (b as { product_count: number }).product_count
-                : 0,
+            product_count: typeof b.product_count === "number" ? b.product_count : 0,
           })),
         );
         setListError(null);

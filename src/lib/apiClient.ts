@@ -203,6 +203,8 @@ export type ApiBrand = {
   parentId?: string | null;
   parentKey?: string | null;
   active: boolean;
+  /** Present on admin brand index when the API counts products per brand. */
+  product_count?: number;
 };
 
 export type ApiTeamMember = {
