@@ -1,26 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import { getConsent, setConsent, subscribeConsent, type Consent } from "@/lib/consent";
 
 /** Cookie-consent banner. Shows only when consent is unset; marketing/analytics
  *  tags load only after "Accept". Default posture is decline. */
 export function ConsentBanner() {
   const [consent, setLocal] = useState<Consent>("granted"); // avoid flash before hydration
-  const pathname = usePathname();
 
   useEffect(() => {
     const update = () => setLocal(getConsent());
     update();
     return subscribeConsent(update);
   }, []);
-
-  // Not in the back office. This asks a SHOPPER whether the shop may measure
-  // their visit; asking the owner for consent to analytics on his own admin is
-  // both meaningless and, since it floats bottom-centre over the content, in the
-  // way of the work. It lives in the root layout, which the admin also uses.
-  if (pathname?.startsWith("/admin") || pathname?.startsWith("/setup")) return null;
 
   if (consent !== "unset") return null;
 

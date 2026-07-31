@@ -11,7 +11,6 @@ import {
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useAdminSettingsSync } from "@/hooks/useAdminSettingsSync";
-import { getDerivedAlerts } from "@/lib/adminStore";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { CommandPalette } from "@/components/admin/CommandPalette";
 import {
@@ -1070,13 +1069,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   // Every admin page, not just Settings — the sidebar shows the store's name and
   // used to show the seeded default until the owner happened to open Settings.
   useAdminSettingsSync();
-  const store = useAdminStore();
-  const alerts = useMemo(() => getDerivedAlerts(store), [store]);
+  // No useAdminStore here any more. The alert bell and the orders badge were
+  // both counted from the localStorage demo seed and drawn on top of every live
+  // screen — a red "3" over the shop's real orders, sourced from practice data
+  // that has nothing to do with this store. Deleted rather than re-pointed: the
+  // count belongs on a server figure, and a badge that is right only sometimes
+  // is worse than no badge, because it is the thing being trusted at a glance.
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerPath, setDrawerPath] = useState(pathname);
   const [search, setSearch] = useState("");
   const [accountOpen, setAccountOpen] = useState(false);
-  const [alertsOpen, setAlertsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const sidebarCollapsedRaw = useSyncExternalStore(
@@ -1088,7 +1090,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const searchId = useId();
   const drawerRef = useRef<HTMLElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
-  const alertsRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const goChordRef = useRef(false);
   const goChordTimerRef = useRef<number | null>(null);
@@ -1156,24 +1157,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [accountOpen]);
-
-  useEffect(() => {
-    if (!alertsOpen) return;
-    function onPointer(event: MouseEvent) {
-      if (!alertsRef.current?.contains(event.target as Node)) {
-        setAlertsOpen(false);
-      }
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setAlertsOpen(false);
-    }
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [alertsOpen]);
 
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null) {
@@ -1421,72 +1404,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 title="Orders"
               >
                 <IconOrders />
-                {store.orders.filter((o) => o.status === "pending").length > 0 ? (
-                  <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#1D1D1F] px-1 text-[9px] font-semibold text-white">
-                    {store.orders.filter((o) => o.status === "pending").length}
-                  </span>
-                ) : null}
               </Link>
-              <div className="relative hidden md:block" ref={alertsRef}>
-                <button
-                  type="button"
-                  onClick={() => setAlertsOpen((v) => !v)}
-                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/[0.07] bg-white text-[#424245] transition hover:bg-[#F5F5F7] hover:text-[#1D1D1F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"
-                  aria-label="Alerts"
-                  aria-expanded={alertsOpen}
-                  title="Alerts"
-                >
-                  <IconBell />
-                  {alerts.length > 0 ? (
-                    <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#B42318] px-1 text-[9px] font-semibold text-white">
-                      {alerts.length}
-                    </span>
-                  ) : null}
-                </button>
-                {alertsOpen ? (
-                  <div className="absolute right-0 top-[calc(100%+6px)] z-40 w-80 overflow-hidden rounded-2xl border border-black/[0.07] bg-white shadow-[0_16px_40px_rgba(17,17,19,0.12)]">
-                    <div className="border-b border-black/[0.06] px-3.5 py-3">
-                      <div className="text-sm font-semibold tracking-[-0.02em]">Needs attention</div>
-                      <div className="mt-0.5 text-xs text-[#86868B]">
-                        {alerts.length === 0 ? "All clear" : `${alerts.length} live alert${alerts.length === 1 ? "" : "s"}`}
-                      </div>
-                    </div>
-                    <ul className="max-h-72 overflow-y-auto py-1">
-                      {alerts.length === 0 ? (
-                        <li className="px-3.5 py-6 text-center text-xs text-[#86868B]">No open alerts</li>
-                      ) : (
-                        alerts.map((alert) => (
-                          <li key={alert.id}>
-                            <Link
-                              href={alert.href ?? "/admin"}
-                              className="block px-3.5 py-2.5 hover:bg-[#F5F5F7]"
-                              onClick={() => setAlertsOpen(false)}
-                            >
-                              <div className={`text-xs font-semibold ${
-                                alert.tone === "warning"
-                                  ? "text-[#B42318]"
-                                  : alert.tone === "success"
-                                    ? "text-[#067647]"
-                                    : "text-[#1D1D1F]"
-                              }`}>
-                                {alert.title}
-                              </div>
-                              <div className="mt-0.5 text-[11px] text-[#6E6E73]">{alert.detail}</div>
-                            </Link>
-                          </li>
-                        ))
-                      )}
-                    </ul>
-                    <Link
-                      href="/admin/activity"
-                      className="block border-t border-black/[0.06] px-3.5 py-2.5 text-xs font-semibold text-[#1D1D1F] hover:bg-[#F5F5F7]"
-                      onClick={() => setAlertsOpen(false)}
-                    >
-                      View activity →
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
               <Link
                 href="/"
                 className="hidden h-9 w-9 items-center justify-center rounded-xl border border-black/[0.07] bg-white text-[#424245] transition hover:bg-[#F5F5F7] hover:text-[#1D1D1F] sm:inline-flex focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D1D1F]"

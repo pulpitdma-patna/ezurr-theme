@@ -2,7 +2,6 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAdminStore } from "@/hooks/useAdminStore";
 
 type PaletteItem = {
   id: string;
@@ -53,7 +52,6 @@ export function CommandPalette({
   initialQuery?: string;
 }) {
   const router = useRouter();
-  const store = useAdminStore();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [wasOpen, setWasOpen] = useState(false);
@@ -70,40 +68,25 @@ export function CommandPalette({
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const entityItems: PaletteItem[] = [
-      ...store.orders.slice(0, 40).map((o) => ({
-        id: `order-${o.id}`,
-        label: o.id,
-        hint: `${o.customerName} · ${o.status}`,
-        group: "Orders",
-        href: `/admin/orders/${o.id}`,
-      })),
-      ...store.products.slice(0, 40).map((p) => ({
-        id: `product-${p.key}`,
-        label: p.name,
-        hint: p.sku,
-        group: "Products",
-        href: `/admin/products/${encodeURIComponent(p.key)}/edit`,
-      })),
-      ...store.customers.slice(0, 40).map((c) => ({
-        id: `customer-${c.id}`,
-        label: c.name,
-        hint: c.mobile,
-        group: "Customers",
-        href: `/admin/customers/${c.id}`,
-      })),
-    ];
-    const all = [...NAV_ITEMS, ...entityItems];
-    if (!q) return all.slice(0, 28);
-    return all
-      .filter(
-        (item) =>
-          item.label.toLowerCase().includes(q) ||
-          item.hint?.toLowerCase().includes(q) ||
-          item.group.toLowerCase().includes(q),
-      )
-      .slice(0, 28);
-  }, [query, store.orders, store.products, store.customers]);
+
+    // Pages only. This used to also list orders, products and customers — but
+    // from the localStorage demo seed, never from the shop. Typing a real order
+    // number found nothing, while a made-up one from the practice data appeared
+    // looking entirely genuine, complete with an order number and a link. A
+    // search that invents results is worse than one that admits it only jumps
+    // between screens.
+    //
+    // Searching real records belongs here, and needs a server endpoint that can
+    // answer across orders, products and customers at once. Until that exists,
+    // this does the one thing it can do honestly.
+    if (!q) return NAV_ITEMS.slice(0, 28);
+    return NAV_ITEMS.filter(
+      (item) =>
+        item.label.toLowerCase().includes(q) ||
+        item.hint?.toLowerCase().includes(q) ||
+        item.group.toLowerCase().includes(q),
+    ).slice(0, 28);
+  }, [query]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, PaletteItem[]>();
@@ -186,7 +169,7 @@ export function CommandPalette({
               setQuery(e.target.value);
               setActive(0);
             }}
-            placeholder="Jump to pages, orders, products, customers…"
+            placeholder="Jump to a screen…"
             className="w-full bg-transparent text-sm outline-none placeholder:text-[#AEAEB2]"
             role="combobox"
             aria-expanded={items.length > 0}

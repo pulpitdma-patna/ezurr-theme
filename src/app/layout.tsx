@@ -6,6 +6,7 @@ import { ApiAuthBoot } from "@/components/ApiAuthBoot";
 import { ThemeAccent } from "@/components/ThemeAccent";
 import { CartProvider } from "@/lib/cart";
 import { CartDrawer } from "@/components/cart/CartDrawer";
+import { StorefrontOnly } from "@/components/StorefrontOnly";
 import { AnalyticsLoader } from "@/components/analytics/AnalyticsLoader";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import { WhatsAppWidget } from "@/components/support/WhatsAppWidget";
@@ -80,10 +81,16 @@ export default async function RootLayout({
         <AnalyticsLoader nonce={nonce} />
         <CartProvider>
           {children}
-          <CartDrawer />
+          {/* Shopper furniture only — the admin and the setup wizard share this
+              layout, and all three of these used to follow the owner around it. */}
+          <StorefrontOnly>
+            <CartDrawer />
+          </StorefrontOnly>
         </CartProvider>
-        <WhatsAppWidget />
-        <ConsentBanner />
+        <StorefrontOnly>
+          <WhatsAppWidget />
+          <ConsentBanner />
+        </StorefrontOnly>
       </body>
     </html>
   );
