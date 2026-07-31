@@ -316,6 +316,8 @@ export interface RazorpayCheckoutHandle {
   amount: number;
   currency: string;
   simulated: boolean;
+  /** Cashfree Checkout.js mode when provider is cashfree. */
+  mode?: "sandbox" | "production" | null;
 }
 
 export interface ApiOrderCreated {
@@ -597,6 +599,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify(ctx),
     }),
+  checkoutOrderStatus: (publicId: string, mobile: string) => {
+    const qs = new URLSearchParams({ mobile });
+    return apiFetch<{ public_id: string; status: string }>(
+      `/checkout/orders/${encodeURIComponent(publicId)}/status?${qs}`,
+    );
+  },
   createOrder: (payload: Record<string, unknown>) =>
     apiFetch<ApiOrderCreated>("/checkout/orders", {
       method: "POST",

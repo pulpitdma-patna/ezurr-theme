@@ -53,7 +53,16 @@ export function loadCashfree(): Promise<CashfreeFactory> {
   return loading;
 }
 
-/** Sandbox when the session id looks simulated; otherwise production. */
+/** Fallback when the API omits mode — simulated sessions are always sandbox. */
 export function cashfreeMode(sessionId: string): "sandbox" | "production" {
   return sessionId.startsWith("session_sim_") ? "sandbox" : "production";
+}
+
+/** Prefer server-provided mode; fall back to session-id heuristic. */
+export function resolveCashfreeMode(
+  serverMode: string | null | undefined,
+  sessionId: string,
+): "sandbox" | "production" {
+  if (serverMode === "sandbox" || serverMode === "production") return serverMode;
+  return cashfreeMode(sessionId);
 }

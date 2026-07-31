@@ -11,7 +11,8 @@ import { formatReleaseLabel, useLiveThemeSettings } from "@/hooks/useLiveThemeSe
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { createDemoCheckoutOrder } from "@/lib/adminStore";
 import { api, isApiEnabled, type ApiProduct } from "@/lib/apiClient";
-import { cashfreeMode, loadCashfree } from "@/lib/cashfree";
+import { loadCashfree, resolveCashfreeMode } from "@/lib/cashfree";
+import { pollPaymentSettlement } from "@/lib/paymentConfirm";
 import { loadRazorpay } from "@/lib/razorpay";
 import { useCart } from "@/lib/cart";
 import {
@@ -687,6 +688,8 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   // API gates only marketing triggers on this flag.
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [placing, setPlacing] = useState(false);
+  /** True while polling webhook settlement after the PSP sheet closes. */
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
   // Idempotency key for the CURRENT place-order attempt. Must be a ref (not
   // derived from the cart): the old `web-<session>-cart-<every product key>`
   // form grew past the API's max:120 on any 2+ item cart (instant 422) and,
@@ -1318,6 +1321,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                 sessionId?: string | null;
                 amount?: number;
                 currency?: string;
+                mode?: "sandbox" | "production" | null;
               }
             | undefined;
           // Capture BEFORE clearing — the success screen reads this.
@@ -1328,10 +1332,53 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
             if (isCart) cart.clear();
             setOrderId(publicId);
             setPlaced(true);
+            setConfirmingPayment(false);
             window.scrollTo(0, 0);
           };
 
-          // Real prepaid / COD-advance → open the gateway sheet. Webhook is source of truth.
+          const awaitWebhookConfirm = async () => {
+            if (!publicId) return;
+            const mobile = normalizeMobile(form.mobile || session?.mobile || "");
+            if (!isValidMobile(mobile)) {
+              setOrderId(publicId);
+              setOrderError(
+                "Payment submitted. Sign in or check Account → Orders to confirm it cleared.",
+              );
+              return;
+            }
+            setConfirmingPayment(true);
+            setOrderId(publicId);
+            setOrderError(null);
+            try {
+              const result = await pollPaymentSettlement({
+                fetchStatus: async () => {
+                  const res = await api.checkoutOrderStatus(publicId, mobile);
+                  return res.status;
+                },
+              });
+              if (result.kind === "settled") {
+                markSuccess();
+                return;
+              }
+              if (result.kind === "failed") {
+                setOrderError(
+                  "Payment failed. Your order is saved unpaid — you can retry payment.",
+                );
+                return;
+              }
+              setOrderError(
+                "Payment is still confirming — you can retry or check Account → Orders.",
+              );
+            } catch {
+              setOrderError(
+                "Payment is still confirming — you can retry or check Account → Orders.",
+              );
+            } finally {
+              setConfirmingPayment(false);
+            }
+          };
+
+          // Real prepaid / COD-advance → open the gateway sheet, then poll webhook.
           if (handle && !handle.simulated && handle.provider === "razorpay" && handle.key && handle.gatewayOrderId) {
             const Razorpay = await loadRazorpay();
             const rzp = new Razorpay({
@@ -1344,7 +1391,9 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                 name: fullName || undefined,
                 contact: form.mobile || session?.mobile || undefined,
               },
-              handler: () => markSuccess(),
+              handler: () => {
+                void awaitWebhookConfirm();
+              },
               modal: {
                 ondismiss: () =>
                   setOrderError(
@@ -1359,7 +1408,9 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
           if (handle && !handle.simulated && handle.provider === "cashfree" && handle.sessionId) {
             try {
               const Cashfree = await loadCashfree();
-              const cf = Cashfree({ mode: cashfreeMode(handle.sessionId) });
+              const cf = Cashfree({
+                mode: resolveCashfreeMode(handle.mode, handle.sessionId),
+              });
               const result = await cf.checkout({
                 paymentSessionId: handle.sessionId,
                 redirectTarget: "_modal",
@@ -1371,7 +1422,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                 );
                 return;
               }
-              markSuccess();
+              await awaitWebhookConfirm();
             } catch (err) {
               setOrderError(
                 err instanceof Error
@@ -1720,6 +1771,19 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                     step 3, so keeping this inside the step-2 branch made a
                     failed order completely silent (the click appeared to do
                     nothing at all). */}
+                {confirmingPayment ? (
+                  <p
+                    className="m-0 mb-4 rounded-[14px] border border-black/[0.08] bg-[#F7F7F8] px-4 py-3.5 text-[13px] text-[#424245]"
+                    role="status"
+                  >
+                    Payment submitted — confirming with the bank…
+                    {orderId ? (
+                      <span className="mt-1 block ez-mono text-[11px] text-[#86868B]">
+                        Order {orderId}
+                      </span>
+                    ) : null}
+                  </p>
+                ) : null}
                 {orderError ? (
                   <p
                     className="m-0 mb-4 rounded-[14px] border border-[#FECACA] bg-[#FEF2F2] px-4 py-3.5 text-[13px] text-[#B42318]"
@@ -2272,7 +2336,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                       <button
                         type="button"
                         onClick={placeOrder}
-                        disabled={policy.blocked || placing}
+                        disabled={policy.blocked || placing || confirmingPayment}
                         className="ez-checkout-btn-dark flex-1 rounded-full border-none py-4 text-[15px] font-semibold disabled:opacity-40"
                       >
                         {/* Was a hardcoded "Place pre-order — ₹0 today", which
@@ -2340,6 +2404,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
             (step === 1 && !canContinueDetails) ||
             policy.blocked ||
             placing ||
+            confirmingPayment ||
             // Match the desktop guard: with no allowed payment method the order
             // can only 422 ("Payment method not allowed.").
             policy.methods.length === 0

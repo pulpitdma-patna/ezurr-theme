@@ -178,7 +178,7 @@ const FULFILMENT_TABS: { value: FulfilmentFilter; label: string }[] = [
 export default function AdminProductsPage() {
   const store = useAdminStore();
   const searchParams = useSearchParams();
-  const [category, setCategory] = useState<AdminProductCategory | "all">("all");
+  const [category, setCategory] = useState<string>("all");
   const [brand, setBrand] = useState("all");
   const [query, setQuery] = useSearchQueryParam();
   const [selected, setSelected] = useState<string[]>([]);
@@ -224,6 +224,7 @@ export default function AdminProductsPage() {
   const [apiProducts, setApiProducts] = useState<AdminCatalogRow[]>([]);
   const [apiRaw, setApiRaw] = useState<Record<string, ApiProductFulfilment>>({});
   const [apiBrandOptions, setApiBrandOptions] = useState<{ value: string; label: string }[]>([]);
+  const [apiCategoryOptions, setApiCategoryOptions] = useState<{ value: string; label: string }[]>([]);
   const [listError, setListError] = useState<string | null>(null);
   const { views, removeView } = useListSavedViews("products");
 
@@ -239,9 +240,10 @@ export default function AdminProductsPage() {
       // Page through the full catalog (server clamps per_page to 100) instead
       // of showing only the first page.
       const perPage = 100;
-      const [first, brandsRes] = await Promise.all([
+      const [first, brandsRes, categoriesRes] = await Promise.all([
         api.adminProducts({ page: 1, per_page: perPage }),
         api.adminBrands().catch(() => ({ data: [] as Awaited<ReturnType<typeof api.adminBrands>>["data"] })),
+        api.adminCategories().catch(() => ({ data: [] as Awaited<ReturnType<typeof api.adminCategories>>["data"] })),
       ]);
       let all = Array.isArray(first.data) ? first.data : [];
       const lastPage = Number(first.last_page ?? 1);
@@ -262,11 +264,19 @@ export default function AdminProductsPage() {
           .map((b) => ({ value: b.slug, label: b.name || b.slug }))
           .sort((a, b) => a.label.localeCompare(b.label)),
       );
+      const categories = Array.isArray(categoriesRes.data) ? categoriesRes.data : [];
+      setApiCategoryOptions(
+        categories
+          .filter((c) => c.active !== false)
+          .map((c) => ({ value: c.key, label: c.label || c.key }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      );
       setListError(null);
     } catch (err) {
       setApiProducts([]);
       setApiRaw({});
       setApiBrandOptions([]);
+      setApiCategoryOptions([]);
       setListError(err instanceof Error ? err.message : "Could not load products");
     } finally {
       setListLoading(false);
@@ -324,6 +334,16 @@ export default function AdminProductsPage() {
 
   const brandFilter = brand !== "all" && brandOptions.includes(brand) ? brand : "all";
 
+  const categoryOptions = useMemo(() => {
+    if (isApiEnabled()) {
+      return apiCategoryOptions.map((c) => c.value);
+    }
+    return store.categories.filter((c) => c.active).map((c) => c.key);
+  }, [store.categories, apiCategoryOptions]);
+
+  const categoryFilter =
+    category !== "all" && categoryOptions.includes(category) ? category : "all";
+
   const productSource = isApiEnabled() ? apiProducts : store.products;
 
   /** Fulfilment for a row: from the API record, else inferred from mock data. */
@@ -354,7 +374,7 @@ export default function AdminProductsPage() {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = productSource.filter((row) => {
-      if (category !== "all" && row.category !== category) return false;
+      if (categoryFilter !== "all" && row.category !== categoryFilter) return false;
       if (brandFilter !== "all" && row.brand !== brandFilter) return false;
       if (!matchesStockFilter(row, stockFilter, lowThreshold)) return false;
       if (fulfilmentFilter !== "all" && rowFulfilment(row).type !== fulfilmentFilter) return false;
@@ -377,7 +397,7 @@ export default function AdminProductsPage() {
     return list;
   }, [
     productSource,
-    category,
+    categoryFilter,
     brandFilter,
     stockFilter,
     lowThreshold,
@@ -816,16 +836,18 @@ export default function AdminProductsPage() {
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <AdminSelect
               label="Category"
-              value={category}
-              onChange={(value) => setCategory(value as AdminProductCategory | "all")}
+              value={categoryFilter}
+              onChange={setCategory}
               options={[
                 { value: "all", label: "All categories" },
-                ...store.categories
-                  .filter((c) => c.active)
-                  .map((cat) => ({
-                    value: cat.key,
-                    label: cat.label,
-                  })),
+                ...(isApiEnabled()
+                  ? apiCategoryOptions
+                  : store.categories
+                      .filter((c) => c.active)
+                      .map((cat) => ({
+                        value: cat.key,
+                        label: cat.label,
+                      }))),
               ]}
             />
             <AdminSelect
@@ -1144,7 +1166,9 @@ function ProductViewPanel({
         <ViewField
           label="Category"
           value={
-            store.categories.find((t) => t.key === product.category)?.label ?? product.category
+            (isApiEnabled()
+              ? apiCategoryOptions.find((t) => t.value === product.category)?.label
+              : store.categories.find((t) => t.key === product.category)?.label) ?? product.category
           }
         />
         <ViewField label="Stock qty" value={String(product.stock)} mono />
