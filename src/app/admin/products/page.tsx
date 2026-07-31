@@ -237,18 +237,19 @@ export default function AdminProductsPage() {
     }
     setListLoading(true);
     try {
-      // Page through the full catalog (server clamps per_page to 100) instead
-      // of showing only the first page.
+      // Page through the catalog (server clamps per_page to 100). Brand is
+      // filtered server-side when set so we do not pull unrelated pages.
       const perPage = 100;
+      const brandParam = brand !== "all" ? brand : undefined;
       const [first, brandsRes, categoriesRes] = await Promise.all([
-        api.adminProducts({ page: 1, per_page: perPage }),
+        api.adminProducts({ page: 1, per_page: perPage, brand: brandParam }),
         api.adminBrands().catch(() => ({ data: [] as Awaited<ReturnType<typeof api.adminBrands>>["data"] })),
         api.adminCategories().catch(() => ({ data: [] as Awaited<ReturnType<typeof api.adminCategories>>["data"] })),
       ]);
       let all = Array.isArray(first.data) ? first.data : [];
       const lastPage = Number(first.last_page ?? 1);
       for (let p = 2; p <= lastPage; p += 1) {
-        const res = await api.adminProducts({ page: p, per_page: perPage });
+        const res = await api.adminProducts({ page: p, per_page: perPage, brand: brandParam });
         if (Array.isArray(res.data)) all = all.concat(res.data);
       }
       setApiProducts(all.map((p, i) => mapApiProductToAdminRow(p, i)));
@@ -281,7 +282,7 @@ export default function AdminProductsPage() {
     } finally {
       setListLoading(false);
     }
-  }, []);
+  }, [brand]);
 
   useEffect(() => {
     void loadProducts();

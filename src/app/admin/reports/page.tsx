@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminNotice } from "@/components/admin/AdminNotice";
-import { isApiEnabled } from "@/lib/apiClient";
+import { StatCard } from "@/components/admin/StatCard";
+import { formatInr } from "@/data/admin";
+import { api, isApiEnabled } from "@/lib/apiClient";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { useReportFilters } from "@/hooks/useReportFilters";
 import { REPORT_DEFINITIONS } from "@/lib/reports/definitions";
@@ -13,23 +16,83 @@ export default function AdminReportsHubPage() {
   const store = useAdminStore();
   const { range } = useReportFilters(store.orders, "30d");
   const anchor = latestOrderAnchor(store.orders);
+  const apiOn = isApiEnabled();
+  const [summary, setSummary] = useState<{
+    revenue: number;
+    orders: number;
+    aov: number;
+    revenue_delta_pct: number | null;
+  } | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    void api
+      .reportSummary(30)
+      .then((s) => {
+        if (!cancelled) {
+          setSummary({
+            revenue: Number(s.revenue ?? 0),
+            orders: Number(s.orders ?? 0),
+            aov: Number(s.aov ?? 0),
+            revenue_delta_pct:
+              s.revenue_delta_pct == null ? null : Number(s.revenue_delta_pct),
+          });
+          setLiveError(null);
+        }
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setLiveError(err.message || "Could not load live summary");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn]);
 
   return (
     <div>
-      {isApiEnabled() ? (
-        <AdminNotice tone="demo">
-          Reports are derived from local demo data — not your live server data yet.
+      {apiOn ? (
+        <AdminNotice tone="info">
+          Headline KPIs load from the live API. Detail report layouts below still
+          use the shared report shells — export from a detail page uses live series
+          when available.
         </AdminNotice>
       ) : null}
       <AdminPageHeader
         title="Reports"
-        description="Derived from your live admin store — booked sales, ops queues, and honest data gaps."
+        description={
+          apiOn
+            ? "Live store reporting from the API."
+            : "Derived from your local admin store — booked sales, ops queues, and honest data gaps."
+        }
         actions={
           <span className="rounded-lg border border-black/[0.08] bg-white px-3 py-2 ez-mono text-[10px] text-[#6E6E73]">
             Default · {formatRangeLabel(range)} · anchor {anchor}
           </span>
         }
       />
+
+      {apiOn && liveError ? (
+        <p className="mb-4 text-sm text-[#B42318]" role="alert">
+          {liveError}
+        </p>
+      ) : null}
+
+      {apiOn && summary ? (
+        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          <StatCard label="Revenue · 30d" value={formatInr(summary.revenue)} />
+          <StatCard label="Orders · 30d" value={String(summary.orders)} />
+          <StatCard
+            label="AOV · 30d"
+            value={`${formatInr(summary.aov)}${
+              summary.revenue_delta_pct != null
+                ? ` · ${summary.revenue_delta_pct > 0 ? "+" : ""}${summary.revenue_delta_pct}%`
+                : ""
+            }`}
+          />
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {REPORT_DEFINITIONS.map((report) => (

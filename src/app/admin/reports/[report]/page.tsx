@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ReportDateFilter } from "@/components/admin/reports/ReportDateFilter";
@@ -21,9 +21,9 @@ import {
   previousPeriodRange,
 } from "@/lib/reports/dateRange";
 import type { ReportId } from "@/lib/reports/types";
-import { parsePrice } from "@/data/admin";
+import { formatInr, parsePrice } from "@/data/admin";
 import { StatCard } from "@/components/admin/StatCard";
-import { isApiEnabled } from "@/lib/apiClient";
+import { api, isApiEnabled } from "@/lib/apiClient";
 
 export default function AdminReportDetailPage() {
   const params = useParams<{ report: string }>();
@@ -36,6 +36,60 @@ export default function AdminReportDetailPage() {
   const { views, saveView, removeView } = useReportSavedViews(valid ? reportId : undefined);
   const [toast, setToast] = useAutoBanner(2400);
   const [viewName, setViewName] = useState("");
+  const apiOn = isApiEnabled();
+  const [liveSummary, setLiveSummary] = useState<{
+    revenue: number;
+    orders: number;
+    aov: number;
+  } | null>(null);
+  const [liveSeries, setLiveSeries] = useState<
+    Array<{ date: string; revenue: number; orders: number }>
+  >([]);
+  const [liveSkus, setLiveSkus] = useState<
+    Array<{ product_key: string; qty: number; revenue: number }>
+  >([]);
+
+  useEffect(() => {
+    if (!apiOn) return;
+    let cancelled = false;
+    void Promise.all([api.reportSummary(30), api.reportSeries(30), api.reportTopSkus()])
+      .then(([summary, series, skus]) => {
+        if (cancelled) return;
+        setLiveSummary({
+          revenue: Number(summary.revenue ?? 0),
+          orders: Number(summary.orders ?? 0),
+          aov: Number(summary.aov ?? 0),
+        });
+        setLiveSeries(
+          Array.isArray(series)
+            ? series.map((r) => ({
+                date: String(r.date),
+                revenue: Number(r.revenue ?? 0),
+                orders: Number(r.orders ?? 0),
+              }))
+            : [],
+        );
+        setLiveSkus(
+          Array.isArray(skus)
+            ? skus.map((r) => ({
+                product_key: String(r.product_key),
+                qty: Number(r.qty ?? 0),
+                revenue: Number(r.revenue ?? 0),
+              }))
+            : [],
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLiveSummary(null);
+          setLiveSeries([]);
+          setLiveSkus([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiOn]);
 
   const meta = getReportMeta(reportId);
   const report = useMemo(
@@ -76,6 +130,17 @@ export default function AdminReportDetailPage() {
   });
 
   function exportCsv() {
+    if (apiOn && liveSeries.length) {
+      downloadCsv(
+        `ezurr-live-${report.id}.csv`,
+        toCsv(
+          ["date", "revenue", "orders"],
+          liveSeries.map((r) => [r.date, String(r.revenue), String(r.orders)]),
+        ),
+      );
+      setToast("CSV exported from live series");
+      return;
+    }
     const headers = report.columns.map((column) => column.header);
     const rows = report.rows.map((row) =>
       report.columns.map((column) => row[column.key] ?? ""),
@@ -102,11 +167,33 @@ export default function AdminReportDetailPage() {
 
   return (
     <div>
-      {isApiEnabled() ? (
-        <AdminNotice tone="demo">
-          This report is derived from local demo data — not your live server
-          data yet. Figures and CSV exports are for preview only.
+      {apiOn ? (
+        <AdminNotice tone="info">
+          Live KPIs and CSV come from the API. The table shell below may still
+          show local demo rows for layout until each report type is fully wired.
         </AdminNotice>
+      ) : null}
+      {apiOn && liveSummary ? (
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <StatCard label="Revenue · 30d" value={formatInr(liveSummary.revenue)} />
+          <StatCard label="Orders · 30d" value={String(liveSummary.orders)} />
+          <StatCard label="AOV · 30d" value={formatInr(liveSummary.aov)} />
+        </div>
+      ) : null}
+      {apiOn && liveSkus.length ? (
+        <div className="mb-4 rounded-2xl border border-black/[0.06] bg-white p-4">
+          <h2 className="text-sm font-semibold">Top SKUs (live)</h2>
+          <ul className="mt-2 divide-y divide-black/[0.05] text-sm">
+            {liveSkus.map((sku) => (
+              <li key={sku.product_key} className="flex justify-between py-2">
+                <span>{sku.product_key}</span>
+                <span className="ez-mono text-[#6E6E73]">
+                  {sku.qty} · {formatInr(sku.revenue)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       <AdminPageHeader
         title={meta.title}

@@ -687,6 +687,11 @@ export const api = {
   },
   accountOrder: (publicId: string) =>
     apiFetch<Record<string, unknown>>(`/account/orders/${encodeURIComponent(publicId)}`),
+  accountCancelOrder: (publicId: string) =>
+    apiFetch<{ cancelled: boolean; refundRequired: boolean; order: Record<string, unknown> }>(
+      `/account/orders/${encodeURIComponent(publicId)}/cancel`,
+      { method: "POST" },
+    ),
 
   // ---- Account facade (Phase 3B) ----
   accountProfile: () => apiFetch<ApiAccountProfile>("/account/profile"),
@@ -831,6 +836,7 @@ export const api = {
     }),
   adminProducts: (params?: {
     category?: string;
+    brand?: string;
     q?: string;
     page?: number;
     per_page?: number;
@@ -838,6 +844,7 @@ export const api = {
   }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
+    if (params?.brand) qs.set("brand", params.brand);
     if (params?.q) qs.set("q", params.q);
     if (params?.page) qs.set("page", String(params.page));
     if (params?.per_page) qs.set("per_page", String(params.per_page));
@@ -846,6 +853,15 @@ export const api = {
     return apiFetch<ApiPaginated<ApiProduct>>(`/admin/products${suffix}`);
   },
   adminTeam: () => apiFetch<{ data: ApiTeamMember[] }>("/admin/team"),
+  inviteTeamMember: (payload: {
+    mobile: string;
+    name?: string;
+    staffRole: "owner" | "manager" | "support" | "viewer";
+  }) =>
+    apiFetch<ApiTeamMember>("/admin/team/invite", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   updateTeamMember: (
     id: number,
     payload: { role?: string; staffRole?: string | null },
@@ -1001,6 +1017,26 @@ export const api = {
         body: JSON.stringify(payload),
       },
     ),
+  adminRefundOrder: (publicId: string, amount?: number) =>
+    apiFetch<{
+      order: Record<string, unknown>;
+      refund: Record<string, unknown>;
+      simulated: boolean;
+      full: boolean;
+    }>(`/admin/orders/${encodeURIComponent(publicId)}/refund`, {
+      method: "POST",
+      body: JSON.stringify(amount != null ? { amount } : {}),
+    }),
+  adminCreateShipment: (publicId: string) =>
+    apiFetch<{
+      order: Record<string, unknown>;
+      awb: string;
+      simulated: boolean;
+      label_url?: string | null;
+    }>(`/admin/orders/${encodeURIComponent(publicId)}/shipment`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   exportCatalog: () => apiFetch<Record<string, unknown>>("/admin/export"),
   importCatalog: (payload: Record<string, unknown>, dryRun = true) =>
     apiFetch<Record<string, unknown>>("/admin/import", {

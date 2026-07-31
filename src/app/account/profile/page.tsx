@@ -106,7 +106,7 @@ export default function ProfilePage() {
               {formatMobileDisplay(session?.mobile ?? "")}
             </div>
             <p className="mt-2 text-xs text-[#86868B]">
-              Mobile is your sign-in identity in this demo — change via a new OTP session.
+              Mobile is your sign-in identity — change it by verifying a new OTP session.
             </p>
           </div>
           <Field label="Date of birth" value={dob} onChange={setDob} type="date" />
@@ -186,7 +186,11 @@ export default function ProfilePage() {
         </p>
         <button
           type="button"
-          onClick={() => window.alert("Deletion request recorded for this demo (no data wiped).")}
+          onClick={() =>
+            window.alert(
+              "Account deletion is not self-serve yet. Contact store support to request removal.",
+            )
+          }
           className="mt-4 text-sm font-semibold text-[#B42318]"
         >
           Request account deletion

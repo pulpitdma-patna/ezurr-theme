@@ -264,7 +264,7 @@ function CheckoutProgress({ step }: { step: number }) {
 function TrustRail() {
   return (
     <ul className="ez-checkout-trust ez-mono flex flex-wrap gap-x-3 gap-y-1 text-[9px] uppercase tracking-[0.14em] text-[#86868B]">
-      <li>Cancel anytime</li>
+      <li>Cancel before dispatch</li>
       <li aria-hidden>·</li>
       <li>Charged on ship</li>
       <li aria-hidden>·</li>
@@ -2366,7 +2366,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                       ← Back
                     </button>
                     <p className="m-0 text-center text-[12px] text-[#86868B] lg:text-left">
-                      Cancel anytime before dispatch.
+                      Cancel before dispatch; prepaid refunds via support.
                     </p>
                   </div>
                 )}

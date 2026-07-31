@@ -23,6 +23,7 @@ type BrandRow = AdminBrandRecord & {
   image?: string | null;
   parentId?: string | null;
   parentKey?: string | null;
+  product_count?: number;
 };
 
 export default function AdminBrandsPage() {
@@ -58,6 +59,10 @@ export default function AdminBrandsPage() {
             parentId: b.parentId ?? null,
             parentKey: b.parentKey ?? null,
             active: b.active,
+            product_count:
+              typeof (b as { product_count?: number }).product_count === "number"
+                ? (b as { product_count: number }).product_count
+                : 0,
           })),
         );
         setListError(null);
@@ -76,14 +81,16 @@ export default function AdminBrandsPage() {
     return brandSource
       .map((brand) => ({
         ...brand,
-        productCount: productSource.filter((p) => p.brand === brand.name).length,
+        productCount: apiOn
+          ? (brand.product_count ?? 0)
+          : productSource.filter((p) => p.brand === brand.name).length,
       }))
       .filter((brand) => {
         if (!q) return true;
         return brand.name.toLowerCase().includes(q);
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [brandSource, productSource, query]);
+  }, [apiOn, brandSource, productSource, query]);
 
   function openAdd() {
     setEditing(null);

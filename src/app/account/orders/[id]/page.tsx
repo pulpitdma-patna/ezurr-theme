@@ -12,6 +12,7 @@ import { api, isApiEnabled } from "@/lib/apiClient";
 import { mapApiOrderToAdmin } from "@/lib/apiMappers";
 import { CountdownInline } from "@/components/ui/Countdown";
 import { OrderTracker } from "@/components/orders/OrderTracker";
+import { canCustomerCancel } from "@/lib/orderCancel";
 
 export default function AccountOrderDetailPage({
   params,
@@ -25,6 +26,8 @@ export default function AccountOrderDetailPage({
   const [apiOrder, setApiOrder] = useState<AdminOrder | null>(null);
   const [loading, setLoading] = useState(apiOn);
   const [error, setError] = useState<string | null>(null);
+  const [cancelMsg, setCancelMsg] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!apiOn) return;
@@ -109,7 +112,42 @@ export default function AccountOrderDetailPage({
       {order.status === "preorder" ? (
         <div className="mb-5 rounded-2xl border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] px-4 py-3 text-sm">
           Price locked at <span className="font-semibold">{order.total}</span>. Releases in{" "}
-          <CountdownInline />. Cancel anytime before dispatch.
+          <CountdownInline />. Cancel before dispatch; prepaid refunds are handled by support.
+        </div>
+      ) : null}
+
+      {cancelMsg ? (
+        <p className="mb-4 text-sm text-[#424245]" role="status">
+          {cancelMsg}
+        </p>
+      ) : null}
+
+      {apiOn && canCustomerCancel(order.status) ? (
+        <div className="mb-4">
+          <button
+            type="button"
+            disabled={cancelling}
+            onClick={() => {
+              setCancelling(true);
+              void api
+                .accountCancelOrder(id)
+                .then((res) => {
+                  setApiOrder(mapApiOrderToAdmin(res.order));
+                  setCancelMsg(
+                    res.refundRequired
+                      ? "Order cancelled. Any prepaid amount will be refunded by support."
+                      : "Order cancelled.",
+                  );
+                })
+                .catch((err: Error) =>
+                  setCancelMsg(err.message || "Could not cancel this order"),
+                )
+                .finally(() => setCancelling(false));
+            }}
+            className="h-10 rounded-xl border border-[#F5C2C0] px-4 text-sm font-semibold text-[#B42318] hover:bg-[#FFF5F5] disabled:opacity-50"
+          >
+            {cancelling ? "Cancelling…" : "Cancel order"}
+          </button>
         </div>
       ) : null}
 

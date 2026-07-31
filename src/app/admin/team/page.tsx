@@ -460,9 +460,32 @@ export default function AdminTeamPage() {
             e.preventDefault();
             if (!email.trim()) return;
             if (apiOn) {
-              setEmail("");
-              setAddOpen(false);
-              toast.push("Adding members isn't wired to the API yet — nothing was saved", "warning");
+              const mobile = email.replace(/\D/g, "").slice(-10);
+              if (!/^[6-9]\d{9}$/.test(mobile)) {
+                toast.push("Enter a valid 10-digit Indian mobile", "warning");
+                return;
+              }
+              void api
+                .inviteTeamMember({ mobile, staffRole: addRole, name: mobile })
+                .then((m) => {
+                  setApiSeats((prev) => [
+                    {
+                      id: String(m.id),
+                      name: m.name,
+                      email: m.mobile,
+                      role: (m.staffRole as StaffRole) ?? addRole,
+                      status: "active",
+                      lastActive: "—",
+                    },
+                    ...prev.filter((s) => s.id !== String(m.id)),
+                  ]);
+                  setEmail("");
+                  setAddOpen(false);
+                  toast.push("Member invited", "success");
+                })
+                .catch((err) =>
+                  toast.push(err instanceof Error ? err.message : "Invite failed", "warning"),
+                );
               return;
             }
             setSeats((prev) => [
@@ -482,14 +505,14 @@ export default function AdminTeamPage() {
           }}
         >
           <label className="block">
-            <span className={labelClass}>Email</span>
+            <span className={labelClass}>{apiOn ? "Mobile" : "Email"}</span>
             <input
               required
-              type="email"
+              type={apiOn ? "tel" : "email"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={`mt-1.5 ${fieldClass}`}
-              placeholder="teammate@ezurr.com"
+              placeholder={apiOn ? "9876543210" : "teammate@ezurr.com"}
             />
           </label>
           <label className="block">
@@ -519,9 +542,15 @@ export default function AdminTeamPage() {
         confirmLabel="Revoke"
         danger
         onConfirm={() => {
-          if (apiOn) {
-            setRevokeId(null);
-            toast.push("Revoke isn't wired to the API yet — no change saved", "warning");
+          if (apiOn && revokeId) {
+            void api
+              .updateTeamMember(Number(revokeId), { role: "customer", staffRole: null })
+              .then(() => {
+                setApiSeats((prev) => prev.filter((seat) => seat.id !== revokeId));
+                setRevokeId(null);
+                toast.push("Seat revoked", "success");
+              })
+              .catch(() => toast.push("Could not revoke seat", "warning"));
             return;
           }
           setSeats((prev) =>

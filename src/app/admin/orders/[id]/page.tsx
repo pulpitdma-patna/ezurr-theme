@@ -33,8 +33,10 @@ import { formatMobileDisplay } from "@/lib/auth";
 import { can } from "@/lib/adminPermissions";
 
 const nextActions: Partial<Record<AdminOrderStatus, AdminOrderStatus[]>> = {
+  pending_payment: ["cancelled"],
   pending: ["confirmed", "cancelled"],
   confirmed: ["packed", "cancelled"],
+  paid: ["packed", "cancelled"],
   packed: ["shipped"],
   shipped: ["delivered"],
   preorder: ["confirmed", "cancelled"],
@@ -415,12 +417,14 @@ export default function AdminOrderDetailPage({
             ) : (
               <p className="mt-2 text-sm text-[#86868B]">No further fulfillment actions.</p>
             )}
-            {order.status === "delivered" || order.status === "shipped" ? (
+            {(["paid", "confirmed", "shipped", "delivered"] as AdminOrderStatus[]).includes(
+              order.status,
+            ) ? (
               <button
                 type="button"
                 onClick={() => {
                   if (!can("orders.refund")) {
-                    setSavedMsg("Your demo role cannot refund");
+                    setSavedMsg("Your role cannot refund");
                     return;
                   }
                   setConfirmRefund(true);
@@ -428,6 +432,30 @@ export default function AdminOrderDetailPage({
                 className="mt-2 h-9 w-full rounded-xl border border-[#F5C2C0] text-xs font-semibold text-[#B42318] hover:bg-[#FFF5F5]"
               >
                 Record refund
+              </button>
+            ) : null}
+            {apiOn &&
+            (["confirmed", "paid", "packed"] as AdminOrderStatus[]).includes(order.status) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void api
+                    .adminCreateShipment(id)
+                    .then(() => {
+                      setSavedMsg("Shipment created");
+                      return loadOrder();
+                    })
+                    .catch((err) =>
+                      setSavedMsg(
+                        err instanceof Error
+                          ? `Shipment failed: ${err.message}`
+                          : "Shipment failed",
+                      ),
+                    );
+                }}
+                className="mt-2 h-9 w-full rounded-xl border border-black/10 text-xs font-semibold"
+              >
+                Create shipment
               </button>
             ) : null}
             <button
@@ -539,24 +567,32 @@ export default function AdminOrderDetailPage({
       />
       <ConfirmDialog
         open={confirmRefund}
-        title="Record a refund?"
-        description={`Mock refund of ${order.total} will mark this order refunded. No payment provider is called.`}
+        title="Refund via payment provider?"
+        description={`Refunds ${order.total} through Razorpay/Cashfree and restocks when the refund is full. Partial amounts can be sent from the API.`}
         confirmLabel="Refund"
         danger
         onConfirm={() => {
           if (apiOn) {
             void api
-              .patchOrderStatus(id, { status: "refunded" })
-              .then(() => {
-                setSavedMsg("Order marked refunded");
+              .adminRefundOrder(id)
+              .then((res) => {
+                setSavedMsg(
+                  res.full
+                    ? res.simulated
+                      ? "Full refund recorded (simulated)"
+                      : "Full refund submitted to the provider"
+                    : "Partial refund recorded",
+                );
                 return loadOrder();
               })
               .catch((err) =>
-                setSavedMsg(err instanceof Error ? `Could not refund: ${err.message}` : "Could not refund"),
+                setSavedMsg(
+                  err instanceof Error ? `Could not refund: ${err.message}` : "Could not refund",
+                ),
               );
           } else {
             refundOrder(order.id);
-            setSavedMsg("Refund recorded");
+            setSavedMsg("Refund recorded (local demo)");
           }
           setConfirmRefund(false);
         }}

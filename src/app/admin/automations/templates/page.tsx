@@ -6,7 +6,7 @@ import { AdminNotice } from "@/components/admin/AdminNotice";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AutomationBuilder } from "@/components/admin/AutomationBuilder";
 import { AdminSelect } from "@/components/admin/AdminSelect";
-import { isApiEnabled } from "@/lib/apiClient";
+import { api, isApiEnabled, type ApiAutomation } from "@/lib/apiClient";
 import type { AdminAutomationRule, AutomationTrigger } from "@/data/admin";
 import {
   automationTemplateCategories,
@@ -79,6 +79,32 @@ export default function AdminAutomationTemplatesPage() {
   }
 
   function saveRule(rule: AdminAutomationRule) {
+    if (isApiEnabled()) {
+      const payload: ApiAutomation = {
+        name: rule.name,
+        description: rule.description,
+        trigger: rule.trigger,
+        enabled: rule.enabled,
+        priority: 100,
+        conditions: rule.conditions.map((c) => ({
+          field: c.field,
+          operator: c.operator,
+          value: String(c.value ?? ""),
+        })),
+        actions: rule.actions.map((a) => ({
+          type: a.type,
+          value: a.value != null ? String(a.value) : undefined,
+        })),
+      };
+      void api
+        .upsertAutomation(payload)
+        .then(() => {
+          setDraft(null);
+          setToast(`Created “${rule.name}” on the server`);
+        })
+        .catch((err: Error) => setToast(err.message || "Could not save automation"));
+      return;
+    }
     const id = rule.id || `auto-${Date.now()}`;
     upsertAutomation({ ...rule, id });
     setDraft(null);
@@ -107,9 +133,8 @@ export default function AdminAutomationTemplatesPage() {
       />
 
       {isApiEnabled() ? (
-        <AdminNotice tone="demo">
-          Automations run on local demo data — a rule saved from a template is
-          stored in this browser only, not on the live server.
+        <AdminNotice tone="info">
+          Saving a template creates a live automation rule on the server.
         </AdminNotice>
       ) : null}
 

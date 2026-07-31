@@ -890,32 +890,43 @@ export default function AdminSettingsPage() {
             id="notifications"
             active={tab === "notifications"}
             title="Notifications"
-            description="Demo preferences — nothing is sent from this theme."
+            description={
+              apiOn
+                ? "Preferences stored on the server. Delivery uses Integrations + Automations."
+                : "Demo preferences — nothing is sent from this theme."
+            }
           >
             <div className="space-y-3">
               <SettingsToggle
                 label="New order alerts"
-                description="Demo · not sent"
+                description={apiOn ? "Used by automations when enabled" : "Demo · not sent"}
                 checked={settings.notifyNewOrder}
                 onChange={(checked) => patch({ notifyNewOrder: checked })}
               />
               <SettingsToggle
                 label="Low stock alerts"
-                description="Demo · not sent"
+                description={apiOn ? "Used by automations when enabled" : "Demo · not sent"}
                 checked={settings.notifyLowStock}
                 onChange={(checked) => patch({ notifyLowStock: checked })}
               />
               <SettingsToggle
                 label="Pre-order release alerts"
-                description="Demo · not sent"
+                description={apiOn ? "Used by automations when enabled" : "Demo · not sent"}
                 checked={settings.notifyPreorderRelease}
                 onChange={(checked) => patch({ notifyPreorderRelease: checked })}
               />
             </div>
-            <div className={`${calloutClass} border-dashed`}>
-              Email / SMS / WhatsApp delivery is out of scope for this mock HQ. Toggles persist
-              so you can design ops flows against them.
-            </div>
+            {!apiOn ? (
+              <div className={`${calloutClass} border-dashed`}>
+                Email / SMS / WhatsApp delivery is out of scope for this mock HQ. Toggles persist
+                so you can design ops flows against them.
+              </div>
+            ) : (
+              <div className={`${calloutClass} border-dashed`}>
+                Wire delivery under Integrations and Automations — these toggles are preference
+                flags for those flows.
+              </div>
+            )}
           </SettingsSection>
 
           <SettingsSection
