@@ -403,7 +403,16 @@ export default function AdminMessageTemplatesPage() {
                 className={fieldClass}
                 value={editing.provider_template_name ?? ""}
                 onChange={(e) => setEditing({ ...editing, provider_template_name: e.target.value })}
-                placeholder="order_confirmed_v1"
+                placeholder="ezurr_login_verification"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className={labelClass}>Template namespace</span>
+              <input
+                className={fieldClass}
+                value={editing.namespace ?? ""}
+                onChange={(e) => setEditing({ ...editing, namespace: e.target.value })}
+                placeholder="Falls back to Integrations → WhatsApp default"
               />
             </label>
             <div className="grid grid-cols-2 gap-3">
