@@ -37,6 +37,11 @@ export function ShopDetailsSection({
   disabled,
 }: SettingsPanelProps) {
   const [emailError, setEmailError] = useState("");
+  // Held locally while it is not yet a valid address. The input is bound to the
+  // saved value, so without this the field would snap back to the old address
+  // between keystrokes — and the server now refuses a malformed one, so every
+  // character of "help@" would have queued a save that came back 422.
+  const [draftEmail, setDraftEmail] = useState<string | null>(null);
 
   return (
     <SettingsSection
@@ -145,13 +150,19 @@ export function ShopDetailsSection({
           >
             <input
               type="email"
-              value={settings.supportEmail}
+              value={draftEmail ?? settings.supportEmail}
               onChange={(e) => {
                 const value = e.target.value;
-                patch({ supportEmail: value });
+                const bad = Boolean(value) && !looksLikeEmail(value);
                 setEmailError(
-                  value && !looksLikeEmail(value) ? "That doesn't look like an email address." : "",
+                  bad ? "That doesn't look like an email address — it has not been saved." : "",
                 );
+                if (bad) {
+                  setDraftEmail(value);
+                  return;
+                }
+                setDraftEmail(null);
+                patch({ supportEmail: value });
               }}
               className={fieldClass}
               placeholder="hello@ezurr.com"

@@ -10,12 +10,54 @@ import { api, apiImport, isApiEnabled } from "@/lib/apiClient";
 import { adminErrorMessage } from "@/lib/adminError";
 import type { AdminCatalogRow, AdminDigitalCode } from "@/data/admin";
 
+/**
+ * Splits a spreadsheet export, respecting quotes.
+ *
+ * It used to split on every comma, so one product called "Assassin's Creed
+ * Valhalla, Gold Edition" — which is exactly how Excel writes a title with a
+ * comma in it — shunted every later column one place along. The price landed in
+ * the stock column and the row was imported wrong rather than refused, on a file
+ * of three hundred games where nobody would spot it.
+ *
+ * Line splitting is deliberately left alone: neither template has a free-text
+ * column, so a newline inside a quoted cell does not arise, and rewriting it
+ * would put files that parse correctly today at risk.
+ */
 function parseCsv(text: string): string[][] {
   return text
     .trim()
     .split(/\r?\n/)
     .filter(Boolean)
-    .map((line) => line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, "")));
+    .map((line) => {
+      const cells: string[] = [];
+      let cell = "";
+      let quoted = false;
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i];
+        if (ch === '"') {
+          // A doubled quote inside quotes is one literal quote — Excel's own way
+          // of writing 24" Monitor.
+          if (inQuotes && line[i + 1] === '"') {
+            cell += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+            quoted = true;
+          }
+          continue;
+        }
+        if (ch === "," && !inQuotes) {
+          cells.push(quoted ? cell : cell.trim());
+          cell = "";
+          quoted = false;
+          continue;
+        }
+        cell += ch;
+      }
+      cells.push(quoted ? cell : cell.trim());
+      return cells;
+    });
 }
 
 export default function AdminImportPage() {
@@ -51,6 +93,16 @@ export default function AdminImportPage() {
       const [header, ...body] = rows;
       const idx = (name: string) => header.findIndex((h) => h.toLowerCase() === name);
 
+      // A row with the wrong number of columns is not a row this file can be
+      // read against — every value after the gap belongs to the wrong heading.
+      // They used to be imported anyway, silently, so a price could end up in
+      // the stock column on a file of three hundred games.
+      const skipped = body.filter((cells) => cells.length !== header.length);
+      const usable = body.filter((cells) => cells.length === header.length);
+      const skippedNote = skipped.length
+        ? `${skipped.length} ${skipped.length === 1 ? "row was" : "rows were"} skipped — they did not have the same columns as the heading row: ${skipped.map((c) => c[0]).join(", ")}.`
+        : null;
+
       // API mode: send the parsed rows to the server's import endpoint instead
       // of only writing to localStorage.
       if (isApiEnabled()) {
@@ -58,7 +110,7 @@ export default function AdminImportPage() {
           const i = idx(name);
           return i >= 0 ? cells[i] : undefined;
         };
-        const products = body
+        const products = usable
           .map((cells) => {
             const name = cell(cells, "name");
             if (!name) return null;
@@ -84,7 +136,11 @@ export default function AdminImportPage() {
         void apiImport({ products, dryRun: false })
           .then((res) => {
             const n = res.summary.products;
-            setReport([`${n} ${n === 1 ? "product" : "products"} added or updated.`]);
+            setReport(
+              [`${n} ${n === 1 ? "product" : "products"} added or updated.`, skippedNote].filter(
+                (line): line is string => Boolean(line),
+              ),
+            );
             toast.push(`${n} ${n === 1 ? "product" : "products"} brought in`, "success");
           })
           .catch((err: Error) => {
@@ -94,11 +150,11 @@ export default function AdminImportPage() {
         return;
       }
 
-      const notes: string[] = [];
+      const notes: string[] = skippedNote ? [skippedNote] : [];
       let imported = 0;
       setAdminState((prev) => {
         const products = [...prev.products];
-        for (const cells of body) {
+        for (const cells of usable) {
           const key = cells[idx("key")] || `import-${Date.now()}-${imported}`;
           const name = cells[idx("name")];
           if (!name) {

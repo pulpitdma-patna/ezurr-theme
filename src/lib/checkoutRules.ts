@@ -830,7 +830,7 @@ export function seedCheckoutRules(now = new Date().toISOString()): AdminCheckout
  * quietly rounded.
  */
 
-type Choice = { value: string; label: string };
+type Choice = { value: string; label: string; menuLabel?: string };
 
 /** Keep a saved value selectable even when it is not one of the ready-made ones. */
 function withSaved(options: Choice[], saved: string | undefined, label: (v: string) => string): Choice[] {
@@ -1239,23 +1239,36 @@ export const OFFERED_ACTIONS: CheckoutActionType[] = [
 ];
 
 /**
- * The label IS the word in the sentence, so it cannot say more than the word.
+ * Five of these mean nothing on their own while the menu is open.
  *
- * The dropdown is ambiguous while it is open — "take", "ask for" and "charge"
- * mean nothing until the value that follows them arrives — and the obvious fix,
- * labelling each option with the whole phrase, silently breaks the sentence:
- * sentenceToText reads the SELECTED option's label, and the action-type slot
- * exists only in the editable sentence, so "take … off for paying online" would
- * render followed by the value and the trailing words all over again.
+ * "take", "ask for" and "charge" are only half a phrase until the value that
+ * follows them arrives, and the obvious fix — labelling each option with the
+ * whole phrase — silently breaks the sentence: sentenceToText reads the
+ * SELECTED option's label, and this slot exists only in the editable sentence,
+ * so "take … off for paying online" would render followed by the value and the
+ * trailing words all over again. That trap is real and this is not a way round
+ * it: `label` is untouched.
  *
- * A menu whose open list says more than its closed state needs a real listbox,
- * not a <select>. Left as it is deliberately, and pinned by the test below, so
- * the next person to notice the ambiguity does not fix it this way.
+ * A native <select> shows only the selected option's text when it is closed, so
+ * the longer phrase goes in `menuLabel` and is rendered only for options that
+ * are NOT selected. The open list says more than the closed control, which is
+ * the whole complaint, and the OS picker — 44pt rows, momentum, a Done button —
+ * is kept, which an ARIA listbox would mean rebuilding by hand for a man using
+ * his thumb.
  */
+const ACTION_MENU_LABELS: Partial<Record<CheckoutActionType, string>> = {
+  hide_payment_method: "do not offer one way of paying",
+  set_prepaid_discount_pct: "take something off for paying online",
+  set_deposit_pct: "ask for part now, the rest later",
+  prefer_gateway: "show one way of paying first",
+  set_tax_rate: "charge a GST rate",
+};
+
 export function actionChoices(current: CheckoutActionType): Choice[] {
   const offered = OFFERED_ACTIONS.map((value) => ({
     value,
     label: CHECKOUT_ACTION_WORDS[value].before,
+    menuLabel: ACTION_MENU_LABELS[value],
   }));
   if (OFFERED_ACTIONS.includes(current)) return offered;
   // The rule already does this. Dropping it from the list would make the only

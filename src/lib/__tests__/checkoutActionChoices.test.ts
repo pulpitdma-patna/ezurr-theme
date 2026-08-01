@@ -58,3 +58,42 @@ describe("what a checkout rule can do, in words", () => {
     expect(actionChoices("set_shipping").map((c) => c.value)).not.toContain("");
   });
 });
+
+/**
+ * Five of these actions are only half a phrase while the menu is open.
+ *
+ * "take", "ask for" and "charge" say nothing until the value that follows them
+ * arrives, and the obvious fix — putting the whole phrase in `label` — breaks
+ * the sentence, because sentenceToText renders the SELECTED option's label and
+ * the tail of the line would then appear twice. It was left ambiguous on
+ * purpose and pinned so nobody fixed it that way.
+ *
+ * A native <select> only ever shows the selected option when closed, so the
+ * longer phrase lives in `menuLabel` and is rendered for options that are NOT
+ * selected. The open list says more; the closed one is untouched.
+ */
+describe("the open menu says more than the closed control", () => {
+  it("gives the half-phrases something readable in the list", () => {
+    const byValue = new Map(actionChoices("set_shipping").map((c) => [c.value, c]));
+
+    expect(byValue.get("set_prepaid_discount_pct")?.menuLabel).toBe(
+      "take something off for paying online",
+    );
+    expect(byValue.get("set_deposit_pct")?.menuLabel).toBe("ask for part now, the rest later");
+    expect(byValue.get("set_tax_rate")?.menuLabel).toBe("charge a GST rate");
+  });
+
+  /** The trap this file already guards. menuLabel must not touch it. */
+  it("leaves every label exactly as the sentence needs it", () => {
+    for (const choice of actionChoices("set_shipping")) {
+      const words = CHECKOUT_ACTION_WORDS[choice.value as CheckoutActionType];
+      expect(choice.label, choice.value).toBe(words.before);
+    }
+  });
+
+  /** An action that already reads on its own needs no second wording. */
+  it("adds nothing to the ones that were never ambiguous", () => {
+    const shipping = actionChoices("set_shipping").find((c) => c.value === "set_shipping");
+    expect(shipping?.menuLabel).toBeUndefined();
+  });
+});
