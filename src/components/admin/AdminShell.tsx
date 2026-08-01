@@ -579,16 +579,6 @@ function SidebarBrand({
   );
 }
 
-function NavSectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <div className="px-2.5 pb-1.5 pt-1">
-      <span className="ez-mono text-[9px] font-medium uppercase tracking-[0.14em] text-white/28">
-        {children}
-      </span>
-    </div>
-  );
-}
-
 function NavLinkItem({
   item,
   pathname,
@@ -969,7 +959,13 @@ function SidebarNav({
       }`}
       aria-label="Admin"
     >
-      {!collapsed ? <NavSectionLabel>Overview</NavSectionLabel> : null}
+      {/*
+        No heading over the five daily destinations. "Overview" was a label on
+        the front door — he is not looking for an overview, he is looking for
+        Today — and a heading over the first five items only pushes them down
+        the screen. The two collapsible groups below carry their own names, so
+        the section label under them was saying nothing either.
+      */}
       <ul className="flex flex-col gap-0.5">
         {topLevelNav.map((item) => (
           <li key={item.href}>
@@ -983,7 +979,6 @@ function SidebarNav({
         ))}
       </ul>
       <div className={`flex flex-col gap-1 ${collapsed ? "" : "border-t border-white/[0.05] pt-3"}`}>
-        {!collapsed ? <NavSectionLabel>Workspace</NavSectionLabel> : null}
         {navSubmenus.map((group) => (
           <NavSubmenu
             key={group.label}
