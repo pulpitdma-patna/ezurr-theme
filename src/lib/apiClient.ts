@@ -501,6 +501,33 @@ export interface ApiActivityEntry {
   created_at: string | null;
 }
 
+/** What the server says about applying a release, and what the last try did. */
+export interface ApiSystemUpdate {
+  installedVersion: string | null;
+  codeVersion: string | null;
+  pendingMigrations: number;
+  updateNeeded: boolean;
+  /**
+   * Whether a copy of the records can be taken on this host at all. False on
+   * hosting that forbids running other programs, where it can never work — so
+   * the screen says so before he presses, not in a refusal afterwards.
+   */
+  backupAvailable: boolean;
+  lastRun: {
+    status: "running" | "done" | "failed" | "stopped";
+    startedAt?: string;
+    finishedAt?: string;
+    from?: string | null;
+    to?: string | null;
+    migrated?: boolean;
+    workerAlive?: boolean | null;
+    failedStep?: string | null;
+    ownBackup?: boolean;
+    backup?: { ok: boolean; name: string | null; reason: string | null };
+  } | null;
+  backups: Array<{ name: string; bytes: number; at: string; href: string }>;
+}
+
 export interface ApiReportSummary {
   days: number;
   revenue: number;
@@ -916,6 +943,13 @@ export const api = {
    * asked the server for a rolling window ending today, so choosing "1-31 May"
    * returned the last 31 days under a May label.
    */
+  systemUpdate: () => apiFetch<ApiSystemUpdate>("/admin/system/update"),
+  applySystemUpdate: (payload?: { backupTakenMyself?: boolean }) =>
+    apiFetch<{ ok: boolean; run: ApiSystemUpdate["lastRun"]; status: ApiSystemUpdate }>(
+      "/admin/system/update",
+      { method: "POST", body: JSON.stringify(payload ?? {}) },
+    ),
+
   reportSummary: (window?: ReportWindow) =>
     apiFetch<ApiReportSummary>(`/admin/reports/summary${reportQuery(window)}`),
   reportSeries: (window?: ReportWindow) =>

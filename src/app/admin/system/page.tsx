@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminNotice } from "@/components/admin/AdminNotice";
+import { UpdatePanel } from "@/components/admin/UpdatePanel";
 import { formatAdminDateTime } from "@/lib/adminFormat";
 import { adminErrorMessage } from "@/lib/adminError";
 import {
   api,
   ApiError,
-  getApiUpstreamUrl,
   isApiEnabled,
   type ApiSystemHealth,
 } from "@/lib/apiClient";
@@ -216,42 +216,12 @@ export default function AdminSystemPage() {
             </div>
           </section>
 
-          {health.version.updateNeeded || health.pendingMigrations > 0 ? (
-            <section className={`${panelClass} border-[#F4D8A8] bg-[#FEF6E7]`}>
-              <div className="p-5 sm:p-6">
-                <h2 className="text-[15px] font-semibold tracking-[-0.03em] text-[#8A5A00]">
-                  An update has not finished
-                </h2>
-                <p className="mt-1.5 max-w-2xl text-[12px] leading-relaxed text-[#8A5A00]">
-                  {health.pendingMigrations > 0
-                    ? `${health.pendingMigrations} ${
-                        health.pendingMigrations === 1 ? "change" : "changes"
-                      } to where your records are kept never finished. Until they do, parts of this admin can break, or look like they saved and quietly save nothing.`
-                    : `This shop is running version ${health.version.code}, but it was last set up as ${
-                        health.version.installed ?? "a version nobody wrote down"
-                      }.`}
-                </p>
-                <p className="mt-3 text-[12px] text-[#8A5A00]">
-                  Ask whoever runs your server for <Command>php artisan ezurr:update</Command>
-                  {getApiUpstreamUrl() ? (
-                    <>
-                      {" "}
-                      or{" "}
-                      <a
-                        href={`${getApiUpstreamUrl()}/update`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-semibold underline underline-offset-2"
-                      >
-                        open the update page
-                      </a>{" "}
-                      on your server — that page only reports; it cannot finish the update for you.
-                    </>
-                  ) : null}
-                </p>
-              </div>
-            </section>
-          ) : null}
+          {/* Was a dead end: it told him an update had not finished and then
+              asked him to get somebody to run a command. He has nobody, so his
+              shop stayed on the old release — including the releases that fix
+              whatever he was complaining about. He can apply it himself now. */}
+          <UpdatePanel />
+
 
           {health.configWarnings.length > 0 ? (
             <section className={panelClass}>
