@@ -361,6 +361,13 @@ export type AdminSettings = {
   codLimit: number;
   /** Catalogue prices already contain GST (India: displayed = payable). */
   taxInclusive: boolean;
+  /**
+   * The shop's GST rate. Read by Product::resolveBasis and the checkout policy;
+   * a checkout rule can still override it for one kind of order.
+   */
+  taxRatePct: number;
+  /** Below the registration threshold — charge no GST at all. */
+  taxExempt: boolean;
   /** Flat ₹ collected online to confirm a COD order (0 = none). */
   codAdvance: number;
   codAdvanceLabel: string;
@@ -1220,6 +1227,8 @@ export const defaultAdminSettings: AdminSettings = {
   codEnabled: true,
   codLimit: 10000,
   taxInclusive: true,
+  taxRatePct: 18,
+  taxExempt: false,
   codAdvance: 0,
   codAdvanceLabel: "",
   codAdvanceUnlocksCap: false,

@@ -50,6 +50,62 @@ export function CheckoutSection({ settings, patch, active, status, disabled }: S
       disabled={disabled}
     >
       <Cluster
+        title="GST"
+        lead="What tax you charge, and whether it is already inside the prices on your products."
+      >
+        <SettingsToggle
+          label="My prices already include GST"
+          description={
+            settings.taxInclusive
+              ? "A customer pays exactly the price shown on the product."
+              : "GST is added on top at checkout, so the customer pays more than the price shown."
+          }
+          checked={settings.taxInclusive}
+          onChange={(checked) => patch({ taxInclusive: checked })}
+        />
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field
+            label="GST rate"
+            hint={
+              settings.taxExempt
+                ? "Not used at the moment — you have said this shop charges no GST."
+                : "The rate for most of what you sell. A checkout rule can charge a different rate on particular orders."
+            }
+          >
+            <span className="flex items-center gap-2">
+              <select
+                value={String(settings.taxRatePct)}
+                disabled={settings.taxExempt}
+                onChange={(e) => patch({ taxRatePct: Number(e.target.value) })}
+                className={fieldClass}
+              >
+                {/* The real slabs, not a free number. A shop that types 1.8 or
+                    180 into a box here misprices every product it sells, and
+                    nothing downstream would question it. */}
+                {[0, 5, 12, 18, 28].map((rate) => (
+                  <option key={rate} value={rate}>
+                    {rate}%
+                  </option>
+                ))}
+              </select>
+            </span>
+          </Field>
+        </div>
+
+        <SettingsToggle
+          label="This shop charges no GST"
+          description={
+            settings.taxExempt
+              ? "No GST on any order, and your bills will say so."
+              : "Turn this on only if you are below the GST registration limit."
+          }
+          checked={settings.taxExempt}
+          onChange={(checked) => patch({ taxExempt: checked })}
+        />
+      </Cluster>
+
+      <Cluster
         title="Paying online"
         lead="What a customer saves by paying before the parcel goes out."
       >

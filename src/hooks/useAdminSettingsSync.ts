@@ -23,6 +23,13 @@ export const ADMIN_SETTING_KEYS: Extract<keyof AdminSettings, string>[] = [
   "codLimit", "freeShippingMin", "orderIdPrefix", "lowStockThreshold", "hideOutOfStock",
   "timezone", "currencyLabel", "notifyNewOrder", "notifyLowStock", "notifyPreorderRelease",
   "gaMeasurementId", "metaPixelId",
+  // GST. This list is load-bearing in BOTH directions — it copies the server's
+  // value in on load, and Settings filters its outgoing payload through it — so
+  // a key missing here is a control that shows "Saved · 4:12 pm" over a value
+  // the server never heard. taxInclusive was accepted by the API and typed here
+  // and still absent from this array, which is why the shop had no way to say
+  // whether its shelf prices already contain GST.
+  "taxInclusive", "taxRatePct", "taxExempt",
   "codAdvance", "codAdvanceLabel", "codAdvanceUnlocksCap", "reservationAmount",
   "whatsappWidgetEnabled", "whatsappNumber", "whatsappGreeting",
   "docBusinessName", "docAddressLine1", "docAddressLine2", "docCity", "docState",
