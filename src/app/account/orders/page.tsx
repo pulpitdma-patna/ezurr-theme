@@ -10,7 +10,6 @@ import { orderStatusLabels, type AdminOrder, type AdminOrderStatus } from "@/dat
 import { normalizeMobile } from "@/lib/auth";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import { mapApiOrderToAdmin } from "@/lib/apiMappers";
-import { CountdownInline } from "@/components/ui/Countdown";
 
 type Filter = "all" | "progress" | "preorder" | "delivered";
 
@@ -116,10 +115,9 @@ export default function OrdersPage() {
 
       {filter === "preorder" ? (
         <div className="mt-4 rounded-2xl border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] px-4 py-3 text-sm text-[#424245]">
-          Pre-orders lock your price until release.{" "}
-          <span className="font-semibold">
-            Releases in <CountdownInline />
-          </span>
+          {/* No clock: this list carries no per-product release date, so any
+              countdown here would be another title's, shown beside this one. */}
+          Pre-orders lock your price until release. We&rsquo;ll text you when yours ships.
         </div>
       ) : null}
 

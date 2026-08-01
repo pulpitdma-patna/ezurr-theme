@@ -7,6 +7,7 @@ import { MicroBar } from "@/components/layout/MicroBar";
 import { Header } from "@/components/layout/Header";
 import { FooterFull } from "@/components/layout/Footer";
 import { CountdownInline } from "@/components/ui/Countdown";
+import { formatInr } from "@/data/admin";
 import { RelatedProductsSection } from "@/components/product/RelatedProductsSection";
 import { ProductDetails } from "@/components/product/ProductDetails";
 import { ProductGallery } from "@/components/product/ProductGallery";
@@ -144,7 +145,12 @@ export function ProductView({
     categorySlug = "preorders",
     categoryHref,
     fulfillmentType,
+    reservationAmount,
   } = resolved;
+  // 0 (or unset) is NOT "free to book" — it means the whole price is taken at
+  // checkout, like any other prepaid order. The screens said "₹0 today" and
+  // then opened the payment sheet for the lot.
+  const advance = reservationAmount ?? 0;
   const discountPct =
     strike && priceValue
       ? Math.round((1 - priceValue / (Number(strike.replace(/[^\d]/g, "")) || priceValue)) * 100)
@@ -336,18 +342,20 @@ export function ProductView({
                     <span className="ez-mono text-[9px] uppercase tracking-[0.15em] text-[#A1A1A6]">
                       Release countdown
                     </span>
-                    <CountdownInline />
+                    <CountdownInline releaseAt={initialProduct?.releaseAt} />
                   </div>
                   <Link
                     href={`/checkout/${encodeURIComponent(productKey)}`}
                     className="ez-btn-primary flex min-h-[52px] w-full items-center justify-center rounded-full px-5 text-center text-[15px] font-semibold shadow-[0_8px_28px_oklch(0.4_0.16_var(--ez-h)/0.38)] transition hover:brightness-105 active:scale-[0.98]"
                   >
-                    Pre-order now · ₹0 today
+                    Pre-order now · {advance > 0 ? `${formatInr(advance)} today` : price}
                   </Link>
                   <div className="mt-3.5 text-[11px] leading-snug text-[#C7C7CC] sm:text-[11.5px]">
                     <div className="flex items-start gap-2">
                       <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-[var(--ez-accent)]" />
-                      Charged only when your order ships
+                      {advance > 0
+                        ? `Balance ${formatInr(Math.max(0, (priceValue ?? 0) - advance))} when it ships`
+                        : "Paid in full at checkout — your price is locked until release"}
                     </div>
                   </div>
                 </>

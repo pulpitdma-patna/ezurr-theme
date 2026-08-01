@@ -15,6 +15,21 @@ import {
 import { digitsOnly, looksLikeEmail } from "@/components/admin/settings/settingsValues";
 
 /**
+ * Not the full IANA list — 400-odd names, on a screen for one shop owner.
+ * India first because that is who this is for; the rest cover a shop run from
+ * abroad, which is the only case that has ever come up.
+ */
+const SHOP_TIMEZONES = [
+  { value: "Asia/Kolkata", label: "India (IST)" },
+  { value: "Asia/Dubai", label: "UAE (GST)" },
+  { value: "Asia/Singapore", label: "Singapore" },
+  { value: "Europe/London", label: "United Kingdom" },
+  { value: "America/New_York", label: "US — East coast" },
+  { value: "America/Los_Angeles", label: "US — West coast" },
+  { value: "Australia/Sydney", label: "Australia — Sydney" },
+];
+
+/**
  * Who the shop is, and how a customer reaches it.
  *
  * Six boxes in a two-column grid, in this order: name, city, email, phone,
@@ -37,6 +52,11 @@ export function ShopDetailsSection({
   disabled,
 }: SettingsPanelProps) {
   const [emailError, setEmailError] = useState("");
+  // Held locally while it is not yet a valid address. The input is bound to the
+  // saved value, so without this the field would snap back to the old address
+  // between keystrokes — and the server now refuses a malformed one, so every
+  // character of "help@" would have queued a save that came back 422.
+  const [draftEmail, setDraftEmail] = useState<string | null>(null);
 
   return (
     <SettingsSection
@@ -145,13 +165,19 @@ export function ShopDetailsSection({
           >
             <input
               type="email"
-              value={settings.supportEmail}
+              value={draftEmail ?? settings.supportEmail}
               onChange={(e) => {
                 const value = e.target.value;
-                patch({ supportEmail: value });
+                const bad = Boolean(value) && !looksLikeEmail(value);
                 setEmailError(
-                  value && !looksLikeEmail(value) ? "That doesn't look like an email address." : "",
+                  bad ? "That doesn't look like an email address — it has not been saved." : "",
                 );
+                if (bad) {
+                  setDraftEmail(value);
+                  return;
+                }
+                setDraftEmail(null);
+                patch({ supportEmail: value });
               }}
               className={fieldClass}
               placeholder="hello@ezurr.com"
@@ -164,6 +190,35 @@ export function ShopDetailsSection({
               className={fieldClass}
               placeholder="9876500000"
               inputMode="numeric"
+            />
+          </Field>
+          <Field
+            label="Where your shop is"
+            hint="Decides when your day starts and ends, so today's takings mean today."
+          >
+            <select
+              value={settings.timezone || "Asia/Kolkata"}
+              onChange={(e) => patch({ timezone: e.target.value })}
+              className={fieldClass}
+            >
+              {SHOP_TIMEZONES.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label="What your order numbers start with"
+            hint="Letters, numbers and dashes. Orders you already have keep the number they were given."
+          >
+            <input
+              value={settings.orderIdPrefix}
+              onChange={(e) =>
+                patch({ orderIdPrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 8) })
+              }
+              className={fieldClass}
+              placeholder="EZ"
             />
           </Field>
         </div>

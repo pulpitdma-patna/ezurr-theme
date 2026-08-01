@@ -89,7 +89,10 @@ export function RuleSentence({
                 .filter((option) => option.value !== "")
                 .map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {/* The SELECTED option keeps its plain label, because that
+                        text is what the closed control shows and what the
+                        sentence reads. Everything else may say more. */}
+                    {option.value === slot.value ? option.label : (option.menuLabel ?? option.label)}
                   </option>
                 ))}
             </select>

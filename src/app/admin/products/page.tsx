@@ -398,6 +398,7 @@ export default function AdminProductsPage() {
       brand: form.brand,
       price: form.price,
       strike: form.strike,
+      cost: form.cost,
       taxInclusive: form.taxInclusive,
       // For a code-delivered product this column is meaningless — the vault is
       // its stock, and OrderService::assertAvailable ignores the column

@@ -10,7 +10,6 @@ import { orderStatusLabels, type AdminOrder } from "@/data/admin";
 import { normalizeMobile } from "@/lib/auth";
 import { api, isApiEnabled } from "@/lib/apiClient";
 import { mapApiOrderToAdmin } from "@/lib/apiMappers";
-import { CountdownInline } from "@/components/ui/Countdown";
 import { OrderTracker } from "@/components/orders/OrderTracker";
 import { canCustomerCancel } from "@/lib/orderCancel";
 
@@ -111,8 +110,9 @@ export default function AccountOrderDetailPage({
 
       {order.status === "preorder" ? (
         <div className="mb-5 rounded-2xl border border-[var(--ez-accent-panel-border)] bg-[var(--ez-accent-panel)] px-4 py-3 text-sm">
-          Price locked at <span className="font-semibold">{order.total}</span>. Releases in{" "}
-          <CountdownInline />. Cancel before dispatch; prepaid refunds are handled by support.
+          {/* Same reason as the list: no per-product date reaches this page. */}
+          Price locked at <span className="font-semibold">{order.total}</span>. We&rsquo;ll text you
+          when it ships. Cancel before dispatch; prepaid refunds are handled by support.
         </div>
       ) : null}
 

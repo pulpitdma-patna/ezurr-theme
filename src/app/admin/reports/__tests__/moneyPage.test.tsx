@@ -176,3 +176,58 @@ describe("when the shop cannot answer", () => {
     expect(screen.queryByText("Nothing sold in these dates")).toBeNull();
   });
 });
+
+/**
+ * Profit, and the honesty that makes it usable.
+ *
+ * The cost of a product is optional — he will not have filled them all in, and
+ * on 298 products he may never. So a sale whose cost is unknown is reported
+ * separately rather than counted: if a missing cost read as zero, every product
+ * he had not got round to would show as pure margin and a thin month would look
+ * like a very good one.
+ */
+function renderMoney(profitFields: Record<string, number>) {
+  reportSummary.mockReset().mockResolvedValue({ ...SUMMARY, ...profitFields });
+  render(<AdminMoneyPage />);
+}
+
+describe("rough profit", () => {
+  it("says there is nothing to work from until he types a cost", async () => {
+    renderMoney({ costed_revenue: 0, cost_of_goods: 0, profit: 0, uncosted_revenue: 90000, uncosted_products: 3 });
+
+    expect(await screen.findByText(/Not worked out yet/i)).toBeTruthy();
+  });
+
+  it("shows the profit on the sales it can account for", async () => {
+    renderMoney({
+      costed_revenue: 100000,
+      cost_of_goods: 88000,
+      profit: 12000,
+      uncosted_revenue: 0,
+      uncosted_products: 0,
+    });
+
+    expect(await screen.findByText("₹12,000")).toBeTruthy();
+  });
+
+  /** The line that stops the number being read as the whole month. */
+  it("names what it could not count, and how many products would close the gap", async () => {
+    renderMoney({
+      costed_revenue: 100000,
+      cost_of_goods: 88000,
+      profit: 12000,
+      uncosted_revenue: 40000,
+      uncosted_products: 1,
+    });
+
+    expect(await screen.findByText(/₹40,000 is not counted/i)).toBeTruthy();
+    expect(screen.getByText(/1 product has no cost saved/i)).toBeTruthy();
+  });
+
+  /** A server that predates the field must not take the screen down. */
+  it("survives a summary with no profit figures at all", async () => {
+    renderMoney({});
+
+    expect(await screen.findByText(/Not worked out yet/i)).toBeTruthy();
+  });
+});

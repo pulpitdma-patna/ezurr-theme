@@ -284,7 +284,13 @@ export type SentenceSlot =
       kind: "choice";
       id: string;
       value: string;
-      options: { value: string; label: string }[];
+      /**
+       * `label` is the word that appears IN the sentence, so it is also what the
+       * closed control shows. `menuLabel`, when present, is shown for an option
+       * that is NOT selected — which is how the open list can say more than the
+       * closed one without abandoning the native picker.
+       */
+      options: { value: string; label: string; menuLabel?: string }[];
       ariaLabel: string;
       emptyLabel?: string;
       onChange?: (value: string) => void;

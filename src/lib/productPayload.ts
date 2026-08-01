@@ -94,6 +94,8 @@ export type ProductPayloadInput = {
   brand: string;
   price: string;
   strike: string;
+  /** Optional so existing call sites and fixtures still typecheck. */
+  cost?: string;
   taxInclusive: boolean;
   stock: number;
   /** Live or hidden — the only two the owner chooses. */
@@ -145,6 +147,12 @@ export function productFormToApiPayload(input: ProductPayloadInput) {
     ...fulfilmentToPayload(input.fulfilment),
   };
   if (input.description !== undefined) payload.description = input.description;
+  // The blank test MUST come before priceToNumber, which returns 0 for an empty
+  // string — that would turn "I don't know what I paid" into "it was free", and
+  // report the product as pure profit for ever after.
+  if (input.cost !== undefined) {
+    payload.cost = input.cost.trim() === "" ? null : priceToNumber(input.cost);
+  }
   // `categories` is `sometimes` on the server: absent is not the same as empty,
   // and sending [] from a screen that never asked would wipe a hand-curated sale.
   if (input.alsoIn) payload.categories = input.alsoIn;
@@ -195,6 +203,7 @@ export function apiProductToForm(p: ApiProduct): ProductFormValues {
     // Edit the merchant's own basis, not the grossed-up display figure.
     price: String(p.price ?? ""),
     strike: p.mrp ? String(p.mrp) : "",
+    cost: p.cost == null ? "" : String(p.cost),
     // null on the API means "inherit the store default", which is inclusive.
     taxInclusive: p.tax_inclusive ?? true,
     stock: String(p.stock ?? 0),

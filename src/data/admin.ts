@@ -391,7 +391,6 @@ export type AdminSettings = {
   lowStockThreshold: number;
   hideOutOfStock: boolean;
   timezone: string;
-  currencyLabel: string;
   notifyNewOrder: boolean;
   notifyLowStock: boolean;
   notifyPreorderRelease: boolean;
@@ -1240,7 +1239,6 @@ export const defaultAdminSettings: AdminSettings = {
   lowStockThreshold: 5,
   hideOutOfStock: false,
   timezone: "Asia/Kolkata",
-  currencyLabel: "INR",
   notifyNewOrder: true,
   notifyLowStock: true,
   notifyPreorderRelease: true,

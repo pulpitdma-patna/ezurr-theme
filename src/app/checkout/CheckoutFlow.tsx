@@ -290,6 +290,8 @@ function OrderSummaryRail({
   taxMessage,
   taxRatePct,
   dueToday,
+  balanceDue,
+  releaseAt,
 }: {
   productTitle: string;
   productSubtitle: string;
@@ -310,6 +312,11 @@ function OrderSummaryRail({
   taxMessage: string | null;
   taxRatePct: number;
   dueToday: string;
+  /** Still owed after today — 0 when the customer is paying in full now. */
+  balanceDue: number;
+  /** THIS product's release date. Never the shop-wide one; a title with no
+      date of its own must show no clock rather than borrow another's. */
+  releaseAt?: string | null;
 }) {
   return (
     <aside className="ez-checkout-summary ez-checkout-rail-in relative hidden flex-col overflow-hidden rounded-[20px] p-6 text-[#F5F5F7] lg:sticky lg:top-8 lg:flex lg:p-7">
@@ -325,7 +332,9 @@ function OrderSummaryRail({
             <span className="pb-1 text-right text-[12px] leading-snug text-[#A1A1A6]">
               {isPreorder
                 ? isPrepaid
-                  ? `Authorize now · ${lockedTotal}${releaseLabel ? ` on ${releaseLabel}` : " when it is released"}`
+                  ? balanceDue > 0
+                    ? `Balance ${fmt(balanceDue)}${releaseLabel ? ` on ${releaseLabel}` : " on release"}`
+                    : "Price locked until release"
                   : `Pay ${lockedTotal} on delivery`
                 : isPrepaid
                   ? "Paid securely online"
@@ -398,13 +407,15 @@ function OrderSummaryRail({
           </div>
           <div className="mt-1 flex justify-between gap-3 border-t border-white/[0.1] pt-3">
             <span className="text-[#A1A1A6]">
-              {isPreorder ? (isPrepaid ? "On release" : "On delivery") : isPrepaid ? "Total" : "On delivery"}
+              {balanceDue > 0 ? (isPreorder ? "On release" : "On delivery") : "Total"}
             </span>
-            <span className="ez-mono shrink-0 font-semibold text-[#F5F5F7]">{lockedTotal}</span>
+            <span className="ez-mono shrink-0 font-semibold text-[#F5F5F7]">
+              {balanceDue > 0 ? fmt(balanceDue) : lockedTotal}
+            </span>
           </div>
         </div>
 
-        {isPreorder ? <CountdownSummaryPanel variant="rail" /> : null}
+        {isPreorder && releaseAt ? <CountdownSummaryPanel variant="rail" releaseAt={releaseAt} /> : null}
         <TrustRail />
       </div>
     </aside>
@@ -500,6 +511,8 @@ function MobileSummarySheet({
   taxAmount,
   taxMessage,
   dueToday,
+  balanceDue,
+  releaseAt,
 }: {
   open: boolean;
   onClose: () => void;
@@ -521,6 +534,8 @@ function MobileSummarySheet({
   taxAmount: number;
   taxMessage: string | null;
   dueToday: string;
+  balanceDue: number;
+  releaseAt?: string | null;
 }) {
   if (!open) return null;
 
@@ -553,7 +568,9 @@ function MobileSummarySheet({
             <span className="pb-1 text-right text-[12px] text-[#A1A1A6]">
               {isPreorder
                 ? isPrepaid
-                  ? `Charged ${lockedTotal} on ship`
+                  ? balanceDue > 0
+                    ? `Balance ${fmt(balanceDue)}${releaseLabel ? ` on ${releaseLabel}` : " on release"}`
+                    : "Price locked until release"
                   : `Pay ${lockedTotal} at door`
                 : isPrepaid
                   ? "Paid securely online"
@@ -616,18 +633,21 @@ function MobileSummarySheet({
           </div>
           <div className="flex justify-between border-t border-white/[0.1] pt-2">
             <span className="text-[#A1A1A6]">
-              {isPreorder ? (isPrepaid ? "On release" : "On delivery") : isPrepaid ? "Total" : "On delivery"}
+              {balanceDue > 0 ? (isPreorder ? "On release" : "On delivery") : "Total"}
             </span>
-            <span className="ez-mono font-semibold">{lockedTotal}</span>
+            <span className="ez-mono font-semibold">{balanceDue > 0 ? fmt(balanceDue) : lockedTotal}</span>
           </div>
         </div>
 
         {isPreorder ? (
           <>
+            {/* "Nothing charged until then." was here and was untrue: with no
+                reservation amount set, a prepaid pre-order is charged in full
+                at checkout, on the very next tap. */}
             <p className="mb-4 m-0 text-[12px] leading-relaxed text-[#A1A1A6]">
-              {releaseLabel ? `Releases ${releaseLabel}.` : "Release date not confirmed yet."} Nothing charged until then.
+              {releaseLabel ? `Releases ${releaseLabel}.` : "Release date not confirmed yet."}
             </p>
-            <CountdownSummaryPanel variant="rail" />
+            {releaseAt ? <CountdownSummaryPanel variant="rail" releaseAt={releaseAt} /> : null}
           </>
         ) : null}
         <div className="mt-4">
@@ -702,9 +722,11 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
   // This product's own date. It read the shop-wide setting, so a customer
   // paying a deposit was shown a release day that had nothing to do with the
   // title in his basket.
-  const releaseLabel = formatReleaseLabel(
-    toDateOnly((checkoutProduct as { release_at?: unknown } | null)?.release_at),
-  );
+  // Kept as the raw date as well as the label, so the clocks can be told which
+  // title they are counting to. A product with no date of its own must show no
+  // clock rather than borrow the shop-wide one.
+  const productReleaseAt = toDateOnly((checkoutProduct as { release_at?: unknown } | null)?.release_at);
+  const releaseLabel = formatReleaseLabel(productReleaseAt);
   const unitPrice = checkoutProduct?.price ?? 0;
   const productTitle = checkoutProduct?.title ?? "";
   const productSubtitle = checkoutProduct?.category_slug
@@ -969,7 +991,11 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
           ? effTotalNum
           : 0
         : useQuote
-          ? 0
+          // A pre-order with no reservation amount set is not free to book: the
+          // customer is charged the whole price at checkout, exactly like any
+          // other prepaid order. This said 0, so every screen promised "₹0
+          // today" and then opened the payment sheet for the full amount.
+          ? (isPrepaid ? effTotalNum : 0)
           : depositPct > 0
             ? Math.round((isPrepaid ? prepaidTotalNum : codTotalNum) * (depositPct / 100))
             : 0;
@@ -1721,7 +1747,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
               </h1>
               <p className="m-0 mt-2 text-[14px] leading-relaxed text-[#6E6E73] sm:text-[15px]">
                 {isPreorder
-                  ? `${displayTitle} — locked at ${lockedTotal}. Nothing charged until release.`
+                  ? `${displayTitle} — locked at ${lockedTotal}.`
                   : `${displayTitle} — ${lockedTotal} total, paid securely.`}
               </p>
             </div>
@@ -2298,14 +2324,14 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                         />
                         <p className="m-0 text-[12px] leading-relaxed text-[#86868B]">
                           {isPreorder
-                            ? `We authorize now and charge ${prepaidTotal} when it ships${releaseLabel ? ` on ${releaseLabel}` : ""}.`
+                            ? `Pay ${dueToday} now.${balanceDueNum > 0 ? ` Balance ${fmt(balanceDueNum)}${releaseLabel ? ` on ${releaseLabel}` : " on release"}.` : ""}`
                             : `Pay ${dueToday} now with UPI.`}
                         </p>
                       </div>
                     ) : isPrepaid ? (
                       <p className="m-0 text-[12px] leading-relaxed text-[#86868B]">
                         {isPreorder
-                          ? `We authorize now and charge ${prepaidTotal} when it ships${releaseLabel ? ` on ${releaseLabel}` : ""}.`
+                          ? `Pay ${dueToday} now.${balanceDueNum > 0 ? ` Balance ${fmt(balanceDueNum)}${releaseLabel ? ` on ${releaseLabel}` : " on release"}.` : ""}`
                           : `Pay ${dueToday} now. Your card or wallet is charged immediately.`}
                       </p>
                     ) : codAvailable ? (
@@ -2453,6 +2479,8 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
               taxMessage={policy.taxInclusiveMessage}
               taxRatePct={policy.taxRatePct}
               dueToday={dueToday}
+              balanceDue={balanceDueNum}
+              releaseAt={productReleaseAt}
             />
           </div>
         </main>
@@ -2492,6 +2520,8 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
           taxAmount={effTaxAmount}
           taxMessage={policy.taxInclusiveMessage}
           dueToday={dueToday}
+          balanceDue={balanceDueNum}
+          releaseAt={productReleaseAt}
         />
       </div>
     </div>
