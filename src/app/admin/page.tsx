@@ -155,6 +155,19 @@ export default function AdminTodayPage() {
         </AdminNotice>
       ) : null}
 
+      {/* The payments half was calculated every morning and never drawn — the
+          one banner built to catch a shop taking orders it collects nothing on,
+          missing from the screen. */}
+      {data?.simulating.payments ? (
+        <AdminNotice tone="demo">
+          <strong>Payments are in practice mode.</strong> Orders will say they are placed and no
+          money will reach you — nothing is being charged.{" "}
+          <Link href="/admin/integrations" className="underline">
+            Turn it on
+          </Link>
+        </AdminNotice>
+      ) : null}
+
       {loading ? (
         <div className="ez-mono py-10 text-center text-[10px] uppercase tracking-[0.16em] text-[#86868B]">
           Loading…
