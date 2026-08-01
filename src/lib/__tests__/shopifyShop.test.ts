@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeShopDomain } from "@/lib/shopifyShop";
+import { normalizeShopDomain, shopProblemFor } from "@/lib/shopifyShop";
 
 /** The allowlist the API validates the shop address against. */
 const API_ACCEPTS = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
@@ -80,5 +80,41 @@ describe("normalizeShopDomain", () => {
       const shop = normalizeShopDomain(value);
       if (shop !== null) expect(shop).toMatch(API_ACCEPTS);
     }
+  });
+});
+
+/**
+ * Which mistake, not just "a mistake".
+ *
+ * The box asks for a bare name, so a shopkeeper who typed one with a space in it
+ * was told he had pasted the wrong web address — a mistake he had not made — and
+ * the Connect button faded out with nothing else to go on.
+ */
+describe("naming the mistake he actually made", () => {
+  it("says nothing while the box is empty or the name is good", () => {
+    expect(shopProblemFor("")).toBeNull();
+    expect(shopProblemFor("   ")).toBeNull();
+    expect(shopProblemFor("mystore")).toBeNull();
+    expect(shopProblemFor("mystore.myshopify.com")).toBeNull();
+    expect(shopProblemFor("https://admin.shopify.com/store/mystore/products")).toBeNull();
+  });
+
+  it("calls a non-Shopify web address what it is", () => {
+    expect(shopProblemFor("mygamestore.in")).toBe("domain");
+    expect(shopProblemFor("www.mygamestore.com")).toBe("domain");
+    expect(shopProblemFor("mystore.shopify.com")).toBe("domain");
+    expect(shopProblemFor("https://mygamestore.in/shop")).toBe("domain");
+  });
+
+  /** The case that used to get the wrong sentence. */
+  it("calls a bad shop name a bad shop name", () => {
+    expect(shopProblemFor("my store")).toBe("characters");
+    expect(shopProblemFor("my_store")).toBe("characters");
+    expect(shopProblemFor("-mystore")).toBe("characters");
+  });
+
+  /** An email is an address, and reads as one — that sentence still fits. */
+  it("treats a pasted email as an address", () => {
+    expect(shopProblemFor("owner@mygamestore.in")).toBe("domain");
   });
 });

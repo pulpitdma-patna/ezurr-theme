@@ -1239,6 +1239,20 @@ export const api = {
       body: JSON.stringify({ shop }),
     }),
 
+  /**
+   * Clears the stored approval as well as switching the shop off.
+   *
+   * Not updateIntegration({enabled:false}): that left the access token in the
+   * row, so the card still resolved every required field and still offered its
+   * live switch — one press put the shop back on, with the old token and no
+   * fresh approval.
+   */
+  shopifyDisconnect: () =>
+    apiFetch<{ ok: boolean }>("/admin/integrations/shopify/oauth/disconnect", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
   // Message templates + outbound log
   messageTemplates: () =>
     apiFetch<{ data: ApiMessageTemplate[] }>("/admin/message-templates"),

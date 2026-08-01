@@ -328,9 +328,11 @@ export default function AdminIntegrationsPage() {
    * and nothing in the import ever removes one.
    */
   async function disconnectShopify() {
-    const updated = apiToCard(
-      await api.updateIntegration("shopify", { enabled: false, status: "not_connected" }),
-    );
+    // Its own endpoint, because it clears the stored approval — turning the row
+    // off left the token behind, so "disconnected" meant nothing that a single
+    // press of Live could not undo.
+    await api.shopifyDisconnect();
+    const updated = apiToCard(await api.integration("shopify"));
     setCards((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
   }
 
@@ -483,7 +485,14 @@ function IntegrationCard({
   onCheck: () => void;
 }) {
   const missing = missingFieldLabels(card);
-  const setUp = missing.length === 0;
+  // A shop connected by pressing Connect is only set up while its approval is
+  // still held. Disconnect used to leave the token in place, so this stayed
+  // true and the live/practice switch below stayed on the card — pressing Live
+  // reconnected the shop silently, with the old token and no fresh approval,
+  // while the panel beside it was offering to connect. Two screens, opposite
+  // answers, no way for him to tell which was real.
+  const oauthDisconnected = card.oauth?.supported === true && card.oauth?.connected !== true;
+  const setUp = missing.length === 0 && !oauthDisconnected;
   // Before he has approved us, the missing values are the ones the connect
   // button is about to fetch on his behalf. Naming them here would put "Admin
   // API access token" back on the card — the exact errand this removes.
