@@ -278,12 +278,6 @@ export type AdminInventoryLedgerEntry = {
   at: string;
 };
 
-export type AdminIntegrationCategory =
-  | "payments"
-  | "shipping"
-  | "messaging"
-  | "analytics"
-  | "other";
 
 export type AdminIntegrationStatus = "connected" | "not_connected" | "needs_attention";
 
@@ -336,7 +330,6 @@ export type AdminIntegrationOauth = {
 export type AdminIntegration = {
   id: string;
   name: string;
-  category: AdminIntegrationCategory;
   description: string;
   status: AdminIntegrationStatus;
   enabled: boolean;
@@ -985,82 +978,73 @@ export const adminInventoryLedger: AdminInventoryLedgerEntry[] = [
  * masked keys here is what hid the "nothing is configurable" bug — demo mode
  * looked fully wired while every real row had NULL credentials.
  */
+/**
+ * The practice shop's version of Other companies.
+ *
+ * The same seven companies the real shop has, in the same words. It used to
+ * carry a different list — cash-on-delivery, meta-pixel, zoho-books, and
+ * webhooks under the name "Your own software" — none of which exist in the real
+ * catalog. So the screen he learns on taught him a shop he does not have, and
+ * none of those ids matched the copy the page keys off, so they all fell through
+ * to generic sentences.
+ *
+ * Deliberately not all "connected": a practice shop where everything is already
+ * working teaches nothing about the thing he actually has to do.
+ */
 export const adminIntegrations: AdminIntegration[] = [
   {
-    id: "razorpay",
-    name: "Razorpay",
-    category: "payments",
-    description: "Accept UPI, cards, netbanking, and wallets at checkout.",
+    id: "whatsapp",
+    name: "WhatsApp Business",
+    description:
+      "Sends your customers their sign-in code, and tells them when an order is accepted, sent, or ready.",
     status: "connected",
     enabled: true,
     lastSync: "2026-07-18T08:42:00",
-    accountLabel: "Ezurr Play HQ · Live",
   },
   {
-    id: "cash-on-delivery",
-    name: "Cash on Delivery",
-    category: "payments",
-    description: "Let customers pay cash when the parcel reaches them.",
+    id: "razorpay",
+    name: "Razorpay",
+    description:
+      "Lets customers pay you online — UPI, cards, or net banking — before the parcel goes out.",
     status: "connected",
     enabled: true,
-    lastSync: "2026-07-18T08:31:00",
-    accountLabel: "Orders below ₹10,000",
+    lastSync: "2026-07-18T08:42:00",
+  },
+  {
+    id: "cashfree",
+    name: "Cashfree",
+    description: "Another way to take payment online. You only need one of these, not both.",
+    status: "not_connected",
+    enabled: true,
   },
   {
     id: "shiprocket",
     name: "Shiprocket",
-    category: "shipping",
-    description: "Book a pickup, print the label, and follow the parcel.",
-    status: "connected",
+    description: "Books a courier for an order and follows the parcel until it arrives.",
+    status: "not_connected",
     enabled: true,
-    lastSync: "2026-07-18T07:55:00",
-    accountLabel: "BLR-01 warehouse",
-  },
-  {
-    id: "whatsapp",
-    name: "WhatsApp Business",
-    category: "messaging",
-    description: "Message customers when an order is accepted, sent, or ready.",
-    status: "needs_attention",
-    enabled: true,
-    lastSync: "2026-07-17T18:10:00",
-    accountLabel: "Ezurr Play HQ",
   },
   {
     id: "google-analytics",
     name: "Google Analytics",
-    category: "analytics",
-    description: "See how many people visit your shop and what they end up buying.",
-    status: "connected",
+    description: "Counts who visits your website and what they buy.",
+    status: "not_connected",
+    enabled: false,
+  },
+  {
+    id: "shopify",
+    name: "Shopify",
+    description: "Brings your products and categories across from Shopify, one way.",
+    status: "not_connected",
     enabled: true,
-    lastSync: "2026-07-18T08:15:00",
-    accountLabel: "G-8EZURRPLAY",
-  },
-  {
-    id: "meta-pixel",
-    name: "Meta Pixel",
-    category: "analytics",
-    description: "Tell Facebook and Instagram ads what people bought.",
-    status: "not_connected",
-    enabled: false,
-  },
-  {
-    id: "zoho-books",
-    name: "Zoho Books",
-    category: "other",
-    description: "Send your sales and payments through to your accountant's books.",
-    status: "not_connected",
-    enabled: false,
   },
   {
     id: "webhooks",
-    name: "Your own software",
-    category: "other",
-    description: "Tell another program you run whenever an order or your stock changes.",
-    status: "connected",
+    name: "Outbound webhooks",
+    description:
+      "Sends a copy of what happens in your shop to another system. Only useful if someone is expecting it.",
+    status: "not_connected",
     enabled: true,
-    lastSync: "2026-07-18T08:40:00",
-    accountLabel: "Told about 3 kinds of change",
   },
 ];
 

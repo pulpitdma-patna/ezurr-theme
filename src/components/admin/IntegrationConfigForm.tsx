@@ -317,7 +317,7 @@ function StateChip({ field, clearing }: { field: AdminIntegrationField; clearing
   if (field.viaFallback && !field.configured) {
     return (
       <span className="inline-flex rounded bg-[#FEF3C7] px-1.5 py-0.5 text-[10px] font-semibold text-[#92400E]">
-        Came with your server
+        Already working
       </span>
     );
   }
@@ -334,22 +334,23 @@ function StateChip({ field, clearing }: { field: AdminIntegrationField; clearing
 }
 
 function secretPlaceholder(field: AdminIntegrationField) {
-  if (field.readOnly) return field.configured ? "Set somewhere else" : "Not set";
+  if (field.readOnly) return field.configured ? "Filled in elsewhere" : "Not filled in yet";
   if (!field.secret) return field.type === "url" ? "https://example.com/hooks/ezurr" : "";
   if (field.configured) return "Leave blank to keep what's saved";
-  if (field.viaFallback) return "Came with your server — paste it here to keep it with your shop";
+  if (field.viaFallback) return "Already working — paste it here to keep it with your shop";
   return "Paste the value";
 }
 
 function fieldCaption(field: AdminIntegrationField) {
   if (field.readOnly) {
-    const source = "This one is set somewhere else and can't be changed here.";
+    const source = "This one is filled in on another screen, so it cannot be changed here.";
     return field.help ? `${source} ${field.help}` : source;
   }
   if (field.viaFallback && !field.configured) {
-    // Says what it means for him — it works, but it is not his shop's copy —
-    // without naming where it came from, which he cannot reach anyway.
-    const note = "This value came with your server and works. Paste it here to keep it with your shop.";
+    // Says what it means for him — it works, but it is not his shop's copy.
+    // "Came with your server" named a thing he has never seen and cannot open,
+    // on the one screen where he is being asked to act.
+    const note = "This is already working, but it was set up before your shop was. Paste it here so it belongs to your shop.";
     return field.help ? `${note} ${field.help}` : note;
   }
   return field.help ?? undefined;

@@ -11,7 +11,6 @@ function shopify(overrides: Partial<AdminIntegration> = {}): AdminIntegration {
   return {
     id: "shopify",
     name: "Shopify",
-    category: "other",
     description: "Brings your products across.",
     status: "not_connected",
     enabled: true,
