@@ -361,12 +361,42 @@ export default function AdminCheckoutRulesPage() {
             {switchedOff.map((rule) => (
               <li
                 key={rule.id}
-                className="flex flex-col gap-2 rounded-xl border border-black/[0.05] bg-[#FAFAFB] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                className="rounded-xl border border-black/[0.05] bg-[#FAFAFB] px-3.5 py-3"
               >
                 <div className="min-w-0">
                   <RuleSentence muted slots={buildCheckoutSentence(rule)} />
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-1">
+
+                {/* What it WOULD do, before he turns it on. A switched-off rule
+                    showed no money line at all, so the only way to find out what
+                    it did was to make it live to customers and look. */}
+                <div className="mt-1.5">
+                  <WhatThisDoes
+                    compact
+                    settings={settings}
+                    allRules={rules}
+                    rule={rule}
+                    order={order}
+                  />
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center justify-end gap-1 border-t border-black/[0.05] pt-2">
+                  {/* Editing a rule that is off used to be impossible: "Change
+                      it" existed only on the live list, so correcting a rule he
+                      had deliberately switched off meant switching it back on —
+                      exposing the version he knew was wrong to real customers —
+                      then fixing it. The delete dialog even advises switching
+                      off instead of deleting, which walked him into exactly
+                      that. Ordering stays off: it means nothing for a rule that
+                      does not run. */}
+                  <RowAction
+                    onClick={() => {
+                      setDrawerError(null);
+                      setEditing(rule);
+                    }}
+                  >
+                    Change it
+                  </RowAction>
                   <button
                     type="button"
                     onClick={() => void setEnabled(rule, true)}

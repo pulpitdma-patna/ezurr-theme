@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { RuleSentence } from "@/components/admin/RuleSentence";
+import type { CheckoutRuleAction } from "@/lib/checkoutRules";
 import {
   buildCheckoutSentence,
   checkoutSentenceText,
@@ -66,6 +67,30 @@ export function blankCheckoutRule(): AdminCheckoutRule {
   };
 }
 
+/**
+ * Is this a value he typed, rather than one he picked?
+ *
+ * An action whose words carry no `options` list takes free text — the note shown
+ * at checkout, the sentence explaining why an order cannot go through. Those are
+ * the ones worth stopping for. A ₹ amount or a courier off a menu is one tap to
+ * set again, so changing the action just clears it, as before.
+ *
+ * Deliberately the blunt browser prompt: the alternative on offer was losing a
+ * paragraph silently, and nothing on the screen said it had gone.
+ */
+function confirmLosingTypedValue(action: CheckoutRuleAction | undefined): boolean {
+  const text = String(action?.value ?? "").trim();
+  if (!text) return true;
+  const words = action ? CHECKOUT_ACTION_WORDS[action.type] : undefined;
+  const typedByHand = !words?.options?.length;
+  if (!typedByHand) return true;
+  if (typeof window === "undefined") return true;
+
+  return window.confirm(
+    `This will clear what you wrote:\n\n"${text}"\n\nChange what the rule does anyway?`,
+  );
+}
+
 export function CheckoutRuleBuilder({
   rule,
   settings,
@@ -107,15 +132,25 @@ export function CheckoutRuleBuilder({
         ...prev,
         conditions: setCheckoutClause(prev.conditions, "subtotal", "less_than_or_equal", value),
       })),
-    onActionType: (index, value) =>
+    onActionType: (index, value) => {
+      // The old value belonged to the old thing — a delivery charge is not a
+      // percentage and a courier is not a note — so it goes with it. That is
+      // right for a value he picked off a menu and can pick again in one tap.
+      //
+      // It is not right for one he TYPED. Changing the action threw away the
+      // note a customer reads at checkout, or the reason an order is refused,
+      // with no warning and nothing to undo it.
+      //
+      // Asked here rather than inside setDraft: a state updater has to be pure,
+      // and React is entitled to run it twice — which would ask him twice.
+      if (!confirmLosingTypedValue(draft.actions[index])) return;
       setDraft((prev) => ({
         ...prev,
         actions: prev.actions.map((action, i) =>
-          // The old value belonged to the old thing — a delivery charge is not
-          // a percentage and a courier is not a note — so it goes with it.
           i === index ? { type: value as CheckoutActionType, value: "" } : action,
         ),
-      })),
+      }));
+    },
     onActionValue: (index, value) =>
       setDraft((prev) => ({
         ...prev,
@@ -159,7 +194,12 @@ export function CheckoutRuleBuilder({
     blankValues.length > 0 ||
     draft.actions.some((action) => {
       const words = CHECKOUT_ACTION_WORDS[action.type];
-      if (!words) return false;
+      // An action with NO type at all is the worst of the blanks, and this used
+      // to wave it straight through: no words meant "nothing to check", so Save
+      // lit up. Choosing the menu's own "choose what it does" then saved a rule
+      // reading "On every order —" whose dropdown had vanished from the drawer,
+      // so it could not be corrected without deleting the whole rule.
+      if (!words) return true;
       if (words.readOnly) return false;
       return !String(action.value ?? "").trim();
     });
