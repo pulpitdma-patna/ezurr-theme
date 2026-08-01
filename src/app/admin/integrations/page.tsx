@@ -124,7 +124,20 @@ function connectsByButton(card: Card): boolean {
 
 function missingFieldLabels(card: Card): string[] {
   const byKey = Object.fromEntries((card.fields ?? []).map((f) => [f.key, f.label]));
-  return (card.missingRequired ?? []).map((key) => byKey[key] ?? key);
+  return (card.missingRequired ?? []).map((key) => shortLabel(byKey[key] ?? key));
+}
+
+/**
+ * The field's name without the "(from your Razorpay dashboard)" tail.
+ *
+ * That tail belongs ON the field, where it tells him where to go and look. In a
+ * sentence naming two of them it reads twice — "Add Key ID (from your Razorpay
+ * dashboard) and Key Secret (from your Razorpay dashboard) first" — which is the
+ * same instruction stuttered, and pushes the two things he actually has to find
+ * to opposite ends of the line.
+ */
+function shortLabel(label: string): string {
+  return label.replace(/\s*\((?:from|in) your [^)]*\)\s*/gi, " ").trim();
 }
 
 /** "Key ID and Key Secret" — the owner's own labels, joined the way he'd say it. */
