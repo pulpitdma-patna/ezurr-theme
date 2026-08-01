@@ -48,8 +48,8 @@ import { can } from "@/lib/adminPermissions";
  * which is exactly the drift that made a failed-payment order look finished.
  */
 const nextActions: Partial<Record<AdminOrderStatus, AdminOrderStatus[]>> = {
-  payment_failed: ["cancelled"],
-  pending_payment: ["cancelled"],
+  payment_failed: ["cancelled", "paid"],
+  pending_payment: ["cancelled", "paid"],
   pending: ["confirmed", "cancelled"],
   confirmed: ["packed", "cancelled"],
   paid: ["packed", "cancelled"],
@@ -293,6 +293,19 @@ export default function AdminOrderDetailPage({
     : null;
 
   const more: OrderAction[] = [];
+  // The rescue for a customer who paid and was told they hadn't. The shop only
+  // learns a prepaid payment succeeded from the gateway calling back; if that
+  // callback can't be verified the order is failed two hours later with the
+  // money already taken, and there was no way back from either state. He
+  // usually reaches this with the customer on the phone reading out their bank
+  // message. No confirm step — it is not destructive, and he is mid-conversation.
+  if (allowed.includes("paid")) {
+    more.push({
+      key: "paid",
+      label: "The money did arrive — mark this paid",
+      onSelect: () => void persistStatus("paid"),
+    });
+  }
   if (courierLive && ["confirmed", "paid"].includes(order.status)) {
     more.push({ key: "courier", label: "Book courier pickup", onSelect: () => void bookCourier() });
   }
@@ -318,7 +331,7 @@ export default function AdminOrderDetailPage({
 
   const barNote =
     order.status === "pending_payment"
-      ? "Waiting for the money to come in. Nothing to do here yet."
+      ? "Waiting for the money to come in. If the customer says it left their account, mark it paid."
       : order.status === "payment_failed"
         ? "The payment didn't go through. Turn the order down if the customer isn't paying another way."
         : null;
