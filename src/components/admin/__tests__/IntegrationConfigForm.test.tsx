@@ -28,7 +28,6 @@ function integration(overrides: Partial<AdminIntegration> = {}): AdminIntegratio
   return {
     id: "razorpay",
     name: "Razorpay",
-    category: "payments",
     description: "Payments",
     status: "needs_attention",
     enabled: true,

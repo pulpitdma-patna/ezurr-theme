@@ -616,6 +616,12 @@ export interface ApiToday {
     monthToDate: number;
   };
   simulating: { messaging: boolean; payments: boolean };
+  /**
+   * Set only when messages have stopped going out — nothing is picking work off
+   * the queue. Null the rest of the time, so the screen has nothing to render
+   * and does not have to know the rule.
+   */
+  messagesStuck: { pending: number; since: string } | null;
 }
 
 export interface ApiGstReturn {
@@ -970,9 +976,12 @@ export const api = {
     page?: number;
     per_page?: number;
     active?: boolean;
+    /** physical | digital | preorder — how the thing reaches the customer. */
+    fulfillment_type?: string;
   }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
+    if (params?.fulfillment_type) qs.set("fulfillment_type", params.fulfillment_type);
     if (params?.brand) qs.set("brand", params.brand);
     if (params?.q) qs.set("q", params.q);
     if (params?.page) qs.set("page", String(params.page));
@@ -1236,6 +1245,20 @@ export const api = {
       body: JSON.stringify({ shop }),
     }),
 
+  /**
+   * Clears the stored approval as well as switching the shop off.
+   *
+   * Not updateIntegration({enabled:false}): that left the access token in the
+   * row, so the card still resolved every required field and still offered its
+   * live switch — one press put the shop back on, with the old token and no
+   * fresh approval.
+   */
+  shopifyDisconnect: () =>
+    apiFetch<{ ok: boolean }>("/admin/integrations/shopify/oauth/disconnect", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
   // Message templates + outbound log
   messageTemplates: () =>
     apiFetch<{ data: ApiMessageTemplate[] }>("/admin/message-templates"),
@@ -1302,9 +1325,14 @@ export type ApiIntegrationField = {
   secret: boolean;
   /** Resolved from env or another admin page; the drawer renders it disabled. */
   readOnly: boolean;
-  envVar: string | null;
   help: string | null;
   configured: boolean;
+  /**
+   * Hidden behind a disclosure: nobody who was not told to touch this one by
+   * a support agent ever needs it.
+   */
+  advanced?: boolean;
+
   /** True when DB is empty but a legacy env/config fallback would still work. */
   viaFallback?: boolean;
   value: string | null;
@@ -1333,14 +1361,13 @@ export type ApiIntegrationOauth = {
 export type ApiIntegration = {
   id: string;
   name: string;
-  category: string;
   description?: string | null;
   status: string;
   enabled: boolean;
   lastSync?: string | null;
-  accountLabel?: string | null;
   webhookUrl?: string | null;
-  config?: Record<string, unknown>;
+  /** The result of the last "Check it works", kept on the row by the API. */
+  lastCheck?: { ok: boolean; message: string; at: string } | null;
   /** 'log' = the provider client simulates every call and contacts nobody. */
   driver?: "log" | "live";
   fields?: ApiIntegrationField[];

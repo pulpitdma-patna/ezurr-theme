@@ -73,10 +73,18 @@ export function RuleSentence({
                   : "border-[#D97706] text-[#9A3412]"
               }`}
             >
-              {/* The empty option stays selectable only where "no filter" is a
-                  real answer; where it is not, it reads as the thing still
-                  missing rather than disappearing. */}
-              <option value="">{slot.emptyLabel ?? "—"}</option>
+              {/* The empty option is the thing still to fill in, so it shows
+                  while nothing is chosen — and stops being offered once
+                  something is, because going BACK to it is never a move he
+                  wants.
+
+                  The comment here used to claim it appeared "only where 'no
+                  filter' is a real answer", and the code below rendered it
+                  unconditionally. On the action menu, picking it produced a rule
+                  with no action at all: Save stayed enabled, the dropdown then
+                  vanished from the drawer, and the rule saved reading "On every
+                  order —" with no way to correct it short of deleting it. */}
+              {selected ? null : <option value="">{slot.emptyLabel ?? "—"}</option>}
               {slot.options
                 .filter((option) => option.value !== "")
                 .map((option) => (

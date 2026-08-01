@@ -45,14 +45,14 @@ import { can } from "@/lib/adminPermissions";
  * lib/apiClient.ts, which another agent owns — this local shape is what that
  * type should gain, and nothing else here depends on the difference.
  */
-type IntegrationPatch = ApiIntegrationPatch & { mode?: "log" | "live" };
+type IntegrationPatch = ApiIntegrationPatch;
 
 /**
  * The result of the last "Check it works", kept on the row by the API so a red
  * card can still say why after a reload — or on the owner's phone, having been
  * checked on the shop laptop. Read structurally for the same reason as above.
  */
-type LastCheck = { ok: boolean; simulated: boolean; message: string; at: string };
+type LastCheck = { ok: boolean; message: string; at: string };
 
 type Card = AdminIntegration & { lastCheck?: LastCheck | null };
 
@@ -91,22 +91,19 @@ const PRACTICE_SENTENCE =
   "Nothing leaves your shop. Everything is written down so you can see what would have happened.";
 
 function apiToCard(i: ApiIntegration): Card {
-  const raw = i as ApiIntegration & { lastCheck?: LastCheck | null };
   return {
     id: i.id,
     name: i.name,
-    category: i.category as AdminIntegration["category"],
     description: i.description ?? "",
     status: i.status as AdminIntegration["status"],
     enabled: i.enabled,
     lastSync: i.lastSync ?? undefined,
-    accountLabel: i.accountLabel ?? undefined,
     webhookUrl: i.webhookUrl ?? undefined,
     driver: i.driver,
-    fields: (i.fields ?? []) as AdminIntegrationField[],
+    fields: i.fields ?? [],
     missingRequired: i.missingRequired ?? [],
     oauth: i.oauth,
-    lastCheck: raw.lastCheck ?? null,
+    lastCheck: i.lastCheck ?? null,
   };
 }
 
@@ -122,9 +119,61 @@ function connectsByButton(card: Card): boolean {
   return Boolean(card.oauth?.supported && card.oauth?.available);
 }
 
+/** One line: is there anything here that needs him today? */
+function whatIsLeft(rows: Card[]): string {
+  const wrong = rows.filter((card) => cardRank(card) === 0).length;
+  const notSetUp = rows.filter((card) => cardRank(card) === 3).length;
+  const live = rows.filter((card) => cardRank(card) === 1).length;
+
+  if (wrong > 0) {
+    return `${wrong === 1 ? "One of these needs" : `${wrong} of these need`} your attention — ${wrong === 1 ? "it is" : "they are"} first below.`;
+  }
+  if (live === 0 && notSetUp > 0) {
+    return "None of these are doing anything yet. Set up the ones you use.";
+  }
+  if (notSetUp > 0) {
+    return `${live} working. ${notSetUp} you have not set up — you only need the ones you actually use.`;
+  }
+
+  return `All ${live} set up and working.`;
+}
+
+/**
+ * What comes first on the screen.
+ *
+ * In the order he cares about them: something is wrong → it is really doing
+ * something → it is ready but switched off → he has not set it up. Deliberately
+ * not alphabetical and not by category; the question this screen answers is
+ * "what needs me?", and every other order buries it.
+ */
+function cardRank(card: Card): number {
+  const missing = (card.missingRequired ?? []).length > 0;
+  const oauthDisconnected = card.oauth?.supported === true && card.oauth?.connected !== true;
+  const setUp = !missing && !oauthDisconnected;
+
+  if (setUp && (card.status === "needs_attention" || card.lastCheck?.ok === false)) return 0;
+  if (setUp && card.enabled && card.driver === "live") return 1;
+  if (setUp) return 2;
+
+  return 3;
+}
+
 function missingFieldLabels(card: Card): string[] {
   const byKey = Object.fromEntries((card.fields ?? []).map((f) => [f.key, f.label]));
-  return (card.missingRequired ?? []).map((key) => byKey[key] ?? key);
+  return (card.missingRequired ?? []).map((key) => shortLabel(byKey[key] ?? key));
+}
+
+/**
+ * The field's name without the "(from your Razorpay dashboard)" tail.
+ *
+ * That tail belongs ON the field, where it tells him where to go and look. In a
+ * sentence naming two of them it reads twice — "Add Key ID (from your Razorpay
+ * dashboard) and Key Secret (from your Razorpay dashboard) first" — which is the
+ * same instruction stuttered, and pushes the two things he actually has to find
+ * to opposite ends of the line.
+ */
+function shortLabel(label: string): string {
+  return label.replace(/\s*\((?:from|in) your [^)]*\)\s*/gi, " ").trim();
 }
 
 /** "Key ID and Key Secret" — the owner's own labels, joined the way he'd say it. */
@@ -216,7 +265,24 @@ export default function AdminIntegrationsPage() {
       : store.integrations.map((i) => ({ ...i, lastCheck: null }));
     // Outbound webhooks has no shop-owner story: it is only meaningful once
     // somebody else's system is already expecting the messages.
-    return source.filter((card) => card.id !== "webhooks" || Boolean(card.webhookUrl));
+    const visible = source.filter((card) => card.id !== "webhooks" || Boolean(card.webhookUrl));
+
+    // Cards arrived in the order the rows were created in the database, so the
+    // one thing that was broken could sit fourth, below three he has never set
+    // up. He opens this screen to find out what needs him; it should be first.
+    // He needs ONE company to take payments, and there are two here. Once one
+    // of them is doing the job the other is not a task, so it stops competing
+    // for the top of the screen — but it stays on it, because switching
+    // providers is a real thing shops do and hiding it would strand him.
+    const paymentSolved = visible.some(
+      (card) => PAYMENT_KEYS.includes(card.id) && cardRank(card) <= 1,
+    );
+    const rank = (card: Card) =>
+      paymentSolved && PAYMENT_KEYS.includes(card.id) && cardRank(card) === 3
+        ? 4
+        : cardRank(card);
+
+    return [...visible].sort((a, b) => rank(a) - rank(b));
   }, [apiOn, cards, store.integrations]);
 
   const active = rows.find((card) => card.id === activeId) ?? null;
@@ -328,9 +394,11 @@ export default function AdminIntegrationsPage() {
    * and nothing in the import ever removes one.
    */
   async function disconnectShopify() {
-    const updated = apiToCard(
-      await api.updateIntegration("shopify", { enabled: false, status: "not_connected" }),
-    );
+    // Its own endpoint, because it clears the stored approval — turning the row
+    // off left the token behind, so "disconnected" meant nothing that a single
+    // press of Live could not undo.
+    await api.shopifyDisconnect();
+    const updated = apiToCard(await api.integration("shopify"));
     setCards((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
   }
 
@@ -340,6 +408,13 @@ export default function AdminIntegrationsPage() {
         title="Other companies"
         description="Accounts you hold somewhere else. Every card has one switch, and where it sits is what that company is doing right now."
       />
+
+      {/* The page's own answer, before he reads six cards to work it out. The
+          order below already puts anything wrong at the top; this says whether
+          there is anything to look for at all. */}
+      {apiOn && rows.length > 0 ? (
+        <p className="mb-3 text-[12px] text-[#6E6E73]">{whatIsLeft(rows)}</p>
+      ) : null}
 
       {!apiOn ? (
         <AdminNotice tone="demo">
@@ -483,7 +558,14 @@ function IntegrationCard({
   onCheck: () => void;
 }) {
   const missing = missingFieldLabels(card);
-  const setUp = missing.length === 0;
+  // A shop connected by pressing Connect is only set up while its approval is
+  // still held. Disconnect used to leave the token in place, so this stayed
+  // true and the live/practice switch below stayed on the card — pressing Live
+  // reconnected the shop silently, with the old token and no fresh approval,
+  // while the panel beside it was offering to connect. Two screens, opposite
+  // answers, no way for him to tell which was real.
+  const oauthDisconnected = card.oauth?.supported === true && card.oauth?.connected !== true;
+  const setUp = missing.length === 0 && !oauthDisconnected;
   // Before he has approved us, the missing values are the ones the connect
   // button is about to fetch on his behalf. Naming them here would put "Admin
   // API access token" back on the card — the exact errand this removes.
@@ -597,7 +679,13 @@ function IntegrationCard({
           onClick={onOpen}
           className="h-8 rounded-lg border border-black/[0.1] px-3 text-[11px] font-semibold text-[#1D1D1F]"
         >
-          {setUp ? "Change what's saved" : byButton ? `Connect ${card.name}` : "Set it up"}
+          {/* One verb for one door. "Set it up", "Change what's saved" and
+              "Connect X" all opened the same drawer, so three labels described
+              one action and the difference between them carried no information
+              he could use. What changes is whether anything is saved yet.
+              Connect stays its own word only where it really is a different
+              thing — he leaves for Shopify and comes back. */}
+          {byButton ? `Connect ${card.name}` : setUp ? "Change" : "Set up"}
         </button>
         {setUp && canWrite ? (
           <button

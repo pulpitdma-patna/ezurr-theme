@@ -121,6 +121,27 @@ export default function AdminTodayPage() {
 
       {error ? <AdminNotice tone="error">{error}</AdminNotice> : null}
 
+      {/*
+        Ahead of practice mode on purpose. Practice mode is a shop that has not
+        been switched on yet; this is a shop that WAS working and has quietly
+        stopped — every order confirmation, game code and sign-in code piling up
+        unsent while the admin goes on showing them as sent. It went unnoticed
+        for a week, and the first person who would have found out is a customer
+        who never got their code.
+      */}
+      {data?.messagesStuck ? (
+        <AdminNotice tone="error">
+          <strong>Messages are not going out.</strong>{" "}
+          {data.messagesStuck.pending === 1
+            ? "1 message is"
+            : `${data.messagesStuck.pending} messages are`}{" "}
+          waiting to be sent, the oldest since{" "}
+          {timeAgo(data.messagesStuck.since) || "some time ago"}. Nothing has been lost —
+          they will all go out once your shop is sending again, but that is not
+          something you can start from here. Ask whoever set your shop up to look at it.
+        </AdminNotice>
+      ) : null}
+
       {/* Practice mode is allowed to interrupt here and nowhere else on this
           screen: a shop whose customers cannot receive a sign-in code is broken
           in a way the owner should not have to go looking for. */}

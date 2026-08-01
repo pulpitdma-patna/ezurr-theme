@@ -49,3 +49,26 @@ export function normalizeShopDomain(input: string): string | null {
 
   return HANDLE.test(value) ? `${value}.myshopify.com` : null;
 }
+
+/**
+ * Which mistake he made, so the screen can say that one.
+ *
+ * The box asks for a bare name, so the single message about ".myshopify.com"
+ * described the wrong error for anyone who typed a name with a space or an
+ * underscore in it — he was told he had pasted a web address he never pasted,
+ * and the button faded out with nothing else to go on.
+ *
+ * - "domain"     — he gave a whole web address, and it is not a Shopify one
+ * - "characters" — he gave a name, but not one Shopify allows
+ * - null         — nothing typed yet, or it resolved fine
+ */
+export type ShopProblem = "domain" | "characters" | null;
+
+export function shopProblemFor(input: string): ShopProblem {
+  const typed = (input ?? "").trim();
+  if (typed === "" || normalizeShopDomain(typed) !== null) return null;
+
+  const looksLikeAddress = /[.]/.test(typed) || /:\/\//.test(typed) || typed.includes("/");
+
+  return looksLikeAddress ? "domain" : "characters";
+}

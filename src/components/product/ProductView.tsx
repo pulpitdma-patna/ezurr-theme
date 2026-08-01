@@ -76,11 +76,14 @@ export function ProductView({
   productKey: string;
   initialProduct: ResolvedProduct | null;
 }) {
-  const settings = useLiveThemeSettings();
   // Tax copy must follow the store's actual setting, never a hardcoded claim.
   const { settings: storeSettings } = useApiSettings();
   const taxInclusive = storeSettings.taxInclusive;
-  const releaseLabel = formatReleaseLabel(settings.releaseDate);
+  // THIS product's date, not the shop's. Every pre-order page printed one
+  // shop-wide date, so seven games with seven different release days all told
+  // the customer the same one — and a deposit was taken against a promise the
+  // shop had never made for that title.
+  const releaseLabel = formatReleaseLabel(initialProduct?.releaseAt);
   const [added, setAdded] = useState(false);
   const cart = useCart();
   const resolved = initialProduct;
@@ -196,7 +199,9 @@ export function ProductView({
       ? "Sold out"
       : "In stock";
   const statusDetail = isPreorder
-    ? `Releases ${releaseLabel}`
+    ? // Better than a borrowed date: he can chase the shop for a date, he
+      // cannot un-believe a wrong one.
+      (releaseLabel ? `Releases ${releaseLabel}` : "Release date not confirmed yet")
     : isOutOfStock
       ? "Get notified"
       : isDigital

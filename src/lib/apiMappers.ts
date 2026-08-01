@@ -220,6 +220,7 @@ export function mapApiProductToAdminRow(p: ApiProduct, index = 0): AdminCatalogR
     taxInclusive: p.tax_inclusive ?? true,
     stock: p.stock,
     digital: p.fulfillment_type === "digital",
+    fulfillmentType: p.fulfillment_type,
     status,
     image: p.image_url || DEFAULT_IMG,
     // The API sends `release_at` (a date cast, so it arrives with a time part)
@@ -230,7 +231,7 @@ export function mapApiProductToAdminRow(p: ApiProduct, index = 0): AdminCatalogR
 }
 
 /** "2026-11-19T00:00:00.000000Z" → "2026-11-19"; anything else → undefined. */
-function toDateOnly(raw: unknown): string | undefined {
+export function toDateOnly(raw: unknown): string | undefined {
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
   return trimmed.length >= 10 ? trimmed.slice(0, 10) : undefined;

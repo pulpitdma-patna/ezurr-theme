@@ -5,7 +5,7 @@ import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import type { AdminIntegration } from "@/data/admin";
 import { formatAdminDateTime } from "@/lib/adminFormat";
 import { ApiError } from "@/lib/apiClient";
-import { normalizeShopDomain } from "@/lib/shopifyShop";
+import { normalizeShopDomain, shopProblemFor } from "@/lib/shopifyShop";
 
 /**
  * Shopify, for an owner who has never opened a developer setting.
@@ -76,6 +76,7 @@ function ConnectForm({
   const [leaving, setLeaving] = useState(false);
 
   const shop = normalizeShopDomain(typed);
+  const shopProblem = shopProblemFor(typed);
 
   async function start(event: React.FormEvent) {
     event.preventDefault();
@@ -132,13 +133,33 @@ function ConnectForm({
           box whose name is read out as its own changing hint is unusable to
           anyone listening to this screen rather than looking at it.
         */}
-        <p id="shopify-shop-hint" className="text-[11px] leading-relaxed text-[#86868B]">
+        {/*
+          One sentence for each mistake he can actually make, not one for all of
+          them. The box asks for a bare name ("mystore"), so a shopkeeper who
+          types one with a space in it was told he had pasted the wrong domain —
+          a mistake he had not made — and the button just faded out with nothing
+          else to go on. And the rule it silently enforces (letters, numbers and
+          hyphens) was written down nowhere.
+
+          Styled and announced as a problem too: it used to be the same grey as
+          the idle hint, with no role, so it read as advice rather than a reason
+          the button had stopped working.
+        */}
+        <p
+          id="shopify-shop-hint"
+          role={shopProblem ? "alert" : undefined}
+          className={`text-[11px] leading-relaxed ${
+            shopProblem ? "font-medium text-[#B42318]" : "text-[#86868B]"
+          }`}
+        >
           {shop ? (
             <>
               We will open <span className="font-semibold text-[#1D1D1F]">{shop}</span>
             </>
-          ) : typed.trim() ? (
-            "That is not a Shopify shop address. It is the one ending in .myshopify.com, not your own website address."
+          ) : shopProblem === "domain" ? (
+            "That is a web address, but not a Shopify one. Shopify's ends in .myshopify.com — it is in the address bar of your Shopify tab, and it is not your own website address."
+          ) : shopProblem === "characters" ? (
+            "A Shopify shop name is only letters, numbers and hyphens — no spaces, and it cannot start with a hyphen. Check the address bar of your Shopify tab."
           ) : (
             "Just the name is enough. You can also paste the whole address from the Shopify tab you have open."
           )}
@@ -232,7 +253,7 @@ function ConnectedPanel({
             {working ? "Disconnecting…" : "Disconnect Shopify"}
           </button>
           <p className="text-[11px] leading-relaxed text-[#86868B]">
-            Your approval stays saved, so connecting again is one press.
+            Connecting again means approving on Shopify once more.
           </p>
         </div>
       )}
@@ -283,7 +304,7 @@ export function startFailureMessage(error: unknown): string {
     return "Shopify did not recognise that shop. Check the address in your Shopify tab — it ends in .myshopify.com — and try again.";
   }
   if (status === 409) {
-    return "This shop is not set up to connect to Shopify by button. Ask whoever set up your shop to finish that off.";
+    return "Connecting to Shopify by button has not been switched on for your shop. This is not something you can do from here — whoever set your shop up needs to finish it off.";
   }
   if (status === 401 || status === 403) {
     return "You are not allowed to change this. Ask the shop owner to connect Shopify.";
@@ -329,7 +350,7 @@ export function shopifyFailureMessage(reason: string | null): string {
     exchange_failed:
       "Shopify approved you, but the last step did not come through. Wait a minute and press Connect again.",
     not_available:
-      "This shop is not set up to connect to Shopify by button yet. Ask whoever set up your shop to switch it on — or add your Shopify details by hand below.",
+      "Connecting to Shopify by button has not been switched on for your shop. This is not something you can do from here — ask whoever set your shop up to finish it off. Until then, open the Shopify card and fill it in by hand.",
     error:
       "Your shop hit a problem finishing this. Nothing has changed — press Connect to try again.",
   };

@@ -1,4 +1,5 @@
 import { formatInr } from "@/data/admin";
+import { toDateOnly } from "@/lib/apiMappers";
 import { payableMrp, payablePrice, type ApiProduct } from "@/lib/apiClient";
 import type { CatalogProduct, ProductBadge } from "@/lib/types";
 
@@ -32,6 +33,18 @@ export type ResolvedProduct = {
    */
   categoryHref?: string;
   fulfillmentType?: string;
+  /**
+   * When THIS product is due, as YYYY-MM-DD.
+   *
+   * Carried per product because that is what it is. The storefront printed one
+   * shop-wide date on every pre-order — so seven games with seven different
+   * release dates all told the customer the same day, and taking a deposit
+   * against a date the shop had not promised.
+   *
+   * Undefined means the shop has not committed to a date, which the screen says
+   * rather than borrowing another product's.
+   */
+  releaseAt?: string;
   source: "api" | "static";
 };
 
@@ -58,6 +71,8 @@ export function fromApi(product: ApiProduct): ResolvedProduct {
     categorySlug: product.category_slug ?? undefined,
     categoryHref: product.category_href ?? undefined,
     fulfillmentType: product.fulfillment_type,
+    // `release_at` is a date cast, so it arrives with a time part on it.
+    releaseAt: toDateOnly((product as { release_at?: unknown }).release_at),
     source: "api",
   };
 }

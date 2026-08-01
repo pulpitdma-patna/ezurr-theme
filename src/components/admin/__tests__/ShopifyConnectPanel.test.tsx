@@ -11,7 +11,6 @@ function shopify(overrides: Partial<AdminIntegration> = {}): AdminIntegration {
   return {
     id: "shopify",
     name: "Shopify",
-    category: "other",
     description: "Brings your products across.",
     status: "not_connected",
     enabled: true,
@@ -40,14 +39,25 @@ describe("ShopifyConnectPanel — before he has connected", () => {
       target: { value: "mystore.example.com" },
     });
     expect(button).toBeDisabled();
-    expect(
-      screen.getByText(/not a Shopify shop address/i),
-    ).toBeInTheDocument();
+    // A web address that is not Shopify's gets the address sentence…
+    expect(screen.getByRole("alert")).toHaveTextContent(/not a Shopify one/i);
+
+    // …and a bad shop NAME gets a different one. It used to get the address
+    // sentence too, so a shopkeeper who typed "my store" — following the box's
+    // own instruction to give just the name — was told he had pasted a web
+    // address he never pasted.
+    fireEvent.change(screen.getByLabelText("Your Shopify shop"), {
+      target: { value: "my store" },
+    });
+    expect(button).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/letters, numbers and hyphens/i);
 
     fireEvent.change(screen.getByLabelText("Your Shopify shop"), {
       target: { value: "mystore" },
     });
     expect(button).toBeEnabled();
+    // Once it resolves it is not a problem any more, so it stops being an alert.
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("shows him the address it will actually use", () => {
@@ -107,7 +117,9 @@ describe("ShopifyConnectPanel — before he has connected", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect to Shopify" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(/Ask whoever set up your shop/i);
+    // Says plainly that it is not his job, without naming a server setting he
+    // could neither reach nor pass on.
+    expect(alert).toHaveTextContent(/not something you can do from here/i);
     expect(alert).not.toHaveTextContent("Request failed");
     expect(navigate).not.toHaveBeenCalled();
     // Still usable afterwards — a failed try must not strand him.
@@ -198,7 +210,7 @@ describe("shopifyFailureMessage", () => {
   it("turns the server's one-word reason into something he can act on", () => {
     expect(shopifyFailureMessage("declined")).toMatch(/stopped before approving/i);
     expect(shopifyFailureMessage("bad_signature")).toMatch(/did not check out/i);
-    expect(shopifyFailureMessage("not_available")).toMatch(/not set up to connect/i);
+    expect(shopifyFailureMessage("not_available")).toMatch(/not something you can do from here/i);
     expect(shopifyFailureMessage("shop_mismatch")).toMatch(/different Shopify shop/i);
   });
 

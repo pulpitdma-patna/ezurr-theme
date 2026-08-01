@@ -1238,6 +1238,20 @@ export const OFFERED_ACTIONS: CheckoutActionType[] = [
   "block_checkout",
 ];
 
+/**
+ * The label IS the word in the sentence, so it cannot say more than the word.
+ *
+ * The dropdown is ambiguous while it is open — "take", "ask for" and "charge"
+ * mean nothing until the value that follows them arrives — and the obvious fix,
+ * labelling each option with the whole phrase, silently breaks the sentence:
+ * sentenceToText reads the SELECTED option's label, and the action-type slot
+ * exists only in the editable sentence, so "take … off for paying online" would
+ * render followed by the value and the trailing words all over again.
+ *
+ * A menu whose open list says more than its closed state needs a real listbox,
+ * not a <select>. Left as it is deliberately, and pinned by the test below, so
+ * the next person to notice the ambiguity does not fix it this way.
+ */
 export function actionChoices(current: CheckoutActionType): Choice[] {
   const offered = OFFERED_ACTIONS.map((value) => ({
     value,
