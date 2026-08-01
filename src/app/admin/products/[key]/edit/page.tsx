@@ -43,7 +43,9 @@ export default function AdminEditProductPage({
     if (!apiOn) return;
     setLoading(true);
     try {
-      const p = await api.product(key);
+      // The admin read, not the public one: the public route hides `cost`, so
+      // this form loaded with an empty box and saved null over what he typed.
+      const p = await api.adminProduct(key);
       setProduct(p);
       setForm(apiProductToForm(p));
       setLoadError(null);
@@ -79,6 +81,7 @@ export default function AdminEditProductPage({
         brand: form.brand,
         price: form.price,
         strike: form.strike,
+        cost: form.cost,
         taxInclusive: form.taxInclusive,
         stock: Number(form.stock) || 0,
         onWebsite,

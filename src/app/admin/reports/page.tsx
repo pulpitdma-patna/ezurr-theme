@@ -288,7 +288,7 @@ export default function AdminMoneyPage() {
 
       {ready ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             <StatCard
               label="Sales"
               value={formatInr(totals.revenue)}
@@ -307,6 +307,35 @@ export default function AdminMoneyPage() {
               value={formatInr(totals.average)}
               detail="What one order is worth on average."
             />
+            {/* Read through a local rather than relying on the `ready` above:
+                ready is true on an unconnected shop while `live` is still null,
+                and reaching into it there would take the whole screen down. */}
+            {(() => {
+              const money = apiOn ? live?.summary : undefined;
+              // Read defensively: a server that predates this field must leave
+              // the card saying "—", not take the whole Money screen down.
+              const costed = Number(money?.costed_revenue ?? 0);
+              if (!money || !Number.isFinite(costed) || costed === 0) {
+                return (
+                  <StatCard
+                    label="Rough profit"
+                    value="—"
+                    detail="Not worked out yet. Type what you paid on a product and its profit shows up here."
+                  />
+                );
+              }
+              return (
+                <StatCard
+                  label="Rough profit"
+                  value={formatInr(Number(money.profit ?? 0))}
+                  detail={
+                    Number(money.uncosted_revenue ?? 0) > 0
+                      ? `On ${formatInr(costed)} of sales. ${formatInr(Number(money.uncosted_revenue))} is not counted — ${money.uncosted_products} ${money.uncosted_products === 1 ? "product has" : "products have"} no cost saved.`
+                      : `On all ${formatInr(costed)} of sales, before your own costs like rent.`
+                  }
+                />
+              );
+            })()}
           </div>
           {/* Said out loud because a cash-on-delivery order counts the moment he
               accepts it: the figure above is what he has sold, which on a COD

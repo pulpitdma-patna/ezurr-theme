@@ -45,6 +45,8 @@ export type ProductFormValues = {
   price: string;
   /** MRP — the struck-through figure. */
   strike: string;
+  /** What he paid his supplier, per item. "" means he has not said — never 0. */
+  cost: string;
   /** Does the entered price already contain GST? Defaults to true. */
   taxInclusive: boolean;
   stock: string;
@@ -69,6 +71,7 @@ export const emptyProductForm: ProductFormValues = {
   description: "",
   price: "",
   strike: "",
+  cost: "",
   taxInclusive: true,
   // Deliberately empty. It used to default to "10", so every product created in
   // a hurry claimed ten units on the shelf — and the shop sold stock it did not
@@ -277,7 +280,7 @@ export function ProductForm({
         />
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Price" error={errors.price}>
           {/* type="number" min=0: these were plain text inputs, and the digit
               filter at submit STRIPPED a minus sign — so "-500" saved silently
@@ -304,6 +307,22 @@ export function ProductForm({
             onChange={(e) => handleUpdate("strike", e.target.value)}
             className={inputClass}
             placeholder="5999"
+          />
+        </Field>
+        <Field
+          label="What you paid"
+          error={errors.cost}
+          hint="Per item. Only you ever see this — it never appears on your website. Leave it blank if you do not know."
+        >
+          <input
+            type="number"
+            min={0}
+            step="1"
+            inputMode="numeric"
+            value={form.cost}
+            onChange={(e) => handleUpdate("cost", e.target.value)}
+            className={inputClass}
+            placeholder="3200"
           />
         </Field>
       </div>

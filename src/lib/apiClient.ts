@@ -508,6 +508,17 @@ export interface ApiReportSummary {
   aov: number;
   prev_revenue: number;
   revenue_delta_pct: number | null;
+  /** Sales this shop knows the cost of, and what is left after paying for them. */
+  costed_revenue: number;
+  cost_of_goods: number;
+  profit: number;
+  /**
+   * Sales it could NOT account for, because no purchase price was recorded.
+   * Reported beside the profit so the figure is never mistaken for the whole
+   * month — a missing cost must never read as pure margin.
+   */
+  uncosted_revenue: number;
+  uncosted_products: number;
 }
 
 export interface ApiReportSeriesPoint {
@@ -708,6 +719,13 @@ export const api = {
     return apiFetch<ApiPaginated<ApiProduct>>(`/products${suffix}`);
   },
   product: (keyOrSlug: string) => apiFetch<ApiProduct>(`/products/${keyOrSlug}`),
+  /**
+   * The admin's read of one product. The public one hides `cost`, so an edit
+   * form loaded from it showed an empty box and saved null over a figure he had
+   * already typed.
+   */
+  adminProduct: (keyOrSlug: string) =>
+    apiFetch<ApiProduct>(`/admin/products/${encodeURIComponent(keyOrSlug)}`),
   checkoutPolicy: (ctx: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/checkout/policy", {
       method: "POST",
@@ -1435,6 +1453,11 @@ export type ApiProduct = {
   /** As the merchant entered it — may be net of GST. Not for display. */
   price: number;
   mrp?: number | null;
+  /**
+   * What he paid, per item. Admin payloads only — hidden from the storefront.
+   * null means not recorded, which is not the same as 0.
+   */
+  cost?: number | null;
   /** null = inherit the store default. */
   tax_inclusive?: boolean | null;
   /**
