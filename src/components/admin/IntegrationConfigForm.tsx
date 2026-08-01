@@ -13,10 +13,8 @@ export type IntegrationConfigSubmit = {
  * him to. `advanced` is missing from `AdminIntegrationField` in data/admin.ts,
  * which another agent owns; read structurally until it lands there.
  */
-type MaybeAdvanced = AdminIntegrationField & { advanced?: boolean };
-
 function isAdvanced(field: AdminIntegrationField): boolean {
-  return Boolean((field as MaybeAdvanced).advanced);
+  return Boolean(field.advanced);
 }
 
 /**

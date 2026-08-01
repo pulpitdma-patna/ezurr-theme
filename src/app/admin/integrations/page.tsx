@@ -45,7 +45,7 @@ import { can } from "@/lib/adminPermissions";
  * lib/apiClient.ts, which another agent owns — this local shape is what that
  * type should gain, and nothing else here depends on the difference.
  */
-type IntegrationPatch = ApiIntegrationPatch & { mode?: "log" | "live" };
+type IntegrationPatch = ApiIntegrationPatch;
 
 /**
  * The result of the last "Check it works", kept on the row by the API so a red
@@ -91,7 +91,6 @@ const PRACTICE_SENTENCE =
   "Nothing leaves your shop. Everything is written down so you can see what would have happened.";
 
 function apiToCard(i: ApiIntegration): Card {
-  const raw = i as ApiIntegration & { lastCheck?: LastCheck | null };
   return {
     id: i.id,
     name: i.name,
@@ -101,10 +100,10 @@ function apiToCard(i: ApiIntegration): Card {
     lastSync: i.lastSync ?? undefined,
     webhookUrl: i.webhookUrl ?? undefined,
     driver: i.driver,
-    fields: (i.fields ?? []) as AdminIntegrationField[],
+    fields: i.fields ?? [],
     missingRequired: i.missingRequired ?? [],
     oauth: i.oauth,
-    lastCheck: raw.lastCheck ?? null,
+    lastCheck: i.lastCheck ?? null,
   };
 }
 

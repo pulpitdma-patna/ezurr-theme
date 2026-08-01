@@ -301,10 +301,15 @@ export type AdminIntegrationField = {
   secret: boolean;
   /** Resolved from env or another admin page — editing it here would be a no-op. */
   readOnly: boolean;
-  envVar: string | null;
   help: string | null;
   /** Present in the Integration DB / Settings — not env. */
   configured: boolean;
+  /**
+   * Hidden behind a disclosure: nobody who was not told to touch this one by
+   * a support agent ever needs it.
+   */
+  advanced?: boolean;
+
   /** Runtime would still work from a legacy env fallback. */
   viaFallback?: boolean;
   /** Present for non-secret fields only. */

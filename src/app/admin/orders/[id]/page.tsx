@@ -178,7 +178,11 @@ export default function AdminOrderDetailPage({
     void api
       .integrations()
       .then((res) => {
-        const courier = (res.data ?? []).find((i) => i.category === "shipping" && i.enabled);
+        // By id, not by category. The category field existed for tabs that were
+        // removed long ago and is no longer sent at all; there is exactly one
+        // courier company, so naming it is both simpler and more exact than
+        // asking which bucket it was filed under.
+        const courier = (res.data ?? []).find((i) => i.id === "shiprocket" && i.enabled);
         if (!cancelled) setCourierLive(courier?.driver === "live");
       })
       .catch(() => {

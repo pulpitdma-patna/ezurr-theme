@@ -1319,9 +1319,14 @@ export type ApiIntegrationField = {
   secret: boolean;
   /** Resolved from env or another admin page; the drawer renders it disabled. */
   readOnly: boolean;
-  envVar: string | null;
   help: string | null;
   configured: boolean;
+  /**
+   * Hidden behind a disclosure: nobody who was not told to touch this one by
+   * a support agent ever needs it.
+   */
+  advanced?: boolean;
+
   /** True when DB is empty but a legacy env/config fallback would still work. */
   viaFallback?: boolean;
   value: string | null;
@@ -1350,14 +1355,13 @@ export type ApiIntegrationOauth = {
 export type ApiIntegration = {
   id: string;
   name: string;
-  category: string;
   description?: string | null;
   status: string;
   enabled: boolean;
   lastSync?: string | null;
-  accountLabel?: string | null;
   webhookUrl?: string | null;
-  config?: Record<string, unknown>;
+  /** The result of the last "Check it works", kept on the row by the API. */
+  lastCheck?: { ok: boolean; message: string; at: string } | null;
   /** 'log' = the provider client simulates every call and contacts nobody. */
   driver?: "log" | "live";
   fields?: ApiIntegrationField[];
