@@ -230,6 +230,16 @@ export type AdminCatalogRow = {
   stock: number;
   status: AdminProductStatus;
   digital: boolean;
+  /**
+   * How this reaches the customer: physical | digital | preorder.
+   *
+   * Carried from the server rather than worked out here. The screen used to
+   * decide "is this a pre-order?" by comparing releaseDate to today, so a
+   * pre-order whose release had come and gone quietly stopped being one on this
+   * screen while it still was one everywhere else — including in the money the
+   * owner is holding against it.
+   */
+  fulfillmentType?: string;
   edition: string;
   /** ISO date (YYYY-MM-DD) for preorder release */
   releaseDate?: string;

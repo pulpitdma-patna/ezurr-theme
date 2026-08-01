@@ -970,9 +970,12 @@ export const api = {
     page?: number;
     per_page?: number;
     active?: boolean;
+    /** physical | digital | preorder — how the thing reaches the customer. */
+    fulfillment_type?: string;
   }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
+    if (params?.fulfillment_type) qs.set("fulfillment_type", params.fulfillment_type);
     if (params?.brand) qs.set("brand", params.brand);
     if (params?.q) qs.set("q", params.q);
     if (params?.page) qs.set("page", String(params.page));

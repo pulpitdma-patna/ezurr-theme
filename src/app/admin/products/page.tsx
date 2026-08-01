@@ -65,6 +65,26 @@ function isStockFilter(value: unknown): value is StockFilter {
 }
 
 /**
+ * How the thing reaches the customer — and the only route to his pre-orders.
+ *
+ * Named for what each one means to him rather than for the column's values: a
+ * pre-order is money he is already holding for something that has not arrived,
+ * and a game code is sent rather than posted.
+ */
+type KindFilter = "all" | "physical" | "digital" | "preorder";
+
+const KIND_FILTER_OPTIONS: { value: KindFilter; label: string }[] = [
+  { value: "all", label: "Anything" },
+  { value: "preorder", label: "Pre-orders" },
+  { value: "digital", label: "Game codes" },
+  { value: "physical", label: "Posted to the customer" },
+];
+
+function isKindFilter(value: unknown): value is KindFilter {
+  return value === "all" || value === "physical" || value === "digital" || value === "preorder";
+}
+
+/**
  * Low/out use the store's configured threshold (the retired Inventory page's
  * behaviour) rather than a fixed 5. `stock` here is the *true* count — for a
  * code-delivered product that is the number of unsold codes, not the ignored
@@ -100,6 +120,20 @@ export default function AdminProductsPage() {
     setStockLocal(null);
   }
   const stockFilter: StockFilter = stockLocal ?? (isStockFilter(urlStock) ? urlStock : "all");
+
+  // `?fulfillment_type=` seeds this the same way, and is what /admin/preorders
+  // now redirects with. It used to send `?fulfilment=preorder` — the theme's
+  // internal spelling, one `l`, for a parameter this screen never read in
+  // either spelling — so every route to his pre-orders landed on the whole
+  // catalogue with no filter and nothing explaining why.
+  const urlKind = searchParams.get("fulfillment_type");
+  const [kindLocal, setKindLocal] = useState<KindFilter | null>(null);
+  const [seenKindParam, setSeenKindParam] = useState(urlKind);
+  if (urlKind !== seenKindParam) {
+    setSeenKindParam(urlKind);
+    setKindLocal(null);
+  }
+  const kindFilter: KindFilter = kindLocal ?? (isKindFilter(urlKind) ? urlKind : "all");
 
   const [page, setPage] = usePagedList(
     `${category}|${brand}|${consoleFilter}|${stockFilter}|${query}|${sortKey}|${sortDir}|${pageSize}`,
@@ -262,6 +296,7 @@ export default function AdminProductsPage() {
       if (brandFilter !== "all" && row.brand !== brandFilter) return false;
       if (consoleFilter !== "all" && row.platform !== consoleFilter) return false;
       if (!matchesStockFilter(trueStock(row), stockFilter, lowThreshold)) return false;
+      if (kindFilter !== "all" && (row.fulfillmentType ?? "physical") !== kindFilter) return false;
       if (!q) return true;
       return (
         row.name.toLowerCase().includes(q) ||
@@ -532,8 +567,11 @@ export default function AdminProductsPage() {
       header: "Product",
       sortable: true,
       render: (row) => {
-        const today = new Date().toISOString().slice(0, 10);
-        const preorder = !!row.releaseDate && row.releaseDate > today;
+        // The column, not the calendar. Comparing releaseDate to today meant a
+        // pre-order whose release had passed stopped showing as one — the exact
+        // moment the owner most needs to see it, because those are the ones he
+        // owes people.
+        const preorder = row.fulfillmentType === "preorder";
         return (
           <div className="flex items-center gap-3">
             <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#F5F5F7] ring-1 ring-black/[0.04]">
@@ -721,6 +759,12 @@ export default function AdminProductsPage() {
               value={stockFilter}
               onChange={(value) => setStockLocal(value as StockFilter)}
               options={STOCK_FILTER_OPTIONS}
+            />
+            <AdminSelect
+              label="Kind"
+              value={kindFilter}
+              onChange={(value) => setKindLocal(value as KindFilter)}
+              options={KIND_FILTER_OPTIONS}
             />
             <div className="hidden h-6 w-px bg-black/[0.08] sm:block" aria-hidden />
             <button
