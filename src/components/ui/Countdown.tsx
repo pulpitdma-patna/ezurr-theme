@@ -31,15 +31,22 @@ function subscribeToClock(listener: () => void) {
   };
 }
 
-function useCountdown() {
+/**
+ * Counts to a date a caller supplies, falling back to the shop-wide one.
+ *
+ * Release dates became a per-product thing, but every clock here still read the
+ * shop setting — so a title releasing in November sat under a clock counting to
+ * whatever date was typed once into Settings. The page said one date and the
+ * clock said another, side by side.
+ */
+function useCountdown(releaseAt?: string | null) {
   const now = useSyncExternalStore(subscribeToClock, () => clockNow, () => 0);
   const settings = useLiveThemeSettings();
   if (!now) return PLACEHOLDER;
 
+  const source = releaseAt || settings.releaseDate;
   const release =
-    settings.releaseDate?.length === 10
-      ? `${settings.releaseDate}T00:00:00`
-      : settings.releaseDate || theme.releaseDate;
+    source?.length === 10 ? `${source}T00:00:00` : source || theme.releaseDate;
   const target = new Date(release).getTime();
   let s = Math.max(0, Math.floor((target - now) / 1000));
   const dd = Math.floor(s / 86400);
@@ -85,8 +92,14 @@ function CountdownBox({
   );
 }
 
-export function CountdownBoxes({ size = "default" }: { size?: "default" | "large" }) {
-  const { dd, hh, mm, ss } = useCountdown();
+export function CountdownBoxes({
+  size = "default",
+  releaseAt,
+}: {
+  size?: "default" | "large";
+  releaseAt?: string | null;
+}) {
+  const { dd, hh, mm, ss } = useCountdown(releaseAt);
 
   return (
     <div className="ez-countdown-row">
@@ -98,8 +111,8 @@ export function CountdownBoxes({ size = "default" }: { size?: "default" | "large
   );
 }
 
-export function CountdownInline() {
-  const { dd, hh, mm, ss } = useCountdown();
+export function CountdownInline({ releaseAt }: { releaseAt?: string | null } = {}) {
+  const { dd, hh, mm, ss } = useCountdown(releaseAt);
   return (
     <span className="text-sm font-bold sm:text-[15px]">
       {dd}d {hh}h {mm}m{" "}
@@ -142,12 +155,14 @@ function SummaryUnit({
 /** Premium segmented countdown for dark checkout summary */
 export function CountdownSummaryPanel({
   variant = "panel",
+  releaseAt,
 }: {
   variant?: "panel" | "rail";
+  releaseAt?: string | null;
 } = {}) {
-  const { dd, hh, mm, ss } = useCountdown();
+  const { dd, hh, mm, ss } = useCountdown(releaseAt);
   const settings = useLiveThemeSettings();
-  const releaseLabel = formatReleaseLabel(settings.releaseDate);
+  const releaseLabel = formatReleaseLabel(releaseAt ?? settings.releaseDate);
 
   if (variant === "rail") {
     return (

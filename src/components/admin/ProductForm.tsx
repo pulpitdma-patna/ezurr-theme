@@ -425,9 +425,12 @@ export function ProductForm({
                   />
                 </label>
                 <p className="mt-1.5 text-[11px] leading-snug text-[#86868B]">
-                  Flat amount you collect up front to hold one unit.{" "}
-                  <strong>0 means free to book.</strong> The rest is charged when the
-                  title releases.
+                  {/* "0 means free to book" was the belief the storefront copy
+                      was built on, and it was wrong: at 0 the customer is
+                      charged the whole price at checkout. */}
+                  Flat amount you collect up front to hold one unit. The rest is due
+                  when the title releases. Leave it 0 and the customer pays the full
+                  price at checkout.
                 </p>
               </div>
             ) : null}

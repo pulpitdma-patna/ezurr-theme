@@ -45,6 +45,13 @@ export type ResolvedProduct = {
    * rather than borrowing another product's.
    */
   releaseAt?: string;
+  /**
+   * Flat rupees taken up front to hold one unit. Undefined means the customer
+   * pays the full price at checkout — which is what every pre-order does when
+   * nobody has set a reservation, and what the screens used to deny by promising
+   * "₹0 today".
+   */
+  reservationAmount?: number;
   source: "api" | "static";
 };
 
@@ -73,6 +80,8 @@ export function fromApi(product: ApiProduct): ResolvedProduct {
     fulfillmentType: product.fulfillment_type,
     // `release_at` is a date cast, so it arrives with a time part on it.
     releaseAt: toDateOnly((product as { release_at?: unknown }).release_at),
+    reservationAmount:
+      Number((product as { reservation_amount?: unknown }).reservation_amount ?? 0) || undefined,
     source: "api",
   };
 }
