@@ -8,6 +8,7 @@ import { CheckoutHeader } from "@/components/layout/Header";
 import { CountdownBoxes, CountdownSummaryPanel } from "@/components/ui/Countdown";
 import { formatInr } from "@/data/admin";
 import { formatReleaseLabel, useLiveThemeSettings } from "@/hooks/useLiveThemeSettings";
+import { toDateOnly } from "@/lib/apiMappers";
 import { useAdminStore } from "@/hooks/useAdminStore";
 import { createDemoCheckoutOrder } from "@/lib/adminStore";
 import { api, isApiEnabled, type ApiProduct } from "@/lib/apiClient";
@@ -303,7 +304,7 @@ function OrderSummaryRail({
   prepaidDiscount: number;
   couponCode: string | null;
   lockedTotal: string;
-  releaseLabel: string;
+  releaseLabel: string | null;
   shippingLabel: string;
   taxAmount: number;
   taxMessage: string | null;
@@ -324,7 +325,7 @@ function OrderSummaryRail({
             <span className="pb-1 text-right text-[12px] leading-snug text-[#A1A1A6]">
               {isPreorder
                 ? isPrepaid
-                  ? `Authorize now · ${lockedTotal} on ${releaseLabel}`
+                  ? `Authorize now · ${lockedTotal}${releaseLabel ? ` on ${releaseLabel}` : " when it is released"}`
                   : `Pay ${lockedTotal} on delivery`
                 : isPrepaid
                   ? "Paid securely online"
@@ -515,7 +516,7 @@ function MobileSummarySheet({
   prepaidDiscount: number;
   couponCode: string | null;
   lockedTotal: string;
-  releaseLabel: string;
+  releaseLabel: string | null;
   shippingLabel: string;
   taxAmount: number;
   taxMessage: string | null;
@@ -624,7 +625,7 @@ function MobileSummarySheet({
         {isPreorder ? (
           <>
             <p className="mb-4 m-0 text-[12px] leading-relaxed text-[#A1A1A6]">
-              Releases {releaseLabel}. Nothing charged until then.
+              {releaseLabel ? `Releases ${releaseLabel}.` : "Release date not confirmed yet."} Nothing charged until then.
             </p>
             <CountdownSummaryPanel variant="rail" />
           </>
@@ -698,7 +699,12 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
 
   const liveTheme = useLiveThemeSettings();
   const { checkoutRules } = useAdminStore();
-  const releaseLabel = formatReleaseLabel(liveTheme.releaseDate);
+  // This product's own date. It read the shop-wide setting, so a customer
+  // paying a deposit was shown a release day that had nothing to do with the
+  // title in his basket.
+  const releaseLabel = formatReleaseLabel(
+    toDateOnly((checkoutProduct as { release_at?: unknown } | null)?.release_at),
+  );
   const unitPrice = checkoutProduct?.price ?? 0;
   const productTitle = checkoutProduct?.title ?? "";
   const productSubtitle = checkoutProduct?.category_slug
@@ -2292,14 +2298,14 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                         />
                         <p className="m-0 text-[12px] leading-relaxed text-[#86868B]">
                           {isPreorder
-                            ? `We authorize now and charge ${prepaidTotal} when it ships on ${releaseLabel}.`
+                            ? `We authorize now and charge ${prepaidTotal} when it ships${releaseLabel ? ` on ${releaseLabel}` : ""}.`
                             : `Pay ${dueToday} now with UPI.`}
                         </p>
                       </div>
                     ) : isPrepaid ? (
                       <p className="m-0 text-[12px] leading-relaxed text-[#86868B]">
                         {isPreorder
-                          ? `We authorize now and charge ${prepaidTotal} when it ships on ${releaseLabel}.`
+                          ? `We authorize now and charge ${prepaidTotal} when it ships${releaseLabel ? ` on ${releaseLabel}` : ""}.`
                           : `Pay ${dueToday} now. Your card or wallet is charged immediately.`}
                       </p>
                     ) : codAvailable ? (
@@ -2358,7 +2364,7 @@ export function CheckoutFlow({ productKey: buyNowKey }: { productKey?: string })
                         // screen before the customer committed.
                         ["Item", reviewItemLabel],
                         // Only a genuine pre-order has a release date.
-                        ...(isPreorder ? [["Releases", releaseLabel] as const] : []),
+                        ...(isPreorder && releaseLabel ? [["Releases", releaseLabel] as const] : []),
                         ["Ships to", shipLine || "—"],
                         ["Mobile", formatMobileDisplay(form.mobile)],
                         [

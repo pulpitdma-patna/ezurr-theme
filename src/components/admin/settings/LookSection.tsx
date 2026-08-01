@@ -118,12 +118,17 @@ export function LookSection({ settings, patch, active, status, disabled }: Setti
           </Cluster>
 
           <Cluster
-            title="Your pre-order date"
-            lead="One date for the whole shop, not per product."
+            title="Home page countdown"
+            lead="The one launch you are counting down to on the front page."
           >
             <Field
-              label="Date everything is due out"
-              hint={`Counts down on your home page and reads “Releases ${releaseLabel}” on every pre-order page.`}
+              label="Date the countdown counts to"
+              // Each pre-order carries its OWN date now, set on the product. This
+              // used to be printed as "Releases …" on every pre-order page and at
+              // checkout, so seven games with seven different dates all told the
+              // customer the same day — and a deposit was taken against a date
+              // this shop had never promised for that title.
+              hint="Only the countdown on your home page. Each pre-order shows its own date, which you set on the product."
             >
               <input
                 type="date"

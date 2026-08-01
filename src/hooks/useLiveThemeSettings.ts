@@ -47,7 +47,24 @@ export function getThemeOrDefault(): AdminSettings {
 }
 
 /** Format settings.releaseDate (YYYY-MM-DD) for storefront labels. */
-export function formatReleaseLabel(isoDate: string) {
+/**
+ * The date a pre-order is due, in words.
+ *
+ * Takes the product's own date. It used to be handed the SHOP-WIDE setting on
+ * every pre-order screen — so seven games with seven different release dates all
+ * told the customer the same day, and a deposit was taken against a date the
+ * shop had never promised for that title.
+ *
+ * Returns null when there is no date, and callers say so rather than borrowing
+ * another product's: "we do not know yet" is a fact he can act on, and a
+ * confident wrong date is not.
+ */
+export function formatReleaseLabel(isoDate: string | null | undefined): string | null {
+  if (!isoDate) return null;
+  return formatReleaseDate(isoDate);
+}
+
+function formatReleaseDate(isoDate: string) {
   const d = new Date(`${isoDate}T00:00:00`);
   if (Number.isNaN(d.getTime())) return isoDate;
   return d.toLocaleDateString("en-IN", {

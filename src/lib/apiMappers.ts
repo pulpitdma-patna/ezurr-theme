@@ -231,7 +231,7 @@ export function mapApiProductToAdminRow(p: ApiProduct, index = 0): AdminCatalogR
 }
 
 /** "2026-11-19T00:00:00.000000Z" → "2026-11-19"; anything else → undefined. */
-function toDateOnly(raw: unknown): string | undefined {
+export function toDateOnly(raw: unknown): string | undefined {
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
   return trimmed.length >= 10 ? trimmed.slice(0, 10) : undefined;
