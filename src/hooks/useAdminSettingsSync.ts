@@ -21,7 +21,7 @@ export const ADMIN_SETTING_KEYS: Extract<keyof AdminSettings, string>[] = [
   "storeName", "supportEmail", "supportPhone", "city", "gstin",
   "accentHue", "showOffer", "releaseDate", "prepaidDiscount", "codEnabled",
   "codLimit", "freeShippingMin", "orderIdPrefix", "lowStockThreshold", "hideOutOfStock",
-  "timezone", "currencyLabel", "notifyNewOrder", "notifyLowStock", "notifyPreorderRelease",
+  "timezone", "notifyNewOrder", "notifyLowStock", "notifyPreorderRelease",
   "gaMeasurementId", "metaPixelId",
   // GST. This list is load-bearing in BOTH directions — it copies the server's
   // value in on load, and Settings filters its outgoing payload through it — so
