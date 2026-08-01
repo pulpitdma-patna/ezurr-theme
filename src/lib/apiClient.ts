@@ -616,6 +616,12 @@ export interface ApiToday {
     monthToDate: number;
   };
   simulating: { messaging: boolean; payments: boolean };
+  /**
+   * Set only when messages have stopped going out — nothing is picking work off
+   * the queue. Null the rest of the time, so the screen has nothing to render
+   * and does not have to know the rule.
+   */
+  messagesStuck: { pending: number; since: string } | null;
 }
 
 export interface ApiGstReturn {
